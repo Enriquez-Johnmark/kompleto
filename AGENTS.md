@@ -12,9 +12,9 @@ Each gate needs the owner's explicit "yes"; an approval for one phase never carr
 | 1–4. Research, competitors, scoring | done (`docs/research/README.md`) |
 | 5. Product direction | done: engine approach and first product decided |
 | 6. P1 spec & acceptance criteria | done (`docs/product/p1-spec.md`), except confirming the AI model via the Taglish test |
-| 7. Rust architecture (engine vs product split) | **in progress** (`docs/architecture.md`) |
-| 8. Project skills & rules | blocked on 7 |
-| 9. Implementation readiness gate | blocked on 8 |
+| 7. Rust architecture (engine vs product split) | done (`docs/architecture.md`) |
+| 8. Project rules, glossary & ADRs | done (`GLOSSARY.md`, `docs/adr/`, rules below) |
+| 9. Implementation readiness gate | **awaiting the owner's go** |
 | 10+. Build engine + P1 (Rust backend; server-rendered pages first, React later) | blocked on 9 |
 
 **No application code exists or gets written until the Phase 9 gate passes.** Research, docs and throwaway prototypes that answer a specific question are in scope; prototypes live in `prototypes/<question>/` and are deleted once their answer is recorded.
@@ -45,6 +45,28 @@ Research claims carry a source (URL, publisher, date, accessed date), an evidenc
 - Start as one crate with modules. Add a workspace only when a concrete requirement demands it.
 - Agent safety lives in code, not prompts. Approval gates, tool permissions, idempotent external sends and bounded loops are enforced by the application. Model output and inbound content are untrusted data.
 - Report test results only from commands actually run.
+- Use the project's words from `GLOSSARY.md` in code, docs and messages (Firm, Client, Contact, Payor, Owed document, Cut-off…).
+
+## Kompleto code rules
+
+Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a tool can enforce a rule, the tool does.
+
+- **Sending:** only `engine::outbox` sends messages, and only an approved Draft whose content hash still matches, with an idempotency key recorded before the provider call (D2, E1).
+- **Firm isolation:** every repository function takes a `FirmId`; there are no unscoped queries on Firm-owned tables (A2).
+- **Time:** read time only through the injected `Clock`. Direct system-clock calls are banned with clippy `disallowed-methods`.
+- **Untrusted input:** model output, inbound email and Uploads are untrusted. Parse them into strict types, and never echo them into commands or SQL. Model requests carry only the fields allowed by `docs/adr/0003-the-model-never-sees-documents-or-tax-data.md` (D6).
+- **Engine boundary:** `src/engine` never depends on `src/kompleto`; a CI check fails the build otherwise (`docs/adr/0001-engine-and-product-in-one-crate.md`).
+- **BIR limits:** no feature may keep books, compute tax, produce BIR-format files or archive documents (`docs/adr/0004-stay-outside-bir-accounting-system-rules.md`).
+- **Tests:** every acceptance criterion has a test whose name starts with its ID, e.g. `e1_crash_mid_send_never_sends_twice`.
+- **Local only in development:** `docker compose` runs Postgres 17 and Mailpit; no real email leaves a dev machine.
+
+## Milestone workflow
+
+1. One branch per milestone (`m1-outbox`, `m2-clients`, …), following the build order in `docs/architecture.md`.
+2. Test first, using the `tdd` skill: write the criterion's test, see it fail, then make it pass.
+3. Run the `code-review` skill on the milestone before opening the pull request.
+4. Open a pull request with "how to try it" steps. CI must pass.
+5. Merge only after the owner says "merge".
 
 ## Scope
 

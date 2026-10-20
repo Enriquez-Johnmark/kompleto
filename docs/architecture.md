@@ -1,6 +1,6 @@
 # Kompleto architecture
 
-Status: **Phase 7, decisions complete; awaiting the owner's approval to close the phase.** Built round by round through grilling. Everything under "Decided" is owner-approved, with its date. It implements `docs/product/p1-spec.md` and its acceptance criteria (referenced by ID, e.g. D2, E1). Research behind it: `docs/research/rust-crates.md`, `docs/research/hosting-and-email-infra.md`, `docs/research/llm-options.md`, `docs/research/agent-architecture-comparison.md`.
+Status: **Phase 7, complete (owner-approved 2026-10-21).** Built round by round through grilling. Everything under "Decided" is owner-approved, with its date. It implements `docs/product/p1-spec.md` and its acceptance criteria (referenced by ID, e.g. D2, E1). Research behind it: `docs/research/rust-crates.md`, `docs/research/hosting-and-email-infra.md`, `docs/research/llm-options.md`, `docs/research/agent-architecture-comparison.md`.
 
 ## Decided
 
@@ -121,6 +121,3 @@ Design rules:
 - GitHub Actions on every push: `cargo fmt --check`, clippy, all tests against a real Postgres service, and cargo-deny. The workflow is added at M1, when there is code to check.
 - Rust pinned via `rust-toolchain.toml` (1.99.1, edition 2024).
 
-## Open
-
-- Owner approval of this document closes Phase 7.

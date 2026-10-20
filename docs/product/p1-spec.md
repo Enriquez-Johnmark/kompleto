@@ -10,7 +10,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 
 ### Users (2026-10-21)
 
-- **Customer:** independent bookkeepers and small firms (1–5 staff) handling about 10–60 clients.
+- **Firm:** independent bookkeepers and small firms (1–5 staff) handling about 10–60 clients.
 - **Language:** English screens; reminders to clients in Taglish or English.
 - **The bookkeeper's clients** never log in; they use a private upload link.
 
@@ -74,8 +74,8 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 
 ### 2307 tracker (2026-10-21)
 
-- For each client, the bookkeeper lists the customers expected to send 2307s each quarter.
-- The client picks which customer an uploaded 2307 is from, and the bookkeeper confirms it as received.
+- For each client, the bookkeeper lists the **Payors** (businesses that withhold tax and owe the client a 2307) expected to send 2307s each quarter.
+- The client picks which Payor an uploaded 2307 is from, and the bookkeeper confirms it as received.
 - The tracker shows what is still missing. **The AI does not read documents** in the first version.
 
 ### Uploaded files (2026-10-21)
@@ -130,7 +130,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 - Never keep books, compute tax, file returns, export SAWT or other BIR-format files, or record or issue transactions or 2307s.
 - Never act as the client's records archive (see retention above).
 - Never put a link in an SMS.
-- No customer data goes to free LLM tiers that train on inputs.
+- No Firm or Client data goes to free LLM tiers that train on inputs.
 
 ## Acceptance criteria (owner-approved 2026-10-21)
 
@@ -165,7 +165,7 @@ Kompleto's first version is done when every criterion below passes. Each criteri
 - **E3.** "Copy for Viber" gives the same text, with the upload link, ready to paste.
 
 **Upload page**
-- **F1.** The upload link opens on a phone with no login. It accepts photos and PDFs up to 10 MB each, and the client labels each file. For a 2307, the label includes which customer it's from.
+- **F1.** The upload link opens on a phone with no login. It accepts photos and PDFs up to 10 MB each, and the client labels each file. For a 2307, the label includes which Payor it's from.
 - **F2.** Each link is unguessable, works only for one client and one period, and stops working 30 days after that period's cut-off.
 - **F3.** Files are stored encrypted, deleted 30 days after being marked received, and never kept beyond 90 days. Tested by advancing the clock.
 
@@ -176,7 +176,7 @@ Kompleto's first version is done when every criterion below passes. Each criteri
 
 **Dashboard and data**
 - **H1.** The dashboard lists every client with its missing items, next cut-off and last message, nearest cut-off first.
-- **H2.** The 2307 tracker shows, per client and quarter, each expected customer as received or missing.
+- **H2.** The 2307 tracker shows, per client and quarter, each expected Payor as received or missing.
 - **I1.** A firm can export its data (CSV plus a zip of the files still held).
 - **I2.** Closing an account deletes all of the firm's data within 30 days.
 

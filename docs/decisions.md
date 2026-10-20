@@ -4,6 +4,13 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **Phase 8.** Five decisions:
+  - the milestone workflow: a branch each, test first, code review, and a pull request merged only on the owner's "merge";
+  - the Kompleto code rules in `AGENTS.md`;
+  - `GLOSSARY.md`, including "Payor" for the business that owes a Client a 2307;
+  - ADRs 0001–0004;
+  - `docker compose` with Postgres 17 and Mailpit for development.
+- **Phase 7 closed.** `docs/architecture.md` approved as Kompleto's architecture.
 - **Architecture, round 2.** Six decisions:
   - hosting from M6: Vultr Singapore, Cloudflare R2 and Email Routing, about $6.72/month;
   - Resend with idempotency keys, an SES application in pilot week 1, and a 90/day send budget;
