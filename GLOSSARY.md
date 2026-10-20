@@ -6,7 +6,7 @@ Kompleto helps Philippine bookkeepers get every client's documents in before eac
 
 **Firm**:
 A bookkeeper or small accounting firm that pays for Kompleto; one account, one login.
-_Avoid_: Customer, user, tenant, account
+_Avoid_: Customer, user, account
 
 **Client**:
 A small business whose books a Firm keeps, and whom Kompleto asks for documents.
@@ -85,6 +85,10 @@ _Avoid_: Rate limit, quota
 **Engine**:
 The reusable core every product runs on: scheduling, drafting, approval, sending, reply handling and records.
 _Avoid_: Platform, framework
+
+**Tenant**:
+The Engine's word for whoever owns a set of data; in Kompleto, a Tenant is always a Firm.
+_Avoid_: Owner, organisation
 
 **Product**:
 A specific offering built on the Engine, such as Kompleto.

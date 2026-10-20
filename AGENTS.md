@@ -60,6 +60,13 @@ Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a
 - **Tests:** every acceptance criterion has a test whose name starts with its ID, e.g. `e1_crash_mid_send_never_sends_twice`.
 - **Local only in development:** `docker compose` runs Postgres 17 and Mailpit; no real email leaves a dev machine.
 
+## Development
+
+- `docker compose up -d` starts Postgres 17 and Mailpit (inbox at http://localhost:8025); `cp .env.example .env` once.
+- Run tests with `cargo test --all-features`: the E1 crash test needs the `failpoints` feature and is skipped without it.
+- After changing any SQL, run `cargo sqlx prepare -- --all-targets --all-features` and commit `.sqlx/`; CI compiles offline from it.
+- `cargo run -- demo` puts one approved email through the outbox into Mailpit.
+
 ## Milestone workflow
 
 1. One branch per milestone (`m1-outbox`, `m2-clients`, …), following the build order in `docs/architecture.md`.

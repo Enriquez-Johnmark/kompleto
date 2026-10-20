@@ -31,6 +31,17 @@ draft ──approve──► approved ──► sending ──► sent
 
 - **Approval binds content.** Approval stores a hash of the exact message. Sending re-checks the hash; on a mismatch, nothing goes out (D2).
 - **Send at most once.** Each send carries a one-time idempotency key recorded before the provider call. After a crash, the outbox reconciles with the provider rather than sending again (E1).
+- **Unconfirmed (2026-10-21).** Resend can safely retry with the same key within its 24-hour window. Mailpit and SES can't block duplicates. If a crash or an unknown outcome hits a send through one of those, or a Resend send older than 23 hours, the message becomes **unconfirmed**. It is shown to the Firm as "may have been sent, check before resending" and never retried automatically.
+
+### Test seams for M1 (2026-10-21)
+
+1. **Outbox API** (`engine::outbox`) with a fake mailer: D2.
+2. **The real binary, crashed on purpose** between the provider call and recording the send, then restarted, against a fake Resend: E1.
+3. **Email adapters** (Resend, Mailpit) against a fake HTTP server: request shape, idempotency header.
+4. **Job queue** (enqueue → claim → finish, concurrent claimers).
+5. **Engine boundary**: a test fails if `src/engine` uses `kompleto` (ADR 0001).
+
+The Engine scopes data by **Tenant** (`GLOSSARY.md`); Kompleto's `FirmId` maps to it.
 
 ### Firm isolation (2026-10-21)
 
