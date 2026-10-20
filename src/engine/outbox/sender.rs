@@ -1,21 +1,25 @@
 //! Sends approved messages, at most once each (E1), and only with the exact
 //! content that was approved (D2).
 //!
-//! One sender runs at a time, guarded by a Postgres advisory lock. So when a
-//! sender starts and finds a message still marked `sending`, the process that
-//! was sending it died mid-call: its outcome is unknown.
+//! One sender runs at a time, guarded by a Postgres advisory lock held on its
+//! own connection (not a pooled one), so the lock dies with the connection.
+//! When a sender starts and finds a message still marked `sending`, the
+//! process that was sending it died mid-call: its outcome is unknown.
+//!
+//! The sender, like the job workers, works across all tenants; every update
+//! still names the row's tenant.
 
 use std::sync::Arc;
 
 use serde_json::json;
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Connection, PgConnection, PgPool, Postgres, Transaction};
 use time::{Duration, OffsetDateTime};
 
-use super::{ContentHash, MessageStatus, NewMessage, OutboxError, event};
-use crate::engine::audit;
+use super::{ContentHash, MessageStatus, OutboxError, event};
+use crate::engine::audit::{self, AuditEvent};
 use crate::engine::clock::Clock;
 use crate::engine::ids::{MessageId, TenantId};
-use crate::engine::mail::{MailError, Mailer, OutgoingEmail, SendReceipt};
+use crate::engine::mail::{Email, MailError, Mailer, SendReceipt};
 
 /// Advisory-lock key that makes the sender a single instance.
 const SENDER_LOCK: i64 = 0x6b6f_6d70_6f75_7462;
@@ -24,6 +28,7 @@ const SENDER_LOCK: i64 = 0x6b6f_6d70_6f75_7462;
 const DUPLICATE_WINDOW: Duration = Duration::hours(23);
 /// Attempts before a message that keeps failing is left for a person.
 const MAX_ATTEMPTS: i32 = 5;
+const UNCONFIRMED_REASON: &str = "may have been sent; check before resending";
 
 /// What one drain did.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -47,16 +52,26 @@ pub struct Sender<M> {
     clock: Arc<dyn Clock>,
 }
 
+/// A message this sender has marked `sending` and now owns.
 struct Claimed {
     id: MessageId,
     tenant: TenantId,
-    content: NewMessage,
+    attempt: i32,
+    first_send_at: OffsetDateTime,
+    email: Email,
 }
 
 enum Claim {
     Send(Claimed),
     Refused,
     NothingDue,
+}
+
+/// What a failed attempt leads to.
+struct NextStep {
+    status: MessageStatus,
+    retry_at: Option<OffsetDateTime>,
+    may_have_sent: bool,
 }
 
 impl<M: Mailer> Sender<M> {
@@ -68,9 +83,11 @@ impl<M: Mailer> Sender<M> {
     /// Settles any send interrupted by a crash, then sends up to `limit` due
     /// messages.
     pub async fn drain_once(&self, limit: usize) -> Result<DrainReport, OutboxError> {
-        let mut lock_conn = self.pool.acquire().await?;
+        // A dedicated connection: if this future is dropped or the process
+        // dies, the connection closes and Postgres releases the lock.
+        let mut lock_conn = PgConnection::connect_with(&self.pool.connect_options()).await?;
         let locked = sqlx::query_scalar!("select pg_try_advisory_lock($1)", SENDER_LOCK)
-            .fetch_one(&mut *lock_conn)
+            .fetch_one(&mut lock_conn)
             .await?
             .unwrap_or(false);
         if !locked {
@@ -80,40 +97,32 @@ impl<M: Mailer> Sender<M> {
             });
         }
         let result = self.drain_locked(limit).await;
-        sqlx::query_scalar!("select pg_advisory_unlock($1)", SENDER_LOCK)
-            .fetch_one(&mut *lock_conn)
-            .await?;
+        // Closing the session releases the lock; a failed close drops the
+        // socket, which releases it too.
+        if let Err(err) = lock_conn.close().await {
+            tracing::warn!(%err, "closing the sender's lock connection");
+        }
         result
     }
 
     async fn drain_locked(&self, limit: usize) -> Result<DrainReport, OutboxError> {
         let mut report = DrainReport::default();
         self.settle_interrupted_sends().await?;
-        let mut handled = 0;
-        while handled < limit {
+        for _ in 0..limit {
             let mut tx = self.pool.begin().await?;
-            match self.claim(&mut tx, &mut report).await? {
+            let claim = self.claim(&mut tx, &mut report).await?;
+            tx.commit().await?;
+            match claim {
                 Claim::NothingDue => break,
-                Claim::Refused => {
-                    tx.commit().await?;
-                }
+                Claim::Refused => {}
                 Claim::Send(claimed) => {
-                    tx.commit().await?;
-                    let email = OutgoingEmail {
-                        to_address: claimed.content.to_address.clone(),
-                        from_name: claimed.content.from_name.clone(),
-                        reply_to: claimed.content.reply_to.clone(),
-                        subject: claimed.content.subject.clone(),
-                        body_text: claimed.content.body_text.clone(),
-                    };
                     // The key is the message ID: the same on every attempt,
                     // and stored before the provider is called.
-                    let outcome = self.mailer.send(&email, &claimed.id.to_string()).await;
+                    let outcome = self.mailer.send(&claimed.email, &claimed.id.to_string()).await;
                     failpoint("after_send_before_record");
                     self.record(&claimed, outcome, &mut report).await?;
                 }
             }
-            handled += 1;
         }
         Ok(report)
     }
@@ -134,14 +143,12 @@ impl<M: Mailer> Sender<M> {
         .fetch_all(&mut *tx)
         .await?;
         for row in interrupted {
-            let id = MessageId::from(row.id);
             let ev = event(
                 row.tenant_id.into(),
                 now,
-                "system",
+                audit::SYSTEM,
                 "outbox.send_interrupted",
-                id,
-                json!({}),
+                row.id.into(),
             );
             audit::record(&mut *tx, &ev).await?;
         }
@@ -153,7 +160,7 @@ impl<M: Mailer> Sender<M> {
         let now = self.clock.now();
         let Some(row) = sqlx::query!(
             "select id, tenant_id, to_address, from_name, reply_to, subject, body_text,
-                    approved_hash, may_have_sent, first_send_at
+                    approved_hash, may_have_sent, first_send_at, send_attempts
              from outbox_messages
              where status = 'approved' or (status = 'failed' and retry_at <= $1)
              order by approved_at
@@ -168,7 +175,7 @@ impl<M: Mailer> Sender<M> {
         };
         let id = MessageId::from(row.id);
         let tenant = TenantId::from(row.tenant_id);
-        let content = NewMessage {
+        let email = Email {
             to_address: row.to_address,
             from_name: row.from_name,
             reply_to: row.reply_to,
@@ -177,58 +184,46 @@ impl<M: Mailer> Sender<M> {
         };
 
         let approved = row.approved_hash.as_deref().map(ContentHash::from_db).transpose()?;
-        if approved.as_ref() != Some(&ContentHash::of(&content)) {
-            set_status(
-                tx,
-                id,
-                MessageStatus::Blocked,
-                now,
-                Some("content changed after approval"),
-            )
-            .await?;
-            audit::record(
-                &mut **tx,
-                &event(tenant, now, "system", "outbox.blocked", id, json!({})),
-            )
-            .await?;
+        if approved.as_ref() != Some(&ContentHash::of(&email)) {
             report.blocked += 1;
-            return Ok(Claim::Refused);
-        }
-
-        if row.may_have_sent && !self.may_retry_unknown(row.first_send_at, now) {
-            set_status(
+            refuse(
                 tx,
+                tenant,
                 id,
-                MessageStatus::Unconfirmed,
                 now,
-                Some("may have been sent; check before resending"),
+                MessageStatus::Blocked,
+                "content changed after approval",
             )
             .await?;
-            audit::record(
-                &mut **tx,
-                &event(tenant, now, "system", "outbox.unconfirmed", id, json!({})),
-            )
-            .await?;
+            return Ok(Claim::Refused);
+        }
+        if row.may_have_sent && !self.may_retry_unknown(row.first_send_at, now) {
             report.unconfirmed += 1;
+            refuse(tx, tenant, id, now, MessageStatus::Unconfirmed, UNCONFIRMED_REASON).await?;
             return Ok(Claim::Refused);
         }
 
+        let first_send_at = row.first_send_at.unwrap_or(now);
         sqlx::query!(
             "update outbox_messages
              set status = 'sending', send_attempts = send_attempts + 1,
-                 first_send_at = coalesce(first_send_at, $2), send_started_at = $2, retry_at = null, updated_at = $2
-             where id = $1",
+                 first_send_at = $3, send_started_at = $4, retry_at = null, updated_at = $4
+             where id = $1 and tenant_id = $2",
             id.as_uuid(),
+            tenant.as_uuid(),
+            first_send_at,
             now,
         )
         .execute(&mut **tx)
         .await?;
-        audit::record(
-            &mut **tx,
-            &event(tenant, now, "system", "outbox.send_started", id, json!({})),
-        )
-        .await?;
-        Ok(Claim::Send(Claimed { id, tenant, content }))
+        audit::record(&mut **tx, &event(tenant, now, audit::SYSTEM, "outbox.send_started", id)).await?;
+        Ok(Claim::Send(Claimed {
+            id,
+            tenant,
+            attempt: row.send_attempts + 1,
+            first_send_at,
+            email,
+        }))
     }
 
     /// A send whose earlier outcome is unknown may be retried only through a
@@ -245,19 +240,31 @@ impl<M: Mailer> Sender<M> {
     ) -> Result<(), OutboxError> {
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
-        let row = sqlx::query!(
-            "select send_attempts, first_send_at from outbox_messages where id = $1 for update",
+        // Fence on (status, attempt): if another sender has since taken this
+        // message over, its record wins and this late result is dropped.
+        let Some(row) = sqlx::query!(
+            "select may_have_sent from outbox_messages
+             where id = $1 and tenant_id = $2 and status = 'sending' and send_attempts = $3
+             for update",
             claimed.id.as_uuid(),
+            claimed.tenant.as_uuid(),
+            claimed.attempt,
         )
-        .fetch_one(&mut *tx)
-        .await?;
+        .fetch_optional(&mut *tx)
+        .await?
+        else {
+            tracing::warn!(id = %claimed.id, "send result arrived after another sender took over; not recorded");
+            return Ok(());
+        };
+
         let (action, details) = match outcome {
             Ok(receipt) => {
                 sqlx::query!(
                     "update outbox_messages
-                     set status = 'sent', provider_message_id = $2, sent_at = $3, last_error = null, updated_at = $3
-                     where id = $1",
+                     set status = 'sent', provider_message_id = $3, sent_at = $4, last_error = null, updated_at = $4
+                     where id = $1 and tenant_id = $2",
                     claimed.id.as_uuid(),
+                    claimed.tenant.as_uuid(),
                     receipt.provider_message_id,
                     now,
                 )
@@ -270,30 +277,21 @@ impl<M: Mailer> Sender<M> {
                 )
             }
             Err(err) => {
-                let may_have_sent = matches!(err, MailError::Unknown(_));
-                let retryable = match err {
-                    MailError::Rejected(_) => false,
-                    MailError::NotSent(_) => true,
-                    MailError::Unknown(_) => self.may_retry_unknown(row.first_send_at, now),
-                };
-                let status = if may_have_sent && !retryable {
+                let next = self.after_failure(&err, row.may_have_sent, claimed, now);
+                if next.status == MessageStatus::Unconfirmed {
                     report.unconfirmed += 1;
-                    MessageStatus::Unconfirmed
                 } else {
                     report.failed += 1;
-                    MessageStatus::Failed
-                };
-                let retry_at =
-                    (retryable && row.send_attempts < MAX_ATTEMPTS).then(|| now + backoff(row.send_attempts));
+                }
                 sqlx::query!(
                     "update outbox_messages
-                     set status = $2, retry_at = $3, may_have_sent = may_have_sent or $4,
-                         last_error = $5, updated_at = $6
-                     where id = $1",
+                     set status = $3, retry_at = $4, may_have_sent = $5, last_error = $6, updated_at = $7
+                     where id = $1 and tenant_id = $2",
                     claimed.id.as_uuid(),
-                    status.as_str(),
-                    retry_at,
-                    may_have_sent,
+                    claimed.tenant.as_uuid(),
+                    next.status.as_str(),
+                    next.retry_at,
+                    next.may_have_sent,
                     err.to_string(),
                     now,
                 )
@@ -301,42 +299,82 @@ impl<M: Mailer> Sender<M> {
                 .await?;
                 (
                     "outbox.send_failed",
-                    json!({ "error": err.to_string(), "retry_at": retry_at }),
+                    json!({ "error": err.to_string(), "retry_at": next.retry_at }),
                 )
             }
         };
-        audit::record(
-            &mut *tx,
-            &event(claimed.tenant, now, "system", action, claimed.id, details),
-        )
-        .await?;
+        let ev = AuditEvent {
+            details,
+            ..event(claimed.tenant, now, audit::SYSTEM, action, claimed.id)
+        };
+        audit::record(&mut *tx, &ev).await?;
         tx.commit().await?;
         Ok(())
     }
+
+    /// Decides what follows a failed attempt. A message that may have gone
+    /// out and won't be retried always ends `unconfirmed`, never plain
+    /// `failed`, so nobody resends it without checking.
+    fn after_failure(
+        &self,
+        err: &MailError,
+        already_maybe_sent: bool,
+        claimed: &Claimed,
+        now: OffsetDateTime,
+    ) -> NextStep {
+        let may_have_sent = already_maybe_sent || matches!(err, MailError::Unknown(_) | MailError::KeyAlreadyUsed(_));
+        let retry_is_safe = match err {
+            MailError::Rejected(_) | MailError::KeyAlreadyUsed(_) => false,
+            MailError::NotSent(_) | MailError::Unknown(_) => {
+                !may_have_sent || self.may_retry_unknown(Some(claimed.first_send_at), now)
+            }
+        };
+        let retry_at = (retry_is_safe && claimed.attempt < MAX_ATTEMPTS).then(|| now + backoff(claimed.attempt));
+        let status = if retry_at.is_none() && may_have_sent {
+            MessageStatus::Unconfirmed
+        } else {
+            MessageStatus::Failed
+        };
+        NextStep {
+            status,
+            retry_at,
+            may_have_sent,
+        }
+    }
 }
 
-async fn set_status(
+/// Takes a message out of the send path with `status`, and records why.
+async fn refuse(
     tx: &mut Transaction<'_, Postgres>,
+    tenant: TenantId,
     id: MessageId,
-    status: MessageStatus,
     now: OffsetDateTime,
-    reason: Option<&str>,
+    status: MessageStatus,
+    reason: &str,
 ) -> Result<(), OutboxError> {
     sqlx::query!(
-        "update outbox_messages set status = $2, retry_at = null, last_error = $3, updated_at = $4 where id = $1",
+        "update outbox_messages set status = $3, retry_at = null, last_error = $4, updated_at = $5
+         where id = $1 and tenant_id = $2",
         id.as_uuid(),
+        tenant.as_uuid(),
         status.as_str(),
         reason,
         now,
     )
     .execute(&mut **tx)
     .await?;
+    let ev = AuditEvent {
+        details: json!({ "status": status.as_str(), "reason": reason }),
+        ..event(tenant, now, audit::SYSTEM, "outbox.refused", id)
+    };
+    audit::record(&mut **tx, &ev).await?;
     Ok(())
 }
 
-/// Wait before retry number `attempts`: 1 min, 5 min, 30 min, then 2 h.
-fn backoff(attempts: i32) -> Duration {
-    match attempts {
+/// Wait before the retry that follows attempt number `attempt`: 1 min,
+/// 5 min, 30 min, then 2 h.
+fn backoff(attempt: i32) -> Duration {
+    match attempt {
         ..=1 => Duration::minutes(1),
         2 => Duration::minutes(5),
         3 => Duration::minutes(30),

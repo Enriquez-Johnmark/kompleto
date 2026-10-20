@@ -1,32 +1,10 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, tenant_id, status, to_address, from_name, reply_to, subject, body_text, sent_at, last_error\n             from outbox_messages where id = $1 and tenant_id = $2",
+  "query": "select status, to_address, from_name, reply_to, subject, body_text, sent_at, last_error\n             from outbox_messages where id = $1 and tenant_id = $2",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "outbox_messages",
-            "name": "id"
-          }
-        }
-      },
-      {
-        "ordinal": 1,
-        "name": "tenant_id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "outbox_messages",
-            "name": "tenant_id"
-          }
-        }
-      },
-      {
-        "ordinal": 2,
         "name": "status",
         "type_info": "Text",
         "origin": {
@@ -37,7 +15,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 1,
         "name": "to_address",
         "type_info": "Text",
         "origin": {
@@ -48,7 +26,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 2,
         "name": "from_name",
         "type_info": "Text",
         "origin": {
@@ -59,7 +37,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 3,
         "name": "reply_to",
         "type_info": "Text",
         "origin": {
@@ -70,7 +48,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 4,
         "name": "subject",
         "type_info": "Text",
         "origin": {
@@ -81,7 +59,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 5,
         "name": "body_text",
         "type_info": "Text",
         "origin": {
@@ -92,7 +70,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "sent_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -103,7 +81,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "last_error",
         "type_info": "Text",
         "origin": {
@@ -124,8 +102,6 @@
       false,
       false,
       false,
-      false,
-      false,
       true,
       false,
       false,
@@ -133,5 +109,5 @@
       true
     ]
   },
-  "hash": "f91ae28696398e0e0a7f4641fcc933e6bdce857fb5dce0a898bc86c0cb8e53fa"
+  "hash": "681e6d95203349321bc080ebae01e67ceef055a7ef9ad6bea19a26d7a1e40e53"
 }

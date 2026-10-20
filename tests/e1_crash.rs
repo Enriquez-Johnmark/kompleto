@@ -6,45 +6,36 @@
 
 mod common;
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::process::{Command, ExitStatus};
+use std::sync::{Arc, Mutex};
 
-use common::{clock, sample_message};
+use common::{clock, sample_email};
 use kompleto::engine::ids::{MessageId, TenantId};
 use kompleto::engine::outbox::{MessageStatus, Outbox};
 use serde_json::json;
 use sqlx::PgPool;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 const FAILPOINT: &str = "after_send_before_record";
 
 #[sqlx::test]
-async fn e1_crash_mid_send_with_resend_retries_under_one_key_so_one_email_goes_out(pool: PgPool) {
-    let provider = fake_provider("/emails", json!({ "id": "re_1" })).await;
+async fn e1_crash_mid_send_with_resend_delivers_exactly_one_email(pool: PgPool) {
+    let resend = FakeResend::default();
+    let provider = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/emails"))
+        .respond_with(resend.clone())
+        .mount(&provider)
+        .await;
     let (tenant, id) = approved(&pool).await;
 
     let crashed = drain(&pool, &resend_env(&provider), Some(FAILPOINT)).await;
     assert!(!crashed.success(), "the failpoint should have killed the process");
     drain(&pool, &resend_env(&provider), None).await;
 
-    let keys: HashSet<String> = provider
-        .received_requests()
-        .await
-        .unwrap()
-        .iter()
-        .filter_map(|r| {
-            r.headers
-                .get("Idempotency-Key")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_owned)
-        })
-        .collect();
-    assert_eq!(
-        keys,
-        HashSet::from([id.to_string()]),
-        "every attempt must carry the message's one key"
-    );
+    assert_eq!(resend.delivered(), 1, "Resend would have delivered this many emails");
     assert_eq!(status(&pool, tenant, id).await, MessageStatus::Sent);
 }
 
@@ -64,6 +55,41 @@ async fn e1_crash_mid_send_without_duplicate_blocking_never_resends(pool: PgPool
     assert_eq!(status(&pool, tenant, id).await, MessageStatus::Unconfirmed);
 }
 
+/// Behaves like Resend's idempotency: a repeat of a key with the same body
+/// returns the first result without sending again; a repeat with a different
+/// body is refused with 409. Counts the emails it would actually deliver.
+#[derive(Clone, Default)]
+struct FakeResend {
+    seen: Arc<Mutex<HashMap<String, Vec<u8>>>>,
+}
+
+impl FakeResend {
+    fn delivered(&self) -> usize {
+        self.seen.lock().unwrap().len()
+    }
+}
+
+impl Respond for FakeResend {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let key = request
+            .headers
+            .get("Idempotency-Key")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default()
+            .to_owned();
+        let mut seen = self.seen.lock().unwrap();
+        match seen.get(&key) {
+            Some(body) if *body != request.body => ResponseTemplate::new(409)
+                .set_body_json(json!({ "name": "invalid_idempotent_request", "message": "different payload" })),
+            Some(_) => ResponseTemplate::new(200).set_body_json(json!({ "id": format!("re_{key}") })),
+            None => {
+                seen.insert(key.clone(), request.body.clone());
+                ResponseTemplate::new(200).set_body_json(json!({ "id": format!("re_{key}") }))
+            }
+        }
+    }
+}
+
 async fn fake_provider(route: &str, body: serde_json::Value) -> MockServer {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
@@ -77,7 +103,7 @@ async fn fake_provider(route: &str, body: serde_json::Value) -> MockServer {
 async fn approved(pool: &PgPool) -> (TenantId, MessageId) {
     let outbox = Outbox::new(pool.clone(), clock());
     let tenant = TenantId::new();
-    let id = outbox.create_draft(tenant, &sample_message()).await.unwrap();
+    let id = outbox.create_draft(tenant, &sample_email()).await.unwrap();
     let seen = outbox.get(tenant, id).await.unwrap().content_hash();
     outbox
         .approve(tenant, id, "bookkeeper@santos.test", &seen)

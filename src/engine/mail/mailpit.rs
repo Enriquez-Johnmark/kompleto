@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use super::{MailError, Mailer, OutgoingEmail, SendReceipt, classify_transport_error};
+use super::{Email, MailError, Mailer, SendReceipt, classify_transport_error};
 
 /// Sends into a local Mailpit.
 #[derive(Debug, Clone)]
@@ -65,7 +65,7 @@ impl Mailer for MailpitMailer {
         false
     }
 
-    async fn send(&self, email: &OutgoingEmail, idempotency_key: &str) -> Result<SendReceipt, MailError> {
+    async fn send(&self, email: &Email, idempotency_key: &str) -> Result<SendReceipt, MailError> {
         let body = MailpitRequest {
             from: Address {
                 email: &self.from_address,

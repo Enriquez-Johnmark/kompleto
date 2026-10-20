@@ -7,6 +7,9 @@ use uuid::Uuid;
 
 use super::ids::TenantId;
 
+/// The actor recorded for things the program does by itself.
+pub const SYSTEM: &str = "system";
+
 /// One audit entry to record.
 #[derive(Debug)]
 pub struct AuditEvent<'a> {

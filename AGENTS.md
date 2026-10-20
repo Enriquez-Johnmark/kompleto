@@ -51,9 +51,9 @@ Research claims carry a source (URL, publisher, date, accessed date), an evidenc
 
 Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a tool can enforce a rule, the tool does.
 
-- **Sending:** only `engine::outbox` sends messages, and only an approved Draft whose content hash still matches, with an idempotency key recorded before the provider call (D2, E1).
-- **Firm isolation:** every repository function takes a `FirmId`; there are no unscoped queries on Firm-owned tables (A2).
-- **Time:** read time only through the injected `Clock`. Direct system-clock calls are banned with clippy `disallowed-methods`.
+- **Sending:** only `engine::outbox` sends messages, and only an approved Draft whose content hash still matches, with an idempotency key recorded before the provider call (D2, E1). `tests/engine_boundary.rs` fails if any other module names the `Mailer` trait.
+- **Firm isolation:** every repository function takes a `FirmId` (the Engine's `TenantId`); there are no unscoped queries on Firm-owned tables (A2). The one exception is the system-wide workers (the outbox sender and job workers), which sweep across tenants; even they name the row's tenant in every update.
+- **Time:** read time only through the injected `Clock`. Direct system-clock calls are banned with clippy `disallowed-methods`. UUIDv7 IDs embed wall-clock time; they are identifiers only, never used to decide anything about time.
 - **Untrusted input:** model output, inbound email and Uploads are untrusted. Parse them into strict types, and never echo them into commands or SQL. Model requests carry only the fields allowed by `docs/adr/0003-the-model-never-sees-documents-or-tax-data.md` (D6).
 - **Engine boundary:** `src/engine` never depends on `src/kompleto`; a CI check fails the build otherwise (`docs/adr/0001-engine-and-product-in-one-crate.md`).
 - **BIR limits:** no feature may keep books, compute tax, produce BIR-format files or archive documents (`docs/adr/0004-stay-outside-bir-accounting-system-rules.md`).

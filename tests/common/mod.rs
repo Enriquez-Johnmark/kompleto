@@ -7,16 +7,15 @@
 use std::sync::{Arc, Mutex};
 
 use kompleto::engine::clock::FixedClock;
-use kompleto::engine::mail::{MailError, Mailer, OutgoingEmail, SendReceipt};
-use kompleto::engine::outbox::NewMessage;
+use kompleto::engine::mail::{Email, MailError, Mailer, SendReceipt};
 use time::macros::datetime;
 
 pub fn clock() -> Arc<FixedClock> {
     Arc::new(FixedClock::new(datetime!(2026-10-21 09:00 UTC)))
 }
 
-pub fn sample_message() -> NewMessage {
-    NewMessage {
+pub fn sample_email() -> Email {
+    Email {
         to_address: "nena@example.test".to_owned(),
         from_name: "Santos Bookkeeping".to_owned(),
         reply_to: Some("reply@getkompleto.test".to_owned()),
@@ -25,19 +24,12 @@ pub fn sample_message() -> NewMessage {
     }
 }
 
-/// What the fake mailer does on each call, in order; after the script runs
-/// out it succeeds.
-#[derive(Clone, Debug)]
-pub enum Scripted {
-    Fail(MailError),
-}
-
 /// A mailer that records every send instead of delivering it.
 #[derive(Clone, Default)]
 pub struct RecordingMailer {
     idempotent: bool,
-    sent: Arc<Mutex<Vec<(OutgoingEmail, String)>>>,
-    script: Arc<Mutex<Vec<Scripted>>>,
+    sent: Arc<Mutex<Vec<(Email, String)>>>,
+    failures: Arc<Mutex<Vec<MailError>>>,
 }
 
 impl RecordingMailer {
@@ -54,12 +46,13 @@ impl RecordingMailer {
         Self::default()
     }
 
-    pub fn then(self, step: Scripted) -> Self {
-        self.script.lock().unwrap().push(step);
+    /// Fails the next call with `err`; calls after the queued failures succeed.
+    pub fn then_fail(self, err: MailError) -> Self {
+        self.failures.lock().unwrap().push(err);
         self
     }
 
-    pub fn calls(&self) -> Vec<(OutgoingEmail, String)> {
+    pub fn calls(&self) -> Vec<(Email, String)> {
         self.sent.lock().unwrap().clone()
     }
 }
@@ -69,24 +62,17 @@ impl Mailer for RecordingMailer {
         self.idempotent
     }
 
-    async fn send(&self, email: &OutgoingEmail, idempotency_key: &str) -> Result<SendReceipt, MailError> {
+    async fn send(&self, email: &Email, idempotency_key: &str) -> Result<SendReceipt, MailError> {
         self.sent
             .lock()
             .unwrap()
             .push((email.clone(), idempotency_key.to_owned()));
-        let next = {
-            let mut script = self.script.lock().unwrap();
-            if script.is_empty() {
-                None
-            } else {
-                Some(script.remove(0))
-            }
-        };
-        match next {
-            Some(Scripted::Fail(err)) => Err(err),
-            None => Ok(SendReceipt {
-                provider_message_id: format!("fake-{idempotency_key}"),
-            }),
+        let mut failures = self.failures.lock().unwrap();
+        if !failures.is_empty() {
+            return Err(failures.remove(0));
         }
+        Ok(SendReceipt {
+            provider_message_id: format!("fake-{idempotency_key}"),
+        })
     }
 }

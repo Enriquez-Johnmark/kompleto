@@ -29,6 +29,10 @@ pub struct ClaimedJob {
 /// Job queue errors.
 #[derive(Debug, thiserror::Error)]
 pub enum JobError {
+    /// The job's lease ran out and another worker has claimed it since; this
+    /// worker's result is discarded.
+    #[error("lease lost: another worker has this job now")]
+    LeaseLost,
     /// Database failure.
     #[error(transparent)]
     Db(#[from] sqlx::Error),
@@ -100,33 +104,45 @@ impl Jobs {
     }
 
     /// Marks a claimed job done.
-    pub async fn complete(&self, id: JobId) -> Result<(), JobError> {
-        sqlx::query!(
-            "update jobs set status = 'done', locked_until = null, updated_at = $2 where id = $1",
-            id.as_uuid(),
+    pub async fn complete(&self, job: &ClaimedJob) -> Result<(), JobError> {
+        let done = sqlx::query!(
+            "update jobs set status = 'done', locked_until = null, updated_at = $3
+             where id = $1 and attempts = $2 and status = 'queued'",
+            job.id.as_uuid(),
+            job.attempts,
             self.clock.now(),
         )
         .execute(&self.pool)
         .await?;
-        Ok(())
+        fenced(done.rows_affected())
     }
 
     /// Records a failed attempt. With `retry_at` the job runs again then;
     /// without, it is given up on (`dead`) and left for a person.
-    pub async fn fail(&self, id: JobId, error: &str, retry_at: Option<OffsetDateTime>) -> Result<(), JobError> {
-        let now = self.clock.now();
-        sqlx::query!(
+    pub async fn fail(&self, job: &ClaimedJob, error: &str, retry_at: Option<OffsetDateTime>) -> Result<(), JobError> {
+        let failed = sqlx::query!(
             "update jobs
-             set status = case when $3::timestamptz is null then 'dead' else 'queued' end,
-                 run_at = coalesce($3, run_at), locked_until = null, last_error = $2, updated_at = $4
-             where id = $1",
-            id.as_uuid(),
+             set status = case when $4::timestamptz is null then 'dead' else 'queued' end,
+                 run_at = coalesce($4, run_at), locked_until = null, last_error = $3, updated_at = $5
+             where id = $1 and attempts = $2 and status = 'queued'",
+            job.id.as_uuid(),
+            job.attempts,
             error,
             retry_at,
-            now,
+            self.clock.now(),
         )
         .execute(&self.pool)
         .await?;
+        fenced(failed.rows_affected())
+    }
+}
+
+/// `complete` and `fail` only touch the job if this worker's claim (its
+/// attempt number) is still the latest one.
+fn fenced(rows_affected: u64) -> Result<(), JobError> {
+    if rows_affected == 1 {
         Ok(())
+    } else {
+        Err(JobError::LeaseLost)
     }
 }

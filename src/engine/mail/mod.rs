@@ -9,10 +9,11 @@ use std::future::Future;
 pub use mailpit::MailpitMailer;
 pub use resend::ResendMailer;
 
-/// One email, ready for a provider.
+/// One email's content. The outbox stores it, an approval binds to it, and
+/// a provider sends it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OutgoingEmail {
-    /// Recipient address.
+pub struct Email {
+    /// The address the email goes to.
     pub to_address: String,
     /// Display name shown as the sender, e.g. the Firm's name. The address
     /// itself is the mailer's configured address on our own domain.
@@ -47,6 +48,10 @@ pub enum MailError {
     /// gone out. Only a provider that blocks duplicate keys can retry safely.
     #[error("send outcome unknown: {0}")]
     Unknown(String),
+    /// The provider already holds an email under this key with different
+    /// content: an earlier attempt reached it, so the email may have gone out.
+    #[error("provider already has an email under this key: {0}")]
+    KeyAlreadyUsed(String),
 }
 
 /// An email provider.
@@ -57,11 +62,8 @@ pub trait Mailer: Send + Sync {
 
     /// Sends one email. `idempotency_key` is the same on every attempt for
     /// the same outbox message.
-    fn send(
-        &self,
-        email: &OutgoingEmail,
-        idempotency_key: &str,
-    ) -> impl Future<Output = Result<SendReceipt, MailError>> + Send;
+    fn send(&self, email: &Email, idempotency_key: &str)
+    -> impl Future<Output = Result<SendReceipt, MailError>> + Send;
 }
 
 /// The mailer chosen at start-up.
@@ -81,7 +83,7 @@ impl Mailer for ConfiguredMailer {
         }
     }
 
-    async fn send(&self, email: &OutgoingEmail, idempotency_key: &str) -> Result<SendReceipt, MailError> {
+    async fn send(&self, email: &Email, idempotency_key: &str) -> Result<SendReceipt, MailError> {
         match self {
             Self::Mailpit(m) => m.send(email, idempotency_key).await,
             Self::Resend(m) => m.send(email, idempotency_key).await,

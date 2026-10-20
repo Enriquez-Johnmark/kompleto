@@ -7,7 +7,7 @@ mod common;
 use std::collections::HashSet;
 
 use common::clock;
-use kompleto::engine::jobs::Jobs;
+use kompleto::engine::jobs::{JobError, Jobs};
 use serde_json::json;
 use sqlx::PgPool;
 use time::Duration;
@@ -97,7 +97,7 @@ async fn a_completed_job_is_never_claimed_again(pool: PgPool) {
         .await
         .unwrap();
     let job = jobs.claim(LEASE).await.unwrap().unwrap();
-    jobs.complete(job.id).await.unwrap();
+    jobs.complete(&job).await.unwrap();
     clock.advance(LEASE + Duration::seconds(1));
 
     let again = jobs.claim(LEASE).await.unwrap();
@@ -113,7 +113,7 @@ async fn a_failed_job_retries_at_the_given_time(pool: PgPool) {
         .await
         .unwrap();
     let job = jobs.claim(LEASE).await.unwrap().unwrap();
-    jobs.fail(job.id, "LLM timed out", Some(clock.now_plus(Duration::minutes(10))))
+    jobs.fail(&job, "LLM timed out", Some(clock.now_plus(Duration::minutes(10))))
         .await
         .unwrap();
     clock.advance(Duration::minutes(10));
@@ -124,4 +124,20 @@ async fn a_failed_job_retries_at_the_given_time(pool: PgPool) {
         retried.is_some_and(|j| j.attempts == 2),
         "the failed job wasn't retried as attempt 2"
     );
+}
+
+#[sqlx::test]
+async fn a_worker_whose_lease_ran_out_cannot_finish_a_job_another_worker_took(pool: PgPool) {
+    let clock = clock();
+    let jobs = Jobs::new(pool, clock.clone());
+    jobs.enqueue("draft_reminders", &json!({}), None, clock.now_plus(Duration::ZERO))
+        .await
+        .unwrap();
+    let slow = jobs.claim(LEASE).await.unwrap().unwrap();
+    clock.advance(LEASE + Duration::seconds(1));
+    jobs.claim(LEASE).await.unwrap().unwrap();
+
+    let result = jobs.complete(&slow).await;
+
+    assert!(matches!(result, Err(JobError::LeaseLost)), "got {result:?}");
 }

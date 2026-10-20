@@ -3,14 +3,14 @@
 
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
 
-use kompleto::engine::mail::{MailError, Mailer, MailpitMailer, OutgoingEmail, ResendMailer};
+use kompleto::engine::mail::{Email, MailError, Mailer, MailpitMailer, ResendMailer};
 use secrecy::SecretString;
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-fn email() -> OutgoingEmail {
-    OutgoingEmail {
+fn email() -> Email {
+    Email {
         to_address: "nena@example.test".to_owned(),
         from_name: "Santos, Reyes & Co".to_owned(),
         reply_to: Some("reply@getkompleto.test".to_owned()),
@@ -105,6 +105,17 @@ async fn resend_concurrent_request_with_the_same_key_means_unknown() {
     .await;
 
     assert!(matches!(err, MailError::Unknown(_)), "got {err:?}");
+}
+
+#[tokio::test]
+async fn resend_key_reused_with_different_content_means_key_already_used() {
+    let err = resend_status(
+        409,
+        json!({ "name": "invalid_idempotent_request", "message": "payload differs" }),
+    )
+    .await;
+
+    assert!(matches!(err, MailError::KeyAlreadyUsed(_)), "got {err:?}");
 }
 
 #[tokio::test]

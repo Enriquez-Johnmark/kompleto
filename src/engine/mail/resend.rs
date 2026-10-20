@@ -7,7 +7,7 @@ use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
-use super::{MailError, Mailer, OutgoingEmail, SendReceipt, classify_transport_error};
+use super::{Email, MailError, Mailer, SendReceipt, classify_transport_error};
 
 /// Sends through Resend.
 #[derive(Debug, Clone)]
@@ -60,7 +60,7 @@ impl Mailer for ResendMailer {
         true
     }
 
-    async fn send(&self, email: &OutgoingEmail, idempotency_key: &str) -> Result<SendReceipt, MailError> {
+    async fn send(&self, email: &Email, idempotency_key: &str) -> Result<SendReceipt, MailError> {
         let body = ResendRequest {
             from: mailbox(&email.from_name, &self.from_address),
             to: [&email.to_address],
@@ -96,6 +96,7 @@ impl Mailer for ResendMailer {
         Err(match status {
             // Another request with this key is still in flight: same email, try again shortly.
             StatusCode::CONFLICT if error.name == "concurrent_idempotent_requests" => MailError::Unknown(detail),
+            StatusCode::CONFLICT if error.name == "invalid_idempotent_request" => MailError::KeyAlreadyUsed(detail),
             StatusCode::TOO_MANY_REQUESTS => MailError::NotSent(detail),
             s if s.is_server_error() => MailError::Unknown(detail),
             _ => MailError::Rejected(detail),

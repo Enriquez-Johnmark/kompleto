@@ -31,6 +31,12 @@ draft ──approve──► approved ──► sending ──► sent
 
 - **Approval binds content.** Approval stores a hash of the exact message. Sending re-checks the hash; on a mismatch, nothing goes out (D2).
 - **Send at most once.** Each send carries a one-time idempotency key recorded before the provider call. After a crash, the outbox reconciles with the provider rather than sending again (E1).
+- **Implementation details (M1):**
+  - a `blocked` state for a message whose content changed behind the outbox;
+  - a `may_have_sent` flag carried across attempts;
+  - retries after 1 min, 5 min, 30 min, then 2 h, at most 5 attempts.
+
+  The `expired` and `cancelled` transitions arrive with D4 (M3) and G1–G2 (M5).
 - **Unconfirmed (2026-10-21).** Resend can safely retry with the same key within its 24-hour window. Mailpit and SES can't block duplicates. If a crash or an unknown outcome hits a send through one of those, or a Resend send older than 23 hours, the message becomes **unconfirmed**. It is shown to the Firm as "may have been sent, check before resending" and never retried automatically.
 
 ### Test seams for M1 (2026-10-21)
@@ -59,6 +65,7 @@ The Engine scopes data by **Tenant** (`GLOSSARY.md`); Kompleto's `FirmId` maps t
 
 - Scheduling, drafting, sending, reading replies and deleting files run as jobs in a Postgres table, claimed with `FOR UPDATE SKIP LOCKED` by workers inside the same program.
 - No Redis and no separate worker service. `apalis` + `apalis-postgres` 1.0 is the fallback if the hand-rolled queue gets costly.
+- **Sending uses the outbox table itself as its queue** (claimed with `FOR UPDATE SKIP LOCKED`, one sender at a time under an advisory lock) rather than a separate job per email, so a message's send state lives in one row. Other work uses the `jobs` table. (Implementation note, M1.)
 
 ### Build order (2026-10-21)
 
@@ -71,7 +78,7 @@ Each milestone ends with its acceptance tests passing; the owner can demo after 
 | **M3** | AI drafts with template fallback, approval screens, "copy for Viber" | D3–D7, E3, J1 |
 | **M4** | Phone upload page, encrypted files, auto-deletion | F1–F3 → **core loop demo-ready (~week 4)** |
 | **M5** | Replies and bounces, dashboard, 2307 tracker | G1–G3, H1–H2 |
-| **M6** | Data export, account closure, real email domain, hosting, hardening | I1–I2, E2, J2 → pilot-ready |
+| **M6** | Data export, account closure, real email domain, daily send budget, hosting, hardening | I1–I2, E2, J2 → pilot-ready |
 
 ### Hosting (2026-10-21)
 

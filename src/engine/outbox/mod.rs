@@ -4,7 +4,9 @@
 //!
 //! ```text
 //! draft ──approve──► approved ──► sending ──► sent
-//!   │                   │            └──► failed (retry with the SAME key) / unconfirmed
+//!   │                   │            ├──► failed (retry with the SAME key)
+//!   │                   │            └──► unconfirmed (may have gone out; a person checks)
+//!   │                   └──► blocked (content changed behind the outbox)
 //!   ├─ edit → draft again (old approval void)
 //!   └─ deadline passes → expired          cancelled ◄── client replied / everything uploaded
 //! ```
@@ -15,29 +17,15 @@ use std::sync::Arc;
 
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use time::OffsetDateTime;
 
 use super::audit::{self, AuditEvent};
 use super::clock::Clock;
 use super::ids::{MessageId, TenantId};
+use super::mail::Email;
 
 pub use sender::{DrainReport, Sender};
-
-/// A message to put in the outbox.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewMessage {
-    /// Recipient address.
-    pub to_address: String,
-    /// Sender display name, e.g. the Firm's name.
-    pub from_name: String,
-    /// Where replies go.
-    pub reply_to: Option<String>,
-    /// Subject line.
-    pub subject: String,
-    /// Plain-text body.
-    pub body_text: String,
-}
 
 /// Where a message is in its life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,7 +38,7 @@ pub enum MessageStatus {
     Sending,
     /// The provider accepted it.
     Sent,
-    /// The last attempt failed; see `retry_at` for whether it will retry.
+    /// The last attempt failed; it retries if a retry is safe and due.
     Failed,
     /// Refused at send time because its content no longer matched the approval.
     Blocked,
@@ -63,56 +51,52 @@ pub enum MessageStatus {
 }
 
 impl MessageStatus {
+    const ALL: [(Self, &'static str); 9] = [
+        (Self::Draft, "draft"),
+        (Self::Approved, "approved"),
+        (Self::Sending, "sending"),
+        (Self::Sent, "sent"),
+        (Self::Failed, "failed"),
+        (Self::Blocked, "blocked"),
+        (Self::Unconfirmed, "unconfirmed"),
+        (Self::Expired, "expired"),
+        (Self::Cancelled, "cancelled"),
+    ];
+
     fn as_str(self) -> &'static str {
-        match self {
-            Self::Draft => "draft",
-            Self::Approved => "approved",
-            Self::Sending => "sending",
-            Self::Sent => "sent",
-            Self::Failed => "failed",
-            Self::Blocked => "blocked",
-            Self::Unconfirmed => "unconfirmed",
-            Self::Expired => "expired",
-            Self::Cancelled => "cancelled",
-        }
+        Self::ALL.iter().find(|(s, _)| *s == self).map_or("", |(_, name)| name)
     }
 
-    fn parse(s: &str) -> Result<Self, OutboxError> {
-        Ok(match s {
-            "draft" => Self::Draft,
-            "approved" => Self::Approved,
-            "sending" => Self::Sending,
-            "sent" => Self::Sent,
-            "failed" => Self::Failed,
-            "blocked" => Self::Blocked,
-            "unconfirmed" => Self::Unconfirmed,
-            "expired" => Self::Expired,
-            "cancelled" => Self::Cancelled,
-            other => return Err(OutboxError::CorruptRow(format!("unknown status {other:?}"))),
-        })
+    fn parse(name: &str) -> Result<Self, OutboxError> {
+        Self::ALL
+            .iter()
+            .find(|(_, n)| *n == name)
+            .map(|(s, _)| *s)
+            .ok_or_else(|| OutboxError::CorruptRow(format!("unknown status {name:?}")))
     }
 }
 
-/// A fingerprint of a message's exact content. An approval binds to it.
+/// A fingerprint of an email's exact content. An approval binds to it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContentHash([u8; 32]);
 
 impl ContentHash {
-    fn of(m: &NewMessage) -> Self {
+    /// The fingerprint of `email`.
+    pub fn of(email: &Email) -> Self {
         let mut hasher = Sha256::new();
-        // Length-prefix every field so no two different messages can share
+        // Length-prefix every field so no two different emails can share
         // the same byte stream.
         for field in [
-            m.to_address.as_str(),
-            m.from_name.as_str(),
-            m.reply_to.as_deref().unwrap_or(""),
-            m.subject.as_str(),
-            m.body_text.as_str(),
+            email.to_address.as_str(),
+            email.from_name.as_str(),
+            email.reply_to.as_deref().unwrap_or(""),
+            email.subject.as_str(),
+            email.body_text.as_str(),
         ] {
             hasher.update((field.len() as u64).to_be_bytes());
             hasher.update(field.as_bytes());
         }
-        hasher.update([u8::from(m.reply_to.is_some())]);
+        hasher.update([u8::from(email.reply_to.is_some())]);
         Self(hasher.finalize().into())
     }
 
@@ -138,7 +122,7 @@ pub struct Message {
     /// Where it is in its life.
     pub status: MessageStatus,
     /// Its content.
-    pub content: NewMessage,
+    pub email: Email,
     /// When it was sent, if it was.
     pub sent_at: Option<OffsetDateTime>,
     /// The last error, if any.
@@ -149,7 +133,7 @@ impl Message {
     /// The fingerprint of the content as it is now. Show this alongside the
     /// content when asking for approval, and pass it back to [`Outbox::approve`].
     pub fn content_hash(&self) -> ContentHash {
-        ContentHash::of(&self.content)
+        ContentHash::of(&self.email)
     }
 }
 
@@ -190,9 +174,9 @@ impl Outbox {
         Self { pool, clock }
     }
 
-    /// Stores `message` as a draft awaiting approval.
-    pub async fn create_draft(&self, tenant: TenantId, message: &NewMessage) -> Result<MessageId, OutboxError> {
-        validate(message)?;
+    /// Stores `email` as a draft awaiting approval.
+    pub async fn create_draft(&self, tenant: TenantId, email: &Email) -> Result<MessageId, OutboxError> {
+        validate(email)?;
         let id = MessageId::new();
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
@@ -202,20 +186,16 @@ impl Outbox {
              values ($1, $2, 'draft', $3, $4, $5, $6, $7, $8, $8)",
             id.as_uuid(),
             tenant.as_uuid(),
-            message.to_address,
-            message.from_name,
-            message.reply_to,
-            message.subject,
-            message.body_text,
+            email.to_address,
+            email.from_name,
+            email.reply_to,
+            email.subject,
+            email.body_text,
             now,
         )
         .execute(&mut *tx)
         .await?;
-        audit::record(
-            &mut *tx,
-            &event(tenant, now, "system", "outbox.draft_created", id, json!({})),
-        )
-        .await?;
+        audit::record(&mut *tx, &event(tenant, now, audit::SYSTEM, "outbox.draft_created", id)).await?;
         tx.commit().await?;
         Ok(id)
     }
@@ -223,7 +203,7 @@ impl Outbox {
     /// Fetches one of `tenant`'s messages.
     pub async fn get(&self, tenant: TenantId, id: MessageId) -> Result<Message, OutboxError> {
         let row = sqlx::query!(
-            "select id, tenant_id, status, to_address, from_name, reply_to, subject, body_text, sent_at, last_error
+            "select status, to_address, from_name, reply_to, subject, body_text, sent_at, last_error
              from outbox_messages where id = $1 and tenant_id = $2",
             id.as_uuid(),
             tenant.as_uuid(),
@@ -232,10 +212,10 @@ impl Outbox {
         .await?
         .ok_or(OutboxError::NotFound)?;
         Ok(Message {
-            id: row.id.into(),
-            tenant: row.tenant_id.into(),
+            id,
+            tenant,
             status: MessageStatus::parse(&row.status)?,
-            content: NewMessage {
+            email: Email {
                 to_address: row.to_address,
                 from_name: row.from_name,
                 reply_to: row.reply_to,
@@ -249,11 +229,11 @@ impl Outbox {
 
     /// Replaces a draft's or an approved message's content. Any approval is
     /// void: the message is a draft again.
-    pub async fn edit(&self, tenant: TenantId, id: MessageId, message: &NewMessage) -> Result<(), OutboxError> {
-        validate(message)?;
+    pub async fn edit(&self, tenant: TenantId, id: MessageId, email: &Email) -> Result<(), OutboxError> {
+        validate(email)?;
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
-        let status = lock_status(&mut tx, tenant, id).await?;
+        let (status, _) = lock(&mut tx, tenant, id).await?;
         if !matches!(status, MessageStatus::Draft | MessageStatus::Approved) {
             return Err(OutboxError::WrongStatus(status));
         }
@@ -264,28 +244,20 @@ impl Outbox {
              where id = $1 and tenant_id = $2",
             id.as_uuid(),
             tenant.as_uuid(),
-            message.to_address,
-            message.from_name,
-            message.reply_to,
-            message.subject,
-            message.body_text,
+            email.to_address,
+            email.from_name,
+            email.reply_to,
+            email.subject,
+            email.body_text,
             now,
         )
         .execute(&mut *tx)
         .await?;
-        let voided = status == MessageStatus::Approved;
-        audit::record(
-            &mut *tx,
-            &event(
-                tenant,
-                now,
-                "system",
-                "outbox.edited",
-                id,
-                json!({ "approval_voided": voided }),
-            ),
-        )
-        .await?;
+        let ev = AuditEvent {
+            details: json!({ "approval_voided": status == MessageStatus::Approved }),
+            ..event(tenant, now, audit::SYSTEM, "outbox.edited", id)
+        };
+        audit::record(&mut *tx, &ev).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -302,11 +274,10 @@ impl Outbox {
     ) -> Result<(), OutboxError> {
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
-        let status = lock_status(&mut tx, tenant, id).await?;
+        let (status, current) = lock(&mut tx, tenant, id).await?;
         if status != MessageStatus::Draft {
             return Err(OutboxError::WrongStatus(status));
         }
-        let current = self.get_in(&mut tx, tenant, id).await?;
         if ContentHash::of(&current) != *seen {
             return Err(OutboxError::StaleApproval);
         }
@@ -322,64 +293,40 @@ impl Outbox {
         )
         .execute(&mut *tx)
         .await?;
-        audit::record(
-            &mut *tx,
-            &event(tenant, now, approver, "outbox.approved", id, json!({})),
-        )
-        .await?;
+        audit::record(&mut *tx, &event(tenant, now, approver, "outbox.approved", id)).await?;
         tx.commit().await?;
         Ok(())
     }
-
-    async fn get_in(
-        &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        tenant: TenantId,
-        id: MessageId,
-    ) -> Result<NewMessage, OutboxError> {
-        let row = sqlx::query!(
-            "select to_address, from_name, reply_to, subject, body_text
-             from outbox_messages where id = $1 and tenant_id = $2",
-            id.as_uuid(),
-            tenant.as_uuid(),
-        )
-        .fetch_optional(&mut **tx)
-        .await?
-        .ok_or(OutboxError::NotFound)?;
-        Ok(NewMessage {
-            to_address: row.to_address,
-            from_name: row.from_name,
-            reply_to: row.reply_to,
-            subject: row.subject,
-            body_text: row.body_text,
-        })
-    }
 }
 
-async fn lock_status(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+/// Locks one of `tenant`'s messages for this transaction and returns its
+/// status and content.
+async fn lock(
+    tx: &mut Transaction<'_, Postgres>,
     tenant: TenantId,
     id: MessageId,
-) -> Result<MessageStatus, OutboxError> {
-    let status = sqlx::query_scalar!(
-        "select status from outbox_messages where id = $1 and tenant_id = $2 for update",
+) -> Result<(MessageStatus, Email), OutboxError> {
+    let row = sqlx::query!(
+        "select status, to_address, from_name, reply_to, subject, body_text
+         from outbox_messages where id = $1 and tenant_id = $2 for update",
         id.as_uuid(),
         tenant.as_uuid(),
     )
     .fetch_optional(&mut **tx)
     .await?
     .ok_or(OutboxError::NotFound)?;
-    MessageStatus::parse(&status)
+    let email = Email {
+        to_address: row.to_address,
+        from_name: row.from_name,
+        reply_to: row.reply_to,
+        subject: row.subject,
+        body_text: row.body_text,
+    };
+    Ok((MessageStatus::parse(&row.status)?, email))
 }
 
-fn event<'a>(
-    tenant: TenantId,
-    at: OffsetDateTime,
-    actor: &'a str,
-    action: &'static str,
-    id: MessageId,
-    details: serde_json::Value,
-) -> AuditEvent<'a> {
+/// An audit entry about outbox message `id`, with no extra details.
+fn event<'a>(tenant: TenantId, at: OffsetDateTime, actor: &'a str, action: &'a str, id: MessageId) -> AuditEvent<'a> {
     AuditEvent {
         tenant,
         at,
@@ -387,28 +334,28 @@ fn event<'a>(
         action,
         subject_type: "outbox_message",
         subject_id: id.as_uuid(),
-        details,
+        details: json!({}),
     }
 }
 
 /// Header fields must be single lines, so a crafted value can't add headers
-/// or recipients.
-fn validate(m: &NewMessage) -> Result<(), OutboxError> {
+/// or addresses.
+fn validate(email: &Email) -> Result<(), OutboxError> {
     let single_line = [
-        ("recipient", m.to_address.as_str()),
-        ("sender name", m.from_name.as_str()),
-        ("reply-to", m.reply_to.as_deref().unwrap_or("")),
-        ("subject", m.subject.as_str()),
+        ("to address", email.to_address.as_str()),
+        ("sender name", email.from_name.as_str()),
+        ("reply-to", email.reply_to.as_deref().unwrap_or("")),
+        ("subject", email.subject.as_str()),
     ];
     if let Some((field, _)) = single_line.iter().find(|(_, v)| v.contains(['\r', '\n'])) {
         return Err(OutboxError::InvalidMessage(format!("{field} must be a single line")));
     }
-    if !m.to_address.contains('@') {
+    if !email.to_address.contains('@') {
         return Err(OutboxError::InvalidMessage(
-            "recipient is not an email address".to_owned(),
+            "to address is not an email address".to_owned(),
         ));
     }
-    if m.body_text.trim().is_empty() {
+    if email.body_text.trim().is_empty() {
         return Err(OutboxError::InvalidMessage("body is empty".to_owned()));
     }
     Ok(())

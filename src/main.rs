@@ -14,9 +14,11 @@ use anyhow::{Context, bail};
 use axum::Router;
 use axum::routing::get;
 use kompleto::config::Config;
+use kompleto::config::MailConfig;
 use kompleto::engine::clock::{Clock, SystemClock};
 use kompleto::engine::ids::TenantId;
-use kompleto::engine::outbox::{NewMessage, Outbox, Sender};
+use kompleto::engine::mail::Email;
+use kompleto::engine::outbox::{Outbox, Sender};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
@@ -103,10 +105,14 @@ async fn shutdown() {
 /// Puts one sample email through draft → approve → send, so a developer can
 /// see it arrive in Mailpit.
 async fn demo(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
+    // The demo drains the whole outbox; never let it reach a real provider.
+    if !matches!(config.mail, MailConfig::Mailpit { .. }) {
+        bail!("demo only runs with MAIL_PROVIDER=mailpit");
+    }
     migrate(&pool).await?;
     let outbox = Outbox::new(pool.clone(), clock.clone());
     let tenant = TenantId::new();
-    let message = NewMessage {
+    let message = Email {
         to_address: "nena@example.test".to_owned(),
         from_name: "Santos Bookkeeping".to_owned(),
         reply_to: Some("reply@getkompleto.test".to_owned()),
