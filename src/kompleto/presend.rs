@@ -37,7 +37,7 @@ impl KompletoChecks {
     }
 
     async fn check_message(&self, firm: FirmId, id: MessageId, email: &Email) -> Result<(), CheckFailed> {
-        let failed = |err: sqlx::Error| CheckFailed(format!("couldn't check the message: {err}"));
+        let failed = |err: sqlx::Error| CheckFailed::Unavailable(err.to_string());
         let client = sqlx::query_scalar!(
             "select client_id from scheduled_drafts where firm_id = $1 and message_id = $2",
             firm.as_uuid(),
@@ -51,12 +51,14 @@ impl KompletoChecks {
                 .clients
                 .get(firm, ClientId::from(client))
                 .await
-                .map_err(|err| CheckFailed(format!("couldn't check the message: {err}")))?;
+                .map_err(|err| CheckFailed::Unavailable(err.to_string()))?;
             if !same_address(&email.to_address, &client.details.email) {
-                return Err(CheckFailed("the recipient isn't the client's stored email".to_owned()));
+                return Err(CheckFailed::Refused(
+                    "the recipient isn't the client's stored email".to_owned(),
+                ));
             }
             if !links(&email.body_text).is_empty() {
-                return Err(CheckFailed(
+                return Err(CheckFailed::Refused(
                     "it has a link that isn't the client's own upload link".to_owned(),
                 ));
             }
@@ -73,7 +75,7 @@ impl KompletoChecks {
         if is_login {
             Ok(())
         } else {
-            Err(CheckFailed(
+            Err(CheckFailed::Refused(
                 "Kompleto doesn't recognise this message, so it won't send it".to_owned(),
             ))
         }

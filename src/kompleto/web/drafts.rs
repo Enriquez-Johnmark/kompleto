@@ -178,6 +178,10 @@ pub(super) fn approval_refusal(err: OutboxError) -> Result<(StatusCode, String),
             "This draft expired at its cut-off and can't be sent.".to_owned(),
         ),
         OutboxError::CheckFailed(reason) => (StatusCode::UNPROCESSABLE_ENTITY, format!("Not approved: {reason}.")),
+        OutboxError::CheckUnavailable(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Couldn't check this draft just now; try again in a moment.".to_owned(),
+        ),
         other => return Err(other.into()),
     })
 }
