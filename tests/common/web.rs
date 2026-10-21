@@ -6,6 +6,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use kompleto::engine::clock::FixedClock;
+use kompleto::engine::files::Files;
 use kompleto::kompleto::firms::{FirmId, Firms};
 use kompleto::kompleto::web::{AppState, router};
 use sqlx::PgPool;
@@ -17,12 +18,15 @@ pub struct TestApp {
     pub router: Router,
     pub pool: PgPool,
     pub clock: Arc<FixedClock>,
+    /// The app's own encrypted files, e.g. to run their deletion sweep.
+    pub files: Files,
 }
 
 pub struct Response {
     pub status: StatusCode,
     pub headers: HeaderMap,
     pub body: String,
+    pub bytes: Vec<u8>,
 }
 
 impl Response {
@@ -49,11 +53,20 @@ impl TestApp {
         let clock = super::clock();
         let xlsx = kompleto::kompleto::import::xlsx::XlsxReader::new(env!("CARGO_BIN_EXE_kompleto").into());
         let files = super::files(&pool, clock.clone());
-        let state = AppState::new(pool.clone(), clock.clone(), BASE_URL, xlsx, &super::master_key(), files).unwrap();
+        let state = AppState::new(
+            pool.clone(),
+            clock.clone(),
+            BASE_URL,
+            xlsx,
+            &super::master_key(),
+            files.clone(),
+        )
+        .unwrap();
         Self {
             router: router(state),
             pool,
             clock,
+            files,
         }
     }
 
@@ -84,6 +97,7 @@ impl TestApp {
             status,
             headers,
             body: String::from_utf8_lossy(&bytes).into_owned(),
+            bytes: bytes.to_vec(),
         }
     }
 
@@ -133,22 +147,42 @@ impl TestApp {
             .create(name, &email)
             .await
             .unwrap();
+        (firm, self.log_in(&email).await)
+    }
+
+    /// Logs in as the Firm whose login address is `email`; returns the
+    /// session cookie.
+    pub async fn log_in(&self, email: &str) -> String {
+        let earlier: i64 = sqlx::query_scalar("select count(*) from outbox_messages where to_address = $1")
+            .bind(email)
+            .fetch_one(&self.pool)
+            .await
+            .unwrap();
         self.request(Method::POST, "/login", None, Some(&format!("email={email}")))
             .await;
-        let token = self.login_token_for(&email).await;
+        let token = self.login_token_after(email, earlier).await;
         let response = self.request(Method::POST, &format!("/login/{token}"), None, None).await;
-        (firm, response.session_cookie().unwrap())
+        response.session_cookie().unwrap()
     }
 
     /// The token in the newest login email to `email`. The email is made
     /// after the login page replies, so this waits for it.
     pub async fn login_token_for(&self, email: &str) -> String {
+        self.login_token_after(email, 0).await
+    }
+
+    /// The token in the newest login email to `email`, once more than
+    /// `earlier` have been made.
+    async fn login_token_after(&self, email: &str, earlier: i64) -> String {
         let mut body = None;
         for _ in 0..100 {
             body = sqlx::query_scalar(
-                "select body_text from outbox_messages where to_address = $1 order by created_at desc, id desc limit 1",
+                "select body_text from outbox_messages where to_address = $1
+                 and (select count(*) from outbox_messages where to_address = $1) > $2
+                 order by created_at desc, id desc limit 1",
             )
             .bind(email)
+            .bind(earlier)
             .fetch_optional(&self.pool)
             .await
             .unwrap();

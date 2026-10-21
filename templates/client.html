@@ -42,6 +42,22 @@ Forms: {% for form in client.details.forms %}{{ form }}{% if !loop.last %}, {% e
   <button>Add</button>
 </form>
 
+<h2 id="uploads">Uploads</h2>
+{% if uploads.is_empty() %}<p class="muted">Nothing uploaded yet.</p>{% else %}
+<table>
+  <tr><th>Period</th><th>Document</th><th>Uploaded</th><th></th></tr>
+  {% for upload in uploads %}
+  <tr><td>{{ upload.period }}</td>
+    <td>{{ upload.document }}{% if !upload.detail.is_empty() %}<br><span class="muted">{{ upload.detail }}</span>{% endif %}</td>
+    <td>{{ upload.uploaded }}<br><span class="muted">{{ upload.size }}</span></td>
+    <td>{% if upload.deleted %}<span class="muted">Deleted</span>{% else %}<a href="/clients/{{ client.id }}/uploads/{{ upload.id }}">Download</a>
+      {% if let Some(received) = upload.received %}<br>Received {{ received }}{% else %}
+      <form method="post" action="/clients/{{ client.id }}/uploads/{{ upload.id }}/received" class="inline"><button>Mark received</button></form>{% endif %}
+      <br><span class="muted">Deleted on {{ upload.delete_by }}</span>{% endif %}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
 <h2>Next 12 months</h2>
 {% if periods.is_empty() %}<p class="muted">Nothing due in the next 12 months.</p>{% endif %}
 {% for period in periods %}

@@ -8,7 +8,8 @@ use axum::http::StatusCode;
 use common::nena;
 use common::web::TestApp;
 use kompleto::kompleto::checklist::owed_documents;
-use kompleto::kompleto::clients::Clients;
+use kompleto::kompleto::clients::{ClientId, Clients};
+use kompleto::kompleto::firms::FirmId;
 use kompleto::kompleto::uploads::MAX_FILE_BYTES;
 use sqlx::PgPool;
 use time::Month;
@@ -19,15 +20,30 @@ const JPEG: &[u8] = b"\xFF\xD8\xFF\xE0 a photo of a receipt";
 /// Nena's Upload link for September 2026 (Cut-off 26 Oct), as a path.
 async fn nena_link(app: &TestApp) -> String {
     let santos = common::firm(&app.pool, "Santos Bookkeeping").await;
+    nena_link_of(app, santos).await.1
+}
+
+/// Nena, a Client of `firm`, and her Upload link for September 2026.
+async fn nena_link_of(app: &TestApp, firm: FirmId) -> (ClientId, String) {
     let client = Clients::new(app.pool.clone(), app.clock.clone())
-        .create(santos, &nena())
+        .create(firm, &nena())
         .await
         .unwrap();
     let url = common::upload_links(&app.pool, app.clock.clone())
-        .for_period(santos, client, "2026-09", date!(2026 - 10 - 26))
+        .for_period(firm, client, "2026-09", date!(2026 - 10 - 26))
         .await
         .unwrap();
-    url.trim_start_matches(common::web::BASE_URL).to_owned()
+    (client, url.trim_start_matches(common::web::BASE_URL).to_owned())
+}
+
+/// Nena uploads a photo of her first Owed document; returns its ID.
+async fn upload_photo(app: &TestApp, link: &str) -> uuid::Uuid {
+    let sent = app.post_multipart(link, &[("document", b"0"), ("file", JPEG)]).await;
+    assert_eq!(sent.status, StatusCode::SEE_OTHER, "{}", sent.body);
+    sqlx::query_scalar("select id from uploads order by uploaded_at desc limit 1")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap()
 }
 
 fn owed() -> Vec<String> {
@@ -152,4 +168,72 @@ async fn f2_an_altered_link_is_not_found_and_an_expired_one_says_whom_to_ask(poo
         "{}",
         expired.body
     );
+}
+
+#[sqlx::test]
+async fn f3_the_firm_downloads_an_upload_as_an_attachment_with_a_generated_name(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (santos, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let (client, link) = nena_link_of(&app, santos).await;
+    let upload = upload_photo(&app, &link).await;
+
+    let page = app.get(&format!("/clients/{client}"), &cookie).await;
+    let file = app.get(&format!("/clients/{client}/uploads/{upload}"), &cookie).await;
+
+    assert!(page.body.contains("Mark received"), "{}", page.body);
+    assert_eq!(file.status, StatusCode::OK);
+    assert_eq!(file.bytes, JPEG, "decrypted as sent");
+    assert_eq!(file.headers["content-type"], "image/jpeg");
+    assert_eq!(file.headers["x-content-type-options"], "nosniff");
+    let disposition = file.headers["content-disposition"].to_str().unwrap();
+    assert!(
+        disposition.starts_with(r#"attachment; filename="Nenas-Sari-Sari-Store_2026-09_"#)
+            && disposition.ends_with(r#"_1.jpg""#),
+        "{disposition}"
+    );
+}
+
+#[sqlx::test]
+async fn f3_an_upload_marked_received_is_deleted_30_days_later(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (santos, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let (client, link) = nena_link_of(&app, santos).await;
+    let upload = upload_photo(&app, &link).await;
+
+    let marked = app
+        .post(&format!("/clients/{client}/uploads/{upload}/received"), &cookie, "")
+        .await;
+
+    assert_eq!(marked.status, StatusCode::SEE_OTHER);
+    app.clock.advance(time::Duration::days(30) - time::Duration::minutes(1));
+    assert_eq!(app.files.sweep().await.unwrap(), 0);
+    app.clock.advance(time::Duration::minutes(1));
+    assert_eq!(app.files.sweep().await.unwrap(), 1);
+    let cookie = app.log_in("santos.bookkeeping@firm.test").await; // the old session has ended
+    let gone = app.get(&format!("/clients/{client}/uploads/{upload}"), &cookie).await;
+    assert_eq!(gone.status, StatusCode::NOT_FOUND);
+    let page = app.get(&format!("/clients/{client}"), &cookie).await;
+    assert!(page.body.contains("Deleted"), "{}", page.body);
+    let actor: String = sqlx::query_scalar("select actor from audit_events where action = 'upload.received'")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    assert_eq!(actor, "santos.bookkeeping@firm.test");
+}
+
+#[sqlx::test]
+async fn f3_an_upload_never_marked_received_is_deleted_after_90_days(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (santos, _) = app.logged_in_firm("Santos Bookkeeping").await;
+    let (client, link) = nena_link_of(&app, santos).await;
+    let upload = upload_photo(&app, &link).await;
+
+    app.clock.advance(time::Duration::days(90) - time::Duration::minutes(1));
+    assert_eq!(app.files.sweep().await.unwrap(), 0);
+    app.clock.advance(time::Duration::minutes(1));
+    assert_eq!(app.files.sweep().await.unwrap(), 1);
+
+    let cookie = app.log_in("santos.bookkeeping@firm.test").await; // the old session has ended
+    let gone = app.get(&format!("/clients/{client}/uploads/{upload}"), &cookie).await;
+    assert_eq!(gone.status, StatusCode::NOT_FOUND);
 }

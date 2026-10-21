@@ -312,6 +312,7 @@ impl UploadError {
             Self::NotAllowedType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::TooBig => StatusCode::PAYLOAD_TOO_LARGE,
             Self::LinkFull => StatusCode::TOO_MANY_REQUESTS,
+            Self::NotFound => StatusCode::NOT_FOUND,
             Self::Invalid(_) | Self::File(_) | Self::Database(_) => StatusCode::UNPROCESSABLE_ENTITY,
         }
     }
@@ -339,7 +340,9 @@ fn message(language: Language, err: &UploadError, firm_name: &str) -> String {
             (LabelProblem::TooLong, true) => "Paikliin po sa isang linya.",
             (LabelProblem::TooLong, false) => "Please keep it to one short line.",
         },
-        UploadError::File(_) | UploadError::Database(_) => "Something went wrong. Please try again.",
+        UploadError::NotFound | UploadError::File(_) | UploadError::Database(_) => {
+            "Something went wrong. Please try again."
+        }
     };
     text.to_owned()
 }

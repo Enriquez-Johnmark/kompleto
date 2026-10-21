@@ -13,7 +13,7 @@ use axum::{Form, Router};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::{AppState, CurrentFirm, ScopedRoute, WebError, show_date};
+use super::{AppState, CurrentFirm, ScopedRoute, WebError, actor, show_date};
 use crate::engine::ids::MessageId;
 use crate::engine::outbox::{ContentHash, MessageStatus, OutboxError};
 use crate::kompleto::drafting::DraftSource;
@@ -122,11 +122,6 @@ async fn reminder(state: &AppState, firm: FirmId, id: Uuid) -> Result<Reminder, 
         .await
         .map_err(WebError::internal)?
         .ok_or(WebError::NotFound)
-}
-
-/// Who is acting: the Firm's one login (J2).
-async fn actor(state: &AppState, firm: FirmId) -> Result<String, WebError> {
-    Ok(state.firms.get(firm).await?.login_email)
 }
 
 #[derive(Deserialize)]

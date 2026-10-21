@@ -13,6 +13,7 @@ mod import;
 mod login;
 mod settings;
 mod upload;
+mod uploads;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -126,6 +127,7 @@ pub fn router(state: AppState) -> Router {
         .merge(import::routes())
         .merge(settings::routes())
         .merge(upload::routes())
+        .merge(uploads::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -153,7 +155,7 @@ pub struct ScopedRoute {
     /// GET or POST.
     pub method: Method,
     /// The path: `{id}` is a Client, `{item}` one of its extra checklist
-    /// items, `{draft}` a reminder Draft.
+    /// items, `{draft}` a reminder Draft, `{upload}` one of its Uploads.
     pub path: &'static str,
     /// A form body the page accepts, for tests; `{hash}` stands for the
     /// Draft's content hash.
@@ -165,6 +167,7 @@ pub fn scoped_routes() -> Vec<ScopedRoute> {
     clients::client_pages()
         .into_iter()
         .chain(drafts::draft_pages())
+        .chain(uploads::upload_pages())
         .map(|(route, _)| route)
         .collect()
 }
@@ -202,6 +205,11 @@ impl FromRequestParts<AppState> for CurrentFirm {
             Err(err) => Err(WebError::internal(err).into_response()),
         }
     }
+}
+
+/// Who is acting, for the audit log: the Firm's login email.
+async fn actor(state: &AppState, firm: FirmId) -> Result<String, WebError> {
+    Ok(state.firms.get(firm).await?.login_email)
 }
 
 /// The session secret from the request's cookies.

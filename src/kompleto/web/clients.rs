@@ -259,7 +259,21 @@ struct ClientPage {
     reminder_days: String,
     default_items: Vec<ChecklistItemView>,
     extra_items: Vec<ChecklistItemView>,
+    uploads: Vec<UploadView>,
     error: Option<String>,
+}
+
+/// One Upload, ready to show.
+struct UploadView {
+    id: String,
+    period: String,
+    document: String,
+    detail: String,
+    uploaded: String,
+    size: String,
+    received: Option<String>,
+    deleted: bool,
+    delete_by: String,
 }
 
 /// One line of a Client's checklist, ready to show.
@@ -297,6 +311,25 @@ async fn client_page(
 ) -> Result<ClientPage, WebError> {
     let client = state.clients.get(firm, id).await?;
     let overrides = state.clients.due_overrides(firm, id).await?;
+    let manila = crate::kompleto::schedule::MANILA;
+    let uploads = state
+        .uploads
+        .for_client(firm, id)
+        .await?
+        .into_iter()
+        .rev()
+        .map(|upload| UploadView {
+            id: upload.id.to_string(),
+            period: upload.period.clone(),
+            document: upload.label.document().to_owned(),
+            detail: upload.label.detail().unwrap_or_default().to_owned(),
+            uploaded: show_date(upload.uploaded_at.to_offset(manila).date()),
+            size: format!("{} KB", u32::try_from(upload.size_bytes).unwrap_or(0).div_ceil(1024)),
+            received: upload.received_at.map(|at| show_date(at.to_offset(manila).date())),
+            deleted: upload.deleted,
+            delete_by: show_date(upload.delete_by.to_offset(manila).date()),
+        })
+        .collect();
     let edits = state.clients.checklist_edits(firm, id).await?;
     let firm_offset = state.firms.get(firm).await?.cut_off_offset_days;
     let calendar = ClientCalendar {
@@ -375,6 +408,7 @@ async fn client_page(
         firm_offset,
         default_items,
         extra_items,
+        uploads,
         error,
     })
 }

@@ -16,6 +16,7 @@ use time::{Duration, OffsetDateTime};
 use super::clients::ClientId;
 use super::firms::FirmId;
 use super::upload_links::OpenLink;
+use crate::engine::audit::{self, AuditEvent};
 use crate::engine::clock::Clock;
 use crate::engine::files::{FileError, Files};
 use crate::engine::ids::FileId;
@@ -119,6 +120,24 @@ pub enum Label {
     },
 }
 
+impl Label {
+    /// The Owed document, or "Something else".
+    pub fn document(&self) -> &str {
+        match self {
+            Self::Owed { document, .. } => document,
+            Self::SomethingElse { .. } => "Something else",
+        }
+    }
+
+    /// The Payor or the note, if any.
+    pub fn detail(&self) -> Option<&str> {
+        match self {
+            Self::Owed { payor, .. } => payor.as_deref(),
+            Self::SomethingElse { note } => Some(note),
+        }
+    }
+}
+
 /// Whether an Owed document is a 2307, which must name its Payor.
 pub fn is_2307(document: &str) -> bool {
     document.contains("2307")
@@ -136,6 +155,9 @@ pub enum UploadError {
     /// The link has taken all the files it can.
     #[error("this link can't take any more files")]
     LinkFull,
+    /// No such Upload for this Client, or its file was deleted.
+    #[error("upload not found")]
+    NotFound,
     /// The label is missing or wrong.
     #[error("{0}")]
     Invalid(LabelProblem),
@@ -183,6 +205,19 @@ pub struct Upload {
     pub received_at: Option<OffsetDateTime>,
     /// Whether the file itself has been deleted.
     pub deleted: bool,
+    /// When the file is deleted, at the latest.
+    pub delete_by: OffsetDateTime,
+}
+
+/// A file to download.
+#[derive(Debug)]
+pub struct Download {
+    /// A name made by Kompleto, never the Contact's own.
+    pub name: String,
+    /// Its kind.
+    pub kind: FileKind,
+    /// The decrypted contents.
+    pub bytes: Vec<u8>,
 }
 
 /// Uploads, stored encrypted.
@@ -277,7 +312,7 @@ impl Uploads {
     pub async fn for_client(&self, firm: FirmId, client: ClientId) -> Result<Vec<Upload>, UploadError> {
         let rows = sqlx::query!(
             r#"select u.id, u.period, u.owed_document, u.payor, u.note, u.media_type, u.size_bytes,
-                      u.uploaded_at, u.received_at, f.deleted_at
+                      u.uploaded_at, u.received_at, f.deleted_at, f.delete_by
                from uploads u join stored_files f on f.id = u.id and f.tenant_id = u.firm_id
                where u.firm_id = $1 and u.client_id = $2
                order by u.uploaded_at, u.id"#,
@@ -305,8 +340,99 @@ impl Uploads {
                 uploaded_at: row.uploaded_at,
                 received_at: row.received_at,
                 deleted: row.deleted_at.is_some(),
+                delete_by: row.delete_by,
             })
             .collect())
+    }
+
+    /// Upload `id` of a Client called `business_name`, decrypted, named like
+    /// `Nenas-Store_2026-10_Bank-statements_1.jpg`.
+    pub async fn download(
+        &self,
+        firm: FirmId,
+        client: ClientId,
+        id: FileId,
+        business_name: &str,
+    ) -> Result<Download, UploadError> {
+        let uploads = self.for_client(firm, client).await?;
+        let position = uploads
+            .iter()
+            .position(|upload| upload.id == id)
+            .ok_or(UploadError::NotFound)?;
+        let upload = &uploads[position];
+        let number = uploads[..=position]
+            .iter()
+            .filter(|other| other.period == upload.period && other.label.document() == upload.label.document())
+            .count();
+        let bytes = self.files.read(firm, id).await.map_err(|err| match err {
+            FileError::NotFound => UploadError::NotFound,
+            other => other.into(),
+        })?;
+        Ok(Download {
+            name: format!(
+                "{}_{}_{}_{number}.{}",
+                slug(business_name),
+                upload.period,
+                slug(upload.label.document()),
+                upload.kind.extension()
+            ),
+            kind: upload.kind,
+            bytes,
+        })
+    }
+
+    /// Marks Upload `id` received by `by`; its file is then deleted within
+    /// 30 days (F3). Marking it again changes nothing.
+    pub async fn mark_received(&self, firm: FirmId, client: ClientId, id: FileId, by: &str) -> Result<(), UploadError> {
+        let received = sqlx::query_scalar!(
+            "select received_at from uploads where firm_id = $1 and client_id = $2 and id = $3",
+            firm.as_uuid(),
+            client.as_uuid(),
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(UploadError::NotFound)?;
+        if received.is_some() {
+            return Ok(());
+        }
+        let now = self.clock.now();
+        // The deadline moves first: if recording fails, the file only goes sooner.
+        match self
+            .files
+            .delete_no_later_than(firm, id, now + Duration::days(KEPT_AFTER_RECEIVED_DAYS))
+            .await
+        {
+            Ok(()) | Err(FileError::NotFound) => {}
+            Err(err) => return Err(err.into()),
+        }
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!(
+            "update uploads set received_at = $4, received_by = $5
+             where firm_id = $1 and client_id = $2 and id = $3 and received_at is null",
+            firm.as_uuid(),
+            client.as_uuid(),
+            id.as_uuid(),
+            now,
+            by,
+        )
+        .execute(&mut *tx)
+        .await?;
+        audit::record(
+            &mut *tx,
+            &AuditEvent {
+                tenant: firm,
+                at: now,
+                actor: by,
+                action: "upload.received",
+                subject_type: "upload",
+                subject_id: id.as_uuid(),
+                details: serde_json::json!({}),
+            },
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(())
     }
 }
 
@@ -339,4 +465,19 @@ fn checked(label: Label, owed: &[String]) -> Result<Label, UploadError> {
             note: short(&note, LabelProblem::NoNote)?,
         }),
     }
+}
+
+/// `text` as a file-name part: ASCII letters and digits, other runs as one
+/// `-`, apostrophes dropped, at most 40 characters.
+fn slug(text: &str) -> String {
+    let mut slug = String::new();
+    for c in text.chars().filter(|c| !matches!(c, '\'' | '’')) {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c);
+        } else if !slug.is_empty() && !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    slug.truncate(40);
+    slug.trim_end_matches('-').to_owned()
 }

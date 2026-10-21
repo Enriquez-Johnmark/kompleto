@@ -15,13 +15,14 @@ use kompleto::kompleto::checklist::{ExtraItem, Recurs};
 use kompleto::kompleto::clients::Clients;
 use kompleto::kompleto::clients::NewClient;
 use kompleto::kompleto::reminders::Scheduler;
+use kompleto::kompleto::uploads::{Label, Uploads};
 use kompleto::kompleto::web::scoped_routes;
 use sqlx::PgPool;
 use time::Duration;
 use uuid::Uuid;
 
 #[sqlx::test]
-async fn a2_every_client_and_draft_page_is_not_found_for_another_firm(pool: PgPool) {
+async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(pool: PgPool) {
     let app = TestApp::new(pool.clone());
     let (santos, santos_cookie) = app.logged_in_firm("Santos Bookkeeping").await;
     let (_, reyes_cookie) = app.logged_in_firm("Reyes CPA").await;
@@ -32,6 +33,22 @@ async fn a2_every_client_and_draft_page_is_not_found_for_another_firm(pool: PgPo
         recurs: Recurs::EveryPeriod,
     };
     let item = clients.add_extra_item(santos, client, &extra).await.unwrap();
+    // An Upload from the Client's Contact.
+    let links = common::upload_links(&pool, app.clock.clone());
+    let url = links
+        .for_period(santos, client, "2026-09", time::macros::date!(2026 - 10 - 26))
+        .await
+        .unwrap();
+    let link = links.open(url.rsplit('/').next().unwrap()).await.unwrap();
+    let owed = vec!["Bank statements".to_owned()];
+    let label = Label::Owed {
+        document: owed[0].clone(),
+        payor: None,
+    };
+    let upload = Uploads::new(pool.clone(), app.clock.clone(), app.files.clone())
+        .add(&link, &owed, label, b"%PDF-1.7 statement")
+        .await
+        .unwrap();
     // A reminder Draft: a monthly client, on 1 Nov 2026 when October's is due.
     let employer = NewClient {
         business_name: "Lito Hardware".to_owned(),
@@ -62,7 +79,8 @@ async fn a2_every_client_and_draft_page_is_not_found_for_another_firm(pool: PgPo
             .path
             .replace("{id}", &client.to_string())
             .replace("{item}", &item.to_string())
-            .replace("{draft}", &draft.to_string());
+            .replace("{draft}", &draft.to_string())
+            .replace("{upload}", &upload.to_string());
         let hash = outbox.get(santos, draft.into()).await.unwrap().content_hash().to_hex();
         let sample = route.sample_form.replace("{hash}", &hash);
         let form = (route.method == Method::POST).then_some(sample.as_str());

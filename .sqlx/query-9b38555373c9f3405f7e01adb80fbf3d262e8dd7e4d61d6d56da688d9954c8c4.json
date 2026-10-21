@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select received_at from uploads where firm_id = $1 and client_id = $2 and id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "received_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "received_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9b38555373c9f3405f7e01adb80fbf3d262e8dd7e4d61d6d56da688d9954c8c4"
+}
