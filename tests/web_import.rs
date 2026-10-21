@@ -130,3 +130,30 @@ async fn b2_the_template_file_has_the_import_columns(pool: PgPool) {
             .starts_with("Business name,Contact first name,Email,Language,Forms\n")
     );
 }
+
+#[sqlx::test]
+async fn b2_a_confirmation_over_the_row_limit_is_refused(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let (firm, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let rows: Vec<String> = (0..=500)
+        .map(|n| {
+            format!(
+                r#"%7B%22business_name%22%3A%22C{n}%22%2C%22contact_first_name%22%3A%22A%22%2C%22email%22%3A%22a%40b.test%22%2C%22language%22%3A%22English%22%2C%22forms%22%3A%5B%222551Q%22%5D%7D"#
+            )
+        })
+        .collect();
+
+    let refused = app
+        .post("/import/confirm", &cookie, &format!("rows=%5B{}%5D", rows.join("%2C")))
+        .await;
+
+    assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(refused.body.contains("more than 500 rows"), "{}", refused.body);
+    assert!(
+        Clients::new(pool, app.clock.clone())
+            .list(firm)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

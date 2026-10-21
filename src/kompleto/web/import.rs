@@ -14,7 +14,7 @@ use serde::Deserialize;
 use super::{AppState, CurrentFirm, WebError};
 use crate::kompleto::clients::{ClientError, ClientInput, NewClient};
 use crate::kompleto::firms::FirmId;
-use crate::kompleto::import::{self, COLUMNS, ImportError, ImportRow, MAX_BYTES};
+use crate::kompleto::import::{self, COLUMNS, ImportError, ImportRow, MAX_BYTES, MAX_ROWS};
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
@@ -119,6 +119,9 @@ async fn confirm(
     let Ok(inputs) = serde_json::from_str::<Vec<ClientInput>>(&form.rows) else {
         return Ok(refused("the confirmation was damaged; please upload the file again"));
     };
+    if inputs.len() > MAX_ROWS {
+        return Ok(refused(ImportError::TooManyRows));
+    }
     // Checked again: the page could be stale or tampered with.
     let rows: Vec<ImportRow> = inputs
         .into_iter()
