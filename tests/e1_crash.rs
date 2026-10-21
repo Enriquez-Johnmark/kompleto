@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 
 use common::{clock, sample_email};
 use kompleto::engine::ids::{MessageId, TenantId};
-use kompleto::engine::outbox::{MessageStatus, Outbox};
+use kompleto::engine::outbox::{MessageStatus, NoExtraChecks, Outbox};
 use serde_json::json;
 use sqlx::PgPool;
 use wiremock::matchers::{method, path};
@@ -106,7 +106,7 @@ async fn approved(pool: &PgPool) -> (TenantId, MessageId) {
     let id = outbox.create_draft(tenant, &sample_email()).await.unwrap();
     let seen = outbox.get(tenant, id).await.unwrap().content_hash();
     outbox
-        .approve(tenant, id, "bookkeeper@santos.test", &seen)
+        .approve(tenant, id, "bookkeeper@santos.test", &seen, &NoExtraChecks)
         .await
         .unwrap();
     (tenant, id)

@@ -10,7 +10,7 @@ use common::{RecordingMailer, clock, sample_email};
 use kompleto::engine::clock::FixedClock;
 use kompleto::engine::ids::{MessageId, TenantId};
 use kompleto::engine::mail::{Email, MailError};
-use kompleto::engine::outbox::{MessageStatus, Outbox, OutboxError, Sender};
+use kompleto::engine::outbox::{MessageStatus, NoExtraChecks, Outbox, OutboxError, Sender};
 use sqlx::PgPool;
 use time::Duration;
 
@@ -22,12 +22,15 @@ async fn d2_approved_draft_is_sent_with_its_exact_content(pool: PgPool) {
     let id = outbox.create_draft(tenant, &sample_email()).await.unwrap();
     let seen = outbox.get(tenant, id).await.unwrap().content_hash();
     outbox
-        .approve(tenant, id, "bookkeeper@santos.test", &seen)
+        .approve(tenant, id, "bookkeeper@santos.test", &seen, &NoExtraChecks)
         .await
         .unwrap();
     let mailer = RecordingMailer::idempotent();
 
-    Sender::new(pool, mailer.clone(), clock).drain_once(10).await.unwrap();
+    Sender::new(pool, mailer.clone(), clock, Arc::new(NoExtraChecks))
+        .drain_once(10)
+        .await
+        .unwrap();
 
     let calls = mailer.calls();
     assert_eq!(calls.len(), 1, "expected one send, got {calls:?}");
@@ -41,7 +44,10 @@ async fn d2_unapproved_draft_is_never_sent(pool: PgPool) {
     outbox.create_draft(TenantId::new(), &sample_email()).await.unwrap();
     let mailer = RecordingMailer::idempotent();
 
-    Sender::new(pool, mailer.clone(), clock).drain_once(10).await.unwrap();
+    Sender::new(pool, mailer.clone(), clock, Arc::new(NoExtraChecks))
+        .drain_once(10)
+        .await
+        .unwrap();
 
     assert_eq!(mailer.calls().len(), 0, "an unapproved draft was sent");
 }
@@ -54,7 +60,7 @@ async fn d2_edit_after_approval_voids_it_so_nothing_is_sent(pool: PgPool) {
     let id = outbox.create_draft(tenant, &sample_email()).await.unwrap();
     let seen = outbox.get(tenant, id).await.unwrap().content_hash();
     outbox
-        .approve(tenant, id, "bookkeeper@santos.test", &seen)
+        .approve(tenant, id, "bookkeeper@santos.test", &seen, &NoExtraChecks)
         .await
         .unwrap();
     let edited = Email {
@@ -64,7 +70,10 @@ async fn d2_edit_after_approval_voids_it_so_nothing_is_sent(pool: PgPool) {
     outbox.edit(tenant, id, &edited).await.unwrap();
     let mailer = RecordingMailer::idempotent();
 
-    Sender::new(pool, mailer.clone(), clock).drain_once(10).await.unwrap();
+    Sender::new(pool, mailer.clone(), clock, Arc::new(NoExtraChecks))
+        .drain_once(10)
+        .await
+        .unwrap();
 
     assert_eq!(
         mailer.calls().len(),
@@ -81,7 +90,7 @@ async fn d2_content_changed_behind_the_outbox_is_blocked_not_sent(pool: PgPool) 
     let id = outbox.create_draft(tenant, &sample_email()).await.unwrap();
     let seen = outbox.get(tenant, id).await.unwrap().content_hash();
     outbox
-        .approve(tenant, id, "bookkeeper@santos.test", &seen)
+        .approve(tenant, id, "bookkeeper@santos.test", &seen, &NoExtraChecks)
         .await
         .unwrap();
     // A bug or bad actor rewrites the body directly, bypassing `edit`.
@@ -92,7 +101,10 @@ async fn d2_content_changed_behind_the_outbox_is_blocked_not_sent(pool: PgPool) 
         .unwrap();
     let mailer = RecordingMailer::idempotent();
 
-    Sender::new(pool, mailer.clone(), clock).drain_once(10).await.unwrap();
+    Sender::new(pool, mailer.clone(), clock, Arc::new(NoExtraChecks))
+        .drain_once(10)
+        .await
+        .unwrap();
 
     assert_eq!(outbox.get(tenant, id).await.unwrap().status, MessageStatus::Blocked);
 }
@@ -110,7 +122,9 @@ async fn d2_approving_content_the_approver_never_saw_is_refused(pool: PgPool) {
     };
     outbox.edit(tenant, id, &edited).await.unwrap();
 
-    let result = outbox.approve(tenant, id, "bookkeeper@santos.test", &seen).await;
+    let result = outbox
+        .approve(tenant, id, "bookkeeper@santos.test", &seen, &NoExtraChecks)
+        .await;
 
     assert!(
         matches!(result, Err(OutboxError::StaleApproval)),
@@ -124,7 +138,7 @@ async fn e1_retry_after_an_unknown_outcome_reuses_the_same_idempotency_key(pool:
     let tenant = TenantId::new();
     approved_message(&pool, &clock, tenant).await;
     let mailer = RecordingMailer::idempotent().then_fail(MailError::Unknown("timeout".to_owned()));
-    let sender = Sender::new(pool, mailer.clone(), clock.clone());
+    let sender = Sender::new(pool, mailer.clone(), clock.clone(), Arc::new(NoExtraChecks));
     sender.drain_once(10).await.unwrap();
     clock.advance(Duration::minutes(2));
 
@@ -143,7 +157,7 @@ async fn e1_unknown_outcome_without_duplicate_blocking_is_unconfirmed_and_never_
     let tenant = TenantId::new();
     approved_message(&pool, &clock, tenant).await;
     let mailer = RecordingMailer::non_idempotent().then_fail(MailError::Unknown("timeout".to_owned()));
-    let sender = Sender::new(pool, mailer.clone(), clock.clone());
+    let sender = Sender::new(pool, mailer.clone(), clock.clone(), Arc::new(NoExtraChecks));
     sender.drain_once(10).await.unwrap();
     clock.advance(Duration::hours(1));
 
@@ -158,7 +172,7 @@ async fn e1_unknown_outcome_past_the_duplicate_window_becomes_unconfirmed(pool: 
     let tenant = TenantId::new();
     let id = approved_message(&pool, &clock, tenant).await;
     let mailer = RecordingMailer::idempotent().then_fail(MailError::Unknown("timeout".to_owned()));
-    let sender = Sender::new(pool.clone(), mailer, clock.clone());
+    let sender = Sender::new(pool.clone(), mailer, clock.clone(), Arc::new(NoExtraChecks));
     sender.drain_once(10).await.unwrap();
     clock.advance(Duration::hours(24));
 
@@ -174,7 +188,7 @@ async fn e1_a_send_that_certainly_failed_is_retried_even_without_duplicate_block
     let tenant = TenantId::new();
     let id = approved_message(&pool, &clock, tenant).await;
     let mailer = RecordingMailer::non_idempotent().then_fail(MailError::NotSent("429".to_owned()));
-    let sender = Sender::new(pool.clone(), mailer, clock.clone());
+    let sender = Sender::new(pool.clone(), mailer, clock.clone(), Arc::new(NoExtraChecks));
     sender.drain_once(10).await.unwrap();
     clock.advance(Duration::minutes(2));
 
@@ -190,7 +204,7 @@ async fn e1_a_rejected_send_is_not_retried(pool: PgPool) {
     let tenant = TenantId::new();
     approved_message(&pool, &clock, tenant).await;
     let mailer = RecordingMailer::idempotent().then_fail(MailError::Rejected("invalid to".to_owned()));
-    let sender = Sender::new(pool, mailer.clone(), clock.clone());
+    let sender = Sender::new(pool, mailer.clone(), clock.clone(), Arc::new(NoExtraChecks));
     sender.drain_once(10).await.unwrap();
     clock.advance(Duration::hours(3));
 
@@ -208,7 +222,7 @@ async fn e1_unknown_outcome_that_runs_out_of_retries_ends_unconfirmed_not_failed
     for _ in 0..5 {
         mailer = mailer.then_fail(MailError::Unknown("timeout".to_owned()));
     }
-    let sender = Sender::new(pool.clone(), mailer, clock.clone());
+    let sender = Sender::new(pool.clone(), mailer, clock.clone(), Arc::new(NoExtraChecks));
     for _ in 0..5 {
         sender.drain_once(10).await.unwrap();
         clock.advance(Duration::hours(3));
@@ -225,7 +239,7 @@ async fn e1_provider_already_holding_the_key_means_unconfirmed(pool: PgPool) {
     let id = approved_message(&pool, &clock, tenant).await;
     let mailer = RecordingMailer::idempotent().then_fail(MailError::KeyAlreadyUsed("409".to_owned()));
 
-    Sender::new(pool.clone(), mailer, clock.clone())
+    Sender::new(pool.clone(), mailer, clock.clone(), Arc::new(NoExtraChecks))
         .drain_once(10)
         .await
         .unwrap();
@@ -239,7 +253,7 @@ async fn approved_message(pool: &PgPool, clock: &Arc<FixedClock>, tenant: Tenant
     let id = outbox.create_draft(tenant, &sample_email()).await.unwrap();
     let seen = outbox.get(tenant, id).await.unwrap().content_hash();
     outbox
-        .approve(tenant, id, "bookkeeper@santos.test", &seen)
+        .approve(tenant, id, "bookkeeper@santos.test", &seen, &NoExtraChecks)
         .await
         .unwrap();
     id

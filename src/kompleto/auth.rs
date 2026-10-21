@@ -18,7 +18,7 @@ use time::Duration;
 use super::firms::{FirmError, FirmId, Firms};
 use crate::engine::clock::Clock;
 use crate::engine::mail::Email;
-use crate::engine::outbox::{Outbox, OutboxError};
+use crate::engine::outbox::{NoExtraChecks, Outbox, OutboxError};
 
 /// How long a login link works.
 pub const LINK_LIFETIME: Duration = Duration::minutes(15);
@@ -124,7 +124,9 @@ impl Auth {
         let id = self.outbox.create_draft_in(&mut tx, firm.id, &email).await?;
         tx.commit().await?;
         let hash = self.outbox.get(firm.id, id).await?.content_hash();
-        self.outbox.approve(firm.id, id, LOGIN_APPROVER, &hash).await?;
+        self.outbox
+            .approve(firm.id, id, LOGIN_APPROVER, &hash, &NoExtraChecks)
+            .await?;
         Ok(LoginOutcome::Sent)
     }
 

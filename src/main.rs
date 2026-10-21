@@ -22,7 +22,7 @@ use kompleto::config::MailConfig;
 use kompleto::engine::clock::{Clock, SystemClock};
 use kompleto::engine::ids::TenantId;
 use kompleto::engine::mail::Email;
-use kompleto::engine::outbox::{Outbox, Sender};
+use kompleto::engine::outbox::{NoExtraChecks, Outbox, Sender};
 use kompleto::kompleto::calendar::Calendar;
 use kompleto::kompleto::firms::Firms;
 use kompleto::kompleto::import::xlsx::{self, XlsxReader};
@@ -80,7 +80,7 @@ async fn run() -> anyhow::Result<()> {
         Some("serve") => serve(&config, pool, clock).await,
         Some("migrate") => migrate(&pool).await,
         Some("outbox-drain") => {
-            let report = Sender::new(pool, config.mailer()?, clock)
+            let report = Sender::new(pool, config.mailer()?, clock, Arc::new(NoExtraChecks))
                 .drain_once(DRAIN_BATCH)
                 .await?;
             tracing::info!(?report, "outbox drained");
@@ -122,7 +122,7 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
             }
         }
     });
-    let sender = Sender::new(pool, config.mailer()?, clock);
+    let sender = Sender::new(pool, config.mailer()?, clock, Arc::new(NoExtraChecks));
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(DRAIN_EVERY);
         loop {
@@ -193,8 +193,10 @@ async fn demo(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::R
     };
     let id = outbox.create_draft(tenant, &message).await?;
     let seen = outbox.get(tenant, id).await?.content_hash();
-    outbox.approve(tenant, id, "demo@kompleto.test", &seen).await?;
-    let report = Sender::new(pool, config.mailer()?, clock)
+    outbox
+        .approve(tenant, id, "demo@kompleto.test", &seen, &NoExtraChecks)
+        .await?;
+    let report = Sender::new(pool, config.mailer()?, clock, Arc::new(NoExtraChecks))
         .drain_once(DRAIN_BATCH)
         .await?;
     tracing::info!(?report, "demo email sent; open http://localhost:8025 to see it");
