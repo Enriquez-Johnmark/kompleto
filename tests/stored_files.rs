@@ -172,3 +172,26 @@ async fn f3_a_file_that_cant_be_deleted_doesnt_hold_up_the_others(pool: PgPool) 
     *stuck.lock().unwrap() = None;
     assert_eq!(files.sweep().await.unwrap(), 1, "tried again at the next sweep");
 }
+
+#[sqlx::test]
+async fn f3_a_discarded_file_is_deleted_at_once_and_audited(pool: PgPool) {
+    let clock = clock();
+    let (files, root) = files(&pool, clock.clone());
+    let santos = TenantId::new();
+    let id = files
+        .save(santos, b"receipt", clock.now_plus(Duration::days(90)))
+        .await
+        .unwrap();
+
+    files.discard(santos, id).await.unwrap();
+
+    assert!(matches!(files.read(santos, id).await, Err(FileError::NotFound)));
+    assert!(on_disk(&root).is_empty());
+    let reason: serde_json::Value =
+        sqlx::query_scalar("select details -> 'reason' from audit_events where subject_id = $1")
+            .bind(id.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(reason, "discarded");
+}

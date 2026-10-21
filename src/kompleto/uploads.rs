@@ -279,7 +279,7 @@ impl Uploads {
             Label::Owed { document, payor } => (Some(document.as_str()), payor.as_deref(), None),
             Label::SomethingElse { note } => (None, None, Some(note.as_str())),
         };
-        sqlx::query!(
+        let recorded = sqlx::query!(
             "insert into uploads
                  (id, firm_id, client_id, link_id, period, owed_document, payor, note, media_type, size_bytes, uploaded_at)
              values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
@@ -296,8 +296,17 @@ impl Uploads {
             now,
         )
         .execute(&mut *tx)
-        .await?;
-        tx.commit().await?;
+        .await;
+        match recorded {
+            Ok(_) => tx.commit().await?,
+            Err(err) => {
+                // A file nobody can see or mark received goes now, not in 90 days.
+                if let Err(discard) = self.files.discard(link.firm, id).await {
+                    tracing::error!(file = %id, %discard, "discarding an unrecorded upload failed");
+                }
+                return Err(err.into());
+            }
+        }
         Ok(id)
     }
 
