@@ -49,6 +49,18 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
         .add(&link, &owed, label, b"%PDF-1.7 statement")
         .await
         .unwrap();
+    // A Reply from the Client's Contact.
+    let reply = uuid::Uuid::now_v7();
+    sqlx::query(
+        "insert into replies (id, firm_id, client_id, period, from_address, subject, body_text, automatic, received_at)
+         values ($1, $2, $3, '2026-09', 'nena@example.test', 'Re: documents', 'Ipapadala ko po.', false, now())",
+    )
+    .bind(reply)
+    .bind(santos.as_uuid())
+    .bind(client.as_uuid())
+    .execute(&pool)
+    .await
+    .unwrap();
     // A reminder Draft: a monthly client, on 1 Nov 2026 when October's is due.
     let employer = NewClient {
         business_name: "Lito Hardware".to_owned(),
@@ -80,7 +92,8 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
             .replace("{id}", &client.to_string())
             .replace("{item}", &item.to_string())
             .replace("{draft}", &draft.to_string())
-            .replace("{upload}", &upload.to_string());
+            .replace("{upload}", &upload.to_string())
+            .replace("{reply}", &reply.to_string());
         let hash = outbox.get(santos, draft.into()).await.unwrap().content_hash().to_hex();
         let sample = route.sample_form.replace("{hash}", &hash);
         let form = (route.method == Method::POST).then_some(sample.as_str());

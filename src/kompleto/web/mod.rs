@@ -12,6 +12,7 @@ mod drafts;
 mod hooks;
 mod import;
 mod login;
+mod replies;
 mod settings;
 mod upload;
 mod uploads;
@@ -65,6 +66,7 @@ pub struct AppState {
     checks: KompletoChecks,
     links: UploadLinks,
     uploads: Uploads,
+    replies: Replies,
     /// Uploads processed at once.
     upload_slots: Arc<Semaphore>,
     xlsx: XlsxReader,
@@ -102,6 +104,7 @@ impl AppState {
         };
         let links = UploadLinks::new(pool.clone(), clock.clone(), master, base_url);
         let checks = KompletoChecks::new(pool.clone(), clock.clone(), base_url, links.clone());
+        let replies = Replies::new(pool.clone(), clock.clone(), links.clone(), checks.clone(), base_url);
         Ok(Self {
             calendar: Arc::new(Calendar::built_in()?),
             auth: Auth::new(pool.clone(), clock.clone(), base_url, checks.clone()),
@@ -112,6 +115,7 @@ impl AppState {
             checks,
             links,
             uploads: Uploads::new(pool.clone(), clock.clone(), files),
+            replies,
             upload_slots: Arc::new(Semaphore::new(upload::UPLOAD_SLOTS)),
             pool,
             clock,
@@ -161,6 +165,7 @@ pub fn router(state: AppState) -> Router {
         .merge(upload::routes())
         .merge(uploads::routes())
         .merge(hooks::routes())
+        .merge(replies::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -189,7 +194,8 @@ pub struct ScopedRoute {
     /// GET or POST.
     pub method: Method,
     /// The path: `{id}` is a Client, `{item}` one of its extra checklist
-    /// items, `{draft}` a reminder Draft, `{upload}` one of its Uploads.
+    /// items, `{draft}` a reminder Draft, `{upload}` one of its Uploads,
+    /// `{reply}` one of its Replies.
     pub path: &'static str,
     /// A form body the page accepts, for tests; `{hash}` stands for the
     /// Draft's content hash.
@@ -202,6 +208,7 @@ pub fn scoped_routes() -> Vec<ScopedRoute> {
         .into_iter()
         .chain(drafts::draft_pages())
         .chain(uploads::upload_pages())
+        .chain(replies::reply_pages())
         .map(|(route, _)| route)
         .collect()
 }

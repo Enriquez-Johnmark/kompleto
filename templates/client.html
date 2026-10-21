@@ -42,6 +42,17 @@ Forms: {% for form in client.details.forms %}{{ form }}{% if !loop.last %}, {% e
   <button>Add</button>
 </form>
 
+<h2 id="replies">Replies</h2>
+{% if replies.is_empty() %}<p class="muted">No replies yet.</p>{% else %}
+<table>
+  <tr><th>Received</th><th>About</th><th></th></tr>
+  {% for reply in replies %}
+  <tr><td>{{ reply.received }}</td><td>{{ reply.period }}{% if reply.automatic %} <span class="muted">(automatic)</span>{% endif %}</td>
+    <td><a href="/replies/{{ reply.id }}">{% if reply.subject.is_empty() %}Read{% else %}{{ reply.subject }}{% endif %}</a></td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
 <h2 id="uploads">Uploads</h2>
 {% if uploads.is_empty() %}<p class="muted">Nothing uploaded yet.</p>{% else %}
 <table>

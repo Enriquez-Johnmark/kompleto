@@ -260,7 +260,17 @@ struct ClientPage {
     default_items: Vec<ChecklistItemView>,
     extra_items: Vec<ChecklistItemView>,
     uploads: Vec<UploadView>,
+    replies: Vec<ReplyView>,
     error: Option<String>,
+}
+
+/// One Reply, ready to show.
+struct ReplyView {
+    id: String,
+    received: String,
+    period: String,
+    automatic: bool,
+    subject: String,
 }
 
 /// One Upload, ready to show.
@@ -328,6 +338,19 @@ async fn client_page(
             received: upload.received_at.map(|at| show_date(at.to_offset(manila).date())),
             deleted: upload.deleted,
             delete_by: show_date(upload.delete_by.to_offset(manila).date()),
+        })
+        .collect();
+    let replies = state
+        .replies
+        .for_client(firm, id)
+        .await?
+        .into_iter()
+        .map(|reply| ReplyView {
+            id: reply.id.to_string(),
+            received: show_date(reply.received_at.to_offset(manila).date()),
+            period: TaxPeriod::parse_key(&reply.period).map_or(reply.period.clone(), |period| period.to_string()),
+            automatic: reply.automatic,
+            subject: reply.subject.unwrap_or_default(),
         })
         .collect();
     let edits = state.clients.checklist_edits(firm, id).await?;
@@ -409,6 +432,7 @@ async fn client_page(
         default_items,
         extra_items,
         uploads,
+        replies,
         error,
     })
 }

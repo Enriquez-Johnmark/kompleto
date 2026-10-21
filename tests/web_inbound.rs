@@ -99,3 +99,60 @@ async fn g1_unsigned_or_wrongly_signed_mail_is_refused_and_nothing_kept(pool: Pg
     }
     assert_eq!(count(&app, "select count(*) from replies").await, 0);
 }
+
+#[sqlx::test]
+async fn g1_the_firm_reads_a_reply_on_its_page_with_the_text_escaped(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let santos: uuid::Uuid = sqlx::query_scalar("select id from firms")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    let employer = NewClient {
+        forms: vec![BirForm::F1601C],
+        ..nena()
+    };
+    Clients::new(app.pool.clone(), app.clock.clone())
+        .create(santos.into(), &employer)
+        .await
+        .unwrap();
+    app.clock.advance(Duration::days(11));
+    Scheduler::new(
+        app.pool.clone(),
+        app.clock.clone(),
+        common::upload_links(&app.pool, app.clock.clone()),
+    )
+    .unwrap()
+    .run_once()
+    .await
+    .unwrap();
+    let reply_to: String = sqlx::query_scalar("select reply_to from outbox_messages where reply_to is not null")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    let body = String::from_utf8(common::inbound("human_reply", &reply_to))
+        .unwrap()
+        .replace("Salamat!", "Salamat! <script>alert(1)</script>")
+        .into_bytes();
+    deliver(&app, body.clone(), &signature(&body)).await;
+    let notice: String = sqlx::query_scalar("select body_text from outbox_messages where to_address = 'santos.bookkeeping@firm.test' and subject like '%replied%'")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    let link = notice
+        .split_whitespace()
+        .find(|word| word.starts_with("http://kompleto.test/replies/"))
+        .unwrap()
+        .trim_start_matches(common::web::BASE_URL);
+
+    let page = app.get(link, &cookie).await;
+
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(page.body.contains("Ipapadala ko po bukas"), "{}", page.body);
+    assert!(
+        !page.body.contains("<script>alert"),
+        "the text is escaped: {}",
+        page.body
+    );
+    assert!(page.body.contains("script&#62;alert"), "{}", page.body);
+}
