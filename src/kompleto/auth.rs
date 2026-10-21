@@ -124,7 +124,7 @@ impl Auth {
                 firm.name, self.base_url
             ),
         };
-        let id = self.outbox.create_draft_in(&mut tx, firm.id, &email).await?;
+        let id = self.outbox.create_draft_in(&mut tx, firm.id, &email, None).await?;
         tx.commit().await?;
         let hash = self.outbox.get(firm.id, id).await?.content_hash();
         self.outbox

@@ -178,7 +178,7 @@ impl Scheduler {
             body_text: text.body,
         };
         let mut tx = self.pool.begin().await?;
-        let message = self.outbox.create_draft_in(&mut tx, firm, &email).await?;
+        let message = self.outbox.create_draft_in(&mut tx, firm, &email, None).await?;
         // A concurrent run that recorded this slot first, or a full Period,
         // makes this insert a no-op, and the Draft rolls back with it.
         let recorded = sqlx::query_scalar!(
