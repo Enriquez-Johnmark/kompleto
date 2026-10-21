@@ -15,7 +15,7 @@ Each gate needs the owner's explicit "yes"; an approval for one phase never carr
 | 7. Rust architecture (engine vs product split) | done (`docs/architecture.md`) |
 | 8. Project rules, glossary & ADRs | done (`GLOSSARY.md`, `docs/adr/`, rules below) |
 | 9. Implementation readiness gate | done (2026-10-21) |
-| 10+. Build engine + P1 (Rust backend; server-rendered pages first, React later) | **in progress**: M1–M3 done; M4 next |
+| 10+. Build engine + P1 (Rust backend; server-rendered pages first, React later) | **in progress**: M1–M4 done; M5 next |
 
 **No application code exists or gets written until the Phase 9 gate passes.** Research, docs and throwaway prototypes that answer a specific question are in scope; prototypes live in `prototypes/<question>/` and are deleted once their answer is recorded.
 
@@ -32,7 +32,7 @@ Record every approved decision, dated, in `docs/decisions.md`, and update the su
 - **Engine:** our own design, borrowing Harvey's ideas but copying none of its code. Built inside P1, with engine and product modules kept separate.
 - **Build first:** build the whole product, core loop first; the owner chooses when to demo.
 - **Go-to-market:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.
-- **Budget:** ~₱600/month until a business pays. No customer data goes to free LLM tiers that train on inputs.
+- **Budget:** ₱0 until pilots; the first spend is the domain, just before pilots. No customer data goes to free LLM tiers that train on inputs, and the app never runs on a Claude subscription (API key only).
 - **Owner constraints:** no network, no interviews or sales calls, no paid ads. Written, asynchronous contact is fine.
 
 ## Evidence

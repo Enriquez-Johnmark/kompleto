@@ -6,7 +6,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 
 ### Name (2026-10-21)
 
-- **Kompleto** ("complete"), on **getkompleto.com**. The domain was unregistered when checked on 2026-10-21; the owner buys it before 1 Nov 2026, when the .com price rises.
+- **Kompleto** ("complete"), on **getkompleto.com**. The domain was unregistered when checked on 2026-10-21. It is bought just before M6 (hosting and real email), not before 1 Nov 2026 as first planned: the budget is ₱0 until pilots (after-M4 round, `docs/decisions.md`).
 
 ### Users (2026-10-21)
 
@@ -144,7 +144,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 - Paid API with no training on our data, behind our own small client so the provider can be swapped.
 - If the AI is unavailable, Kompleto **falls back to fixed message templates**, so reminders still go out.
 - **Details (M3 round, 2026-10-21):**
-  - The API key is optional: without `ANTHROPIC_API_KEY` every Draft is a template. The blind Taglish test runs once Anthropic credits are bought.
+  - The API key is optional: without `ANTHROPIC_API_KEY` every Draft is a template. The blind Taglish test runs by hand in claude.ai with fictional clients (after-M4 round); the app itself only ever uses an API key.
   - Thinking off, JSON-schema output, a 15-second timeout and no retry; any failure gives a template Draft at once. The model is a configuration value.
   - **The model writes only the wording:** a subject, an opening and a closing in the Client's language. Kompleto inserts the exact Owed documents, the Cut-off date, the firm's name and (from M4) the upload link, so the model can't garble or invent facts and never sees the firm name or a link.
   - **Tone:** first request friendly; 7 days before the Cut-off a friendly reminder; 3 days firmer; 1 day urgent but polite.

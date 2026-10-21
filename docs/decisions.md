@@ -4,6 +4,15 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **After M4.** The owner accepted eight recommendations ("go ahead"):
+  - **budget ₱0 until pilots** (the owner has no money to spend for now). Supersedes "~₱600/month until a business pays". The first spend is the domain, just before pilots; the first ₱1,500 payment from a Firm covers running costs after that;
+  - **the domain waits:** getkompleto.com is bought just before M6 (hosting and real email), not before 1 Nov 2026, accepting the .com price rise and the small risk of losing the name (renaming is a configuration change plus docs). Supersedes the "buy before 1 Nov" plan in the P1 spec round 3;
+  - **no subscription for the app's AI:** a Claude subscription doesn't include API use, and the consumer terms forbid automated access without an API key (Consumer Terms §3(7), effective 8 Oct 2025). The API key stays optional and Drafts stay templates until there is one;
+  - **the Taglish test runs by hand** in claude.ai on the owner's existing subscription, with fictional clients only; Claude prepares the kit and shuffles the answers for a blind rating (`prototypes/taglish-test/`);
+  - **keep building M5 and M6 at no cost** (template Drafts, local Mailpit); before pilots, research the cheapest domain, email and hosting set-up, free tiers first;
+  - **`same-origin` referrer policy** on the upload page instead of `no-referrer` (found in the M4 code review: browsers send `Origin: null` under `no-referrer`, so every upload was refused);
+  - **M4 is done;**
+  - **a development command** that runs the scheduler as if it were a chosen date, so the whole loop can be tried before 1 Nov; then **M5 starts with a grilling round**.
 - **M4 round.** The owner accepted all 15 recommendations ("go ahead"):
   - one Upload link per Client per Period, created with the Period's first Draft; the link is a record ID plus a 128-bit HMAC signature, so the database holds no usable link; it works until 30 days after the Cut-off;
   - Kompleto inserts the link into every Reminder and the Viber text; the pre-send check requires exactly that link;
