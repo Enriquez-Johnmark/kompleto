@@ -15,7 +15,7 @@ Each gate needs the owner's explicit "yes"; an approval for one phase never carr
 | 7. Rust architecture (engine vs product split) | done (`docs/architecture.md`) |
 | 8. Project rules, glossary & ADRs | done (`GLOSSARY.md`, `docs/adr/`, rules below) |
 | 9. Implementation readiness gate | done (2026-10-21) |
-| 10+. Build engine + P1 (Rust backend; server-rendered pages first, React later) | **in progress**: M1–M4 done; M5 next |
+| 10+. Build engine + P1 (Rust backend; server-rendered pages first, React later) | **in progress**: M1–M5 done; M6 next |
 
 **No application code exists or gets written until the Phase 9 gate passes.** Research, docs and throwaway prototypes that answer a specific question are in scope; prototypes live in `prototypes/<question>/` and are deleted once their answer is recorded.
 
@@ -52,7 +52,10 @@ Research claims carry a source (URL, publisher, date, accessed date), an evidenc
 Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a tool can enforce a rule, the tool does.
 
 - **Sending:** only `engine::outbox` sends messages, and only an approved Draft whose content hash still matches, with an idempotency key recorded before the provider call (D2, E1). `tests/engine_boundary.rs` fails if any other module names the `Mailer` trait.
-- **Firm isolation:** every repository function takes a `FirmId` (the Engine's `TenantId`); there are no unscoped queries on Firm-owned tables (A2). The exceptions are the system-wide workers (the outbox sender and job workers), which sweep across tenants and even then name the row's tenant in every update, and operator commands run from the command line (`kompleto llm-costs`), which no Firm's page can reach.
+- **Firm isolation:** every repository function takes a `FirmId` (the Engine's `TenantId`); there are no unscoped queries on Firm-owned tables (A2). The exceptions:
+  - system-wide workers (the outbox sender and job workers), which sweep across tenants and even then name the row's tenant in every update;
+  - operator commands run from the command line (`kompleto llm-costs`), which no Firm's page can reach;
+  - the inbound-email and delivery-event handlers under `/hooks/`, which find the Firm from a signed reply code, the sender's address or the provider's message ID before any Firm is known.
 - **Time:** read time only through the injected `Clock`. Direct system-clock calls are banned with clippy `disallowed-methods`. UUIDv7 IDs embed wall-clock time; they are identifiers only, never used to decide anything about time.
 - **Untrusted input:** model output, inbound email and Uploads are untrusted. Parse them into strict types, and never echo them into commands or SQL. Model requests carry only the fields allowed by `docs/adr/0003-the-model-never-sees-documents-or-tax-data.md` (D6).
 - **Engine boundary:** `src/engine` never depends on `src/kompleto`; a CI check fails the build otherwise (`docs/adr/0001-engine-and-product-in-one-crate.md`).

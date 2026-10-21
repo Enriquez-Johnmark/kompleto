@@ -68,7 +68,7 @@ draft ──approve──► approved ──► sending ──► sent
   - the sent message by the provider's ID, for a delivery event;
   - the 90-day sweep of Reply text, which names each row's Firm.
 - **Bounces.** Resend's Transient and Undetermined bounces only show; Permanent ones (or no type) and complaints stop reminders. Only reminders to the address that bounced are cancelled, and a late bounce for an address since replaced stops nothing else.
-- **A Reply** ends the Period's reminders: waiting Drafts are cancelled, and the scheduler drafts none for a Period with a human Reply.
+- **A Reply** through the signed reply address ends the Period's reminders: waiting Drafts are cancelled, and the scheduler drafts none for that Period. One matched by its sender alone (`replies.signed` false) changes nothing but shows and is announced.
 - **Attachments.** Images that the HTML embeds by Content-ID and that are under 50 KB are treated as signature logos and dropped. NUL characters are removed from inbound text, since Postgres can't store them.
 - **Payors.**
   - A Client's Payors travel in its `ChecklistEdits`, so every place that lists Owed documents gets "BIR Form 2307 from <Payor>" in place of the general item.
