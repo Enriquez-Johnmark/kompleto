@@ -144,6 +144,8 @@ async fn drain(pool: &PgPool, env: &[(&'static str, String)], failpoint: Option<
         .env("DATABASE_URL", database_url(pool).await)
         .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
         .env("PUBLIC_BASE_URL", BASE_URL)
+        // Reminders carry signed Upload links, so the checks need the key.
+        .env("FILE_MASTER_KEY", "ab".repeat(32))
         .env("RUST_LOG", "warn")
         .envs(env.iter().map(|(k, v)| (*k, v.as_str())));
     match failpoint {
