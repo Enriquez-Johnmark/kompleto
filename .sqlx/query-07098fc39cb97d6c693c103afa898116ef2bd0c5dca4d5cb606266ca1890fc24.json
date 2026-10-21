@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from payors\n                              where firm_id = $1 and client_id = $2 and lower(name) = lower($3)) as \"listed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "listed!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "07098fc39cb97d6c693c103afa898116ef2bd0c5dca4d5cb606266ca1890fc24"
+}

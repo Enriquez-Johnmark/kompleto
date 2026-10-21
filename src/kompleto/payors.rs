@@ -7,6 +7,7 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use super::checklist::{ANOTHER_PAYOR_2307, payor_2307};
 use super::clients::{ClientError, ClientId};
 use super::firms::FirmId;
 use crate::engine::clock::Clock;
@@ -75,6 +76,10 @@ impl Payors {
                 "a Payor's name can't look like a web address".to_owned(),
             ));
         }
+        // Its 2307 would read as the upload page's choice for unlisted ones.
+        if payor_2307(name).eq_ignore_ascii_case(ANOTHER_PAYOR_2307) {
+            return Err(ClientError::Invalid(format!("\"{name}\" can't be a Payor's name")));
+        }
         let id = PayorId::new();
         let added = sqlx::query!(
             "insert into payors (id, firm_id, client_id, name, created_at)
@@ -92,9 +97,18 @@ impl Payors {
         if added.rows_affected() == 1 {
             return Ok(id);
         }
-        // Either the Client isn't this Firm's, or the name is listed already.
-        let listed = self.list(firm, client).await?;
-        if listed.iter().any(|payor| payor.name.eq_ignore_ascii_case(name)) {
+        // Either the Client isn't this Firm's, or the name is listed already,
+        // compared as the unique index does.
+        let listed = sqlx::query_scalar!(
+            r#"select exists (select 1 from payors
+                              where firm_id = $1 and client_id = $2 and lower(name) = lower($3)) as "listed!""#,
+            firm.as_uuid(),
+            client.as_uuid(),
+            name,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        if listed {
             Err(ClientError::DuplicateName(name.to_owned()))
         } else {
             Err(ClientError::NotFound)

@@ -38,10 +38,19 @@ async fn h2_a_client_lists_its_expected_payors_by_name(pool: PgPool) {
         let refused = payors.add(santos, client, name).await;
         assert!(matches!(refused, Err(ClientError::Invalid(_))), "{case}: {refused:?}");
     }
-    assert!(matches!(
-        payors.add(santos, client, "sm supermalls").await,
-        Err(ClientError::DuplicateName(_))
-    ));
+    payors.add(santos, client, "Peñafrancia Trading").await.unwrap();
+    for duplicate in ["sm supermalls", "PEÑAFRANCIA TRADING"] {
+        let refused = payors.add(santos, client, duplicate).await;
+        assert!(
+            matches!(refused, Err(ClientError::DuplicateName(_))),
+            "{duplicate}: {refused:?}"
+        );
+    }
+    let reserved = payors.add(santos, client, "Another Business").await;
+    assert!(
+        matches!(reserved, Err(ClientError::Invalid(_))),
+        "the upload page's own choice"
+    );
     assert!(matches!(
         payors.add(reyes, client, "Puregold").await,
         Err(ClientError::NotFound)
@@ -52,7 +61,7 @@ async fn h2_a_client_lists_its_expected_payors_by_name(pool: PgPool) {
         Err(ClientError::NotFound)
     ));
     payors.remove(santos, client, sm).await.unwrap();
-    assert_eq!(payors.list(santos, client).await.unwrap().len(), 1);
+    assert_eq!(payors.list(santos, client).await.unwrap().len(), 2);
 }
 
 #[sqlx::test]
