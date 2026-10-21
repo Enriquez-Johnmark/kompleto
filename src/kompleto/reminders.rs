@@ -1,0 +1,199 @@
+//! The scheduler (D1): each run creates the Drafts that are due, as fixed
+//! templates in the Client's language. Every Draft waits for the
+//! bookkeeper's approval; nothing here approves or sends. M3 replaces the
+//! template text with AI drafts, keeping the template as the fallback.
+//!
+//! - Only the latest Draft due is created; a missed earlier one is skipped,
+//!   so a Client never gets a burst of catch-up messages.
+//! - A newly added Client is chased from the first Period whose Cut-off is
+//!   after the day it was added.
+//! - Each Draft is claimed in `scheduled_drafts` before it's created, and
+//!   that table's constraints allow at most four per Client per Period.
+//!
+//! This is a system-wide worker: it reads every Firm's Clients, and names
+//! the Firm in every row it writes.
+
+use std::sync::Arc;
+
+use sqlx::PgPool;
+
+use super::calendar::{Calendar, CalendarError};
+use super::checklist::owed_documents;
+use super::clients::{Client, ClientError, ClientId, Clients, Language};
+use super::dates::show_date;
+use super::firms::FirmId;
+use super::periods::{ClientCalendar, CollectionPeriod};
+use super::schedule::{MANILA, MAX_DRAFTS_PER_PERIOD, PlannedDraft, Slot, appears_at, planned_drafts};
+use crate::engine::clock::Clock;
+use crate::engine::mail::Email;
+use crate::engine::outbox::{Outbox, OutboxError};
+
+/// Scheduler errors.
+#[derive(Debug, thiserror::Error)]
+pub enum SchedulerError {
+    /// The database failed.
+    #[error(transparent)]
+    Database(#[from] sqlx::Error),
+    /// Reading a Client failed.
+    #[error(transparent)]
+    Client(#[from] ClientError),
+    /// The outbox refused a Draft.
+    #[error(transparent)]
+    Outbox(#[from] OutboxError),
+}
+
+/// Creates the Drafts that are due.
+pub struct Scheduler {
+    pool: PgPool,
+    clock: Arc<dyn Clock>,
+    calendar: Calendar,
+    clients: Clients,
+    outbox: Outbox,
+}
+
+impl Scheduler {
+    /// A scheduler using the built-in calendar.
+    pub fn new(pool: PgPool, clock: Arc<dyn Clock>) -> Result<Self, CalendarError> {
+        Ok(Self {
+            calendar: Calendar::built_in()?,
+            clients: Clients::new(pool.clone(), clock.clone()),
+            outbox: Outbox::new(pool.clone(), clock.clone()),
+            pool,
+            clock,
+        })
+    }
+
+    /// Creates every Draft due now; returns how many. Safe to run again.
+    pub async fn run_once(&self) -> Result<usize, SchedulerError> {
+        let rows = sqlx::query!(
+            "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset
+             from clients c join firms f on f.id = c.firm_id
+             where not c.paused"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut created = 0;
+        for row in rows {
+            let (firm, id) = (FirmId::from(row.firm_id), ClientId::from(row.id));
+            let client = self.clients.get(firm, id).await?;
+            let overrides = self.clients.due_overrides(firm, id).await?;
+            let calendar = ClientCalendar {
+                calendar: &self.calendar,
+                forms: &client.details.forms,
+                overrides: &overrides,
+                cut_off_offset_days: client
+                    .cut_off_offset_days
+                    .unwrap_or_else(|| u8::try_from(row.firm_offset).unwrap_or(5)),
+            };
+            let now = self.clock.now();
+            let added_on = row.created_at.to_offset(MANILA).date();
+            for period in calendar.upcoming(now.to_offset(MANILA).date()) {
+                if period.cut_off <= added_on {
+                    continue;
+                }
+                let latest_due = planned_drafts(&period, &client.reminder_days)
+                    .into_iter()
+                    .rfind(|draft| appears_at(draft.on) <= now);
+                if let Some(draft) = latest_due
+                    && self.create(&row.firm_name, &client, firm, &period, draft).await?
+                {
+                    created += 1;
+                }
+            }
+        }
+        Ok(created)
+    }
+
+    /// Claims the slot and creates its Draft; false if it already exists or
+    /// the Period has had its four.
+    async fn create(
+        &self,
+        firm_name: &str,
+        client: &Client,
+        firm: FirmId,
+        period: &CollectionPeriod,
+        draft: PlannedDraft,
+    ) -> Result<bool, SchedulerError> {
+        let (key, slot) = (period.key(), slot_key(draft.slot));
+        let claimed = sqlx::query_scalar!(
+            r#"insert into scheduled_drafts (firm_id, client_id, period, slot, ordinal, created_at)
+               select $1, $2, $3, $4, count(*)::smallint, $5
+               from scheduled_drafts where client_id = $2 and period = $3
+               having count(*) < $6
+               on conflict do nothing
+               returning 1 as "claimed!""#,
+            firm.as_uuid(),
+            client.id.as_uuid(),
+            key,
+            slot,
+            self.clock.now(),
+            i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        if claimed.is_none() {
+            return Ok(false);
+        }
+        let edits = self.clients.checklist_edits(firm, client.id).await?;
+        let owed = owed_documents(&client.details.forms, period.month, &edits);
+        let message = self
+            .outbox
+            .create_draft(firm, &template(firm_name, client, period, draft.slot, &owed))
+            .await?;
+        sqlx::query!(
+            "update scheduled_drafts set message_id = $5
+             where firm_id = $1 and client_id = $2 and period = $3 and slot = $4",
+            firm.as_uuid(),
+            client.id.as_uuid(),
+            key,
+            slot,
+            message.as_uuid(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(true)
+    }
+}
+
+fn slot_key(slot: Slot) -> String {
+    match slot {
+        Slot::FirstRequest => "first".to_owned(),
+        Slot::Reminder { days_before } => format!("before-{days_before}"),
+    }
+}
+
+/// The fixed-template Draft for one slot.
+fn template(firm_name: &str, client: &Client, period: &CollectionPeriod, slot: Slot, owed: &[String]) -> Email {
+    let (name, label, cut_off) = (
+        &client.details.contact_first_name,
+        period.label,
+        show_date(period.cut_off),
+    );
+    let list: String = owed.iter().map(|item| format!("- {item}\n")).collect();
+    let reminder = matches!(slot, Slot::Reminder { .. });
+    let (subject, body) = match client.details.language {
+        Language::Taglish => (
+            format!("Mga dokumento para sa {label}, bago {cut_off}"),
+            format!(
+                "Hi {name},\n\n{}Para sa {label} BIR filings ninyo, paki-send po ang mga ito bago {cut_off}:\n\n\
+                 {list}\nSalamat po!\n{firm_name}\n",
+                if reminder { "Paalala lang po. " } else { "" }
+            ),
+        ),
+        Language::English => (
+            format!("Documents for {label}, by {cut_off}"),
+            format!(
+                "Hi {name},\n\n{}For your {label} BIR filings, please send us these by {cut_off}:\n\n\
+                 {list}\nThank you!\n{firm_name}\n",
+                if reminder { "A quick reminder. " } else { "" }
+            ),
+        ),
+    };
+    Email {
+        to_address: client.details.email.clone(),
+        from_name: firm_name.to_owned(),
+        reply_to: None,
+        subject,
+        body_text: body,
+    }
+}

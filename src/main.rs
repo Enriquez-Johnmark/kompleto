@@ -26,6 +26,7 @@ use kompleto::engine::outbox::{Outbox, Sender};
 use kompleto::kompleto::calendar::Calendar;
 use kompleto::kompleto::firms::Firms;
 use kompleto::kompleto::import::xlsx::{self, XlsxReader};
+use kompleto::kompleto::reminders::Scheduler;
 use kompleto::kompleto::web::{AppState, router};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -35,6 +36,8 @@ use tracing_subscriber::EnvFilter;
 const DRAIN_BATCH: usize = 50;
 /// How often `serve` drains the outbox.
 const DRAIN_EVERY: Duration = Duration::from_secs(30);
+/// How often `serve` creates the Drafts that are due.
+const SCHEDULE_EVERY: Duration = Duration::from_secs(60 * 60);
 
 fn main() -> ExitCode {
     // The Excel parser runs before anything else starts (threads, the
@@ -104,6 +107,17 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
     let xlsx = XlsxReader::new(std::env::current_exe().context("finding this program for the Excel reader")?);
     let state = AppState::new(pool.clone(), clock.clone(), &config.public_base_url, xlsx)?;
     let wake_up = state.sender_wake_up();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone())?;
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(SCHEDULE_EVERY);
+        loop {
+            tick.tick().await;
+            match scheduler.run_once().await {
+                Ok(created) => tracing::info!(created, "reminder drafts created"),
+                Err(err) => tracing::error!(%err, "creating reminder drafts failed"),
+            }
+        }
+    });
     let sender = Sender::new(pool, config.mailer()?, clock);
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(DRAIN_EVERY);

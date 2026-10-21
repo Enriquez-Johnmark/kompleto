@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset\n             from clients c join firms f on f.id = c.firm_id\n             where not c.paused",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "firm_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "firm_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "firm_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "firms",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "firm_offset",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "firms",
+            "name": "cut_off_offset_days"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "49032034eb691b3077476d9f371db17e3ebba552382cfc4bf80378971f585d7a"
+}
