@@ -1,0 +1,93 @@
+# Kompleto's built-in BIR calendar (B3). One file, maintained by us.
+# Sources and confidence: docs/research/bir-calendar.md.
+#
+# covers: which Periods a form is filed for
+#   monthly                    every month
+#   monthly-except-quarter-end months 1-2 of each quarter (month 3 is in the quarterly return)
+#   quarterly                  every quarter
+#   quarterly-except-q4        Q1-Q3 (Q4 is in the annual return)
+#   annual                     the calendar year
+# due: the statutory due date, counted from the Period's last day
+#   { days_after = N }                   N days after the Period ends
+#   { months_after = N, day = D }        day D of the Nth month after the Period's
+#                                        last month; a D past the month's end means
+#                                        its last day
+# december_due: a different rule for December's Period, where the BIR sets one
+
+[[form]]
+code = "0619-E"
+name = "Monthly remittance of expanded withholding tax"
+covers = "monthly-except-quarter-end"
+due = { months_after = 1, day = 10 }
+source = "RR 11-2018"
+
+[[form]]
+code = "1601-C"
+name = "Monthly withholding tax on compensation"
+covers = "monthly"
+due = { months_after = 1, day = 10 }
+december_due = { months_after = 1, day = 15 }
+source = "PwC year-end payroll reminders, 2021 (secondary)"
+
+[[form]]
+code = "1601-EQ"
+name = "Quarterly expanded withholding tax return"
+covers = "quarterly"
+due = { months_after = 1, day = 31 }
+source = "RR 11-2018"
+
+[[form]]
+code = "2550Q"
+name = "Quarterly VAT return"
+covers = "quarterly"
+due = { days_after = 25 }
+source = "NIRC s.114(A); RR 13-2018"
+
+[[form]]
+code = "2551Q"
+name = "Quarterly percentage tax return"
+covers = "quarterly"
+due = { days_after = 25 }
+source = "NIRC s.128(A)(1)"
+
+[[form]]
+code = "1701Q"
+name = "Quarterly income tax return (individuals)"
+covers = "quarterly-except-q4"
+due = { months_after = 2, day = 15 }
+source = "NIRC s.74; RR 8-2018"
+
+[[form]]
+code = "1702Q"
+name = "Quarterly income tax return (corporations)"
+covers = "quarterly-except-q4"
+due = { days_after = 60 }
+source = "NIRC s.77(B) as amended by RA 11976"
+
+[[form]]
+code = "1701"
+name = "Annual income tax return (individuals, incl. 1701A)"
+covers = "annual"
+due = { months_after = 4, day = 15 }
+source = "NIRC s.51(C)(1)"
+
+[[form]]
+code = "1702"
+name = "Annual income tax return (corporations, RT/EX/MX)"
+covers = "annual"
+due = { months_after = 4, day = 15 }
+source = "NIRC s.77(B)"
+
+[[form]]
+code = "1604-C"
+name = "Annual information return of tax withheld on compensation"
+covers = "annual"
+due = { months_after = 1, day = 31 }
+source = "RR 11-2018"
+
+[[form]]
+code = "1604-E"
+name = "Annual information return of creditable taxes withheld (expanded)"
+covers = "annual"
+due = { months_after = 3, day = 1 }
+source = "RR 11-2018"
