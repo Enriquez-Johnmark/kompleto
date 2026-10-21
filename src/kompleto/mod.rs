@@ -4,3 +4,4 @@
 pub mod calendar;
 pub mod checklist;
 pub mod periods;
+pub mod schedule;
