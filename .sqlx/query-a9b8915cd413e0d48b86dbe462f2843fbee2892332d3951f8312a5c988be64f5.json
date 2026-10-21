@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, name, login_email, cut_off_offset_days from firms where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "firms",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "firms",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "login_email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "firms",
+            "name": "login_email"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "cut_off_offset_days",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "firms",
+            "name": "cut_off_offset_days"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a9b8915cd413e0d48b86dbe462f2843fbee2892332d3951f8312a5c988be64f5"
+}

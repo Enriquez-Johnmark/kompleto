@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into clients (id, firm_id, business_name, contact_first_name, email, language,\n                                  forms, created_at, updated_at)\n             values ($1, $2, $3, $4, $5, $6, $7, $8, $8)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "286ab4e3774b2e74e16f4231bc0dc81c99d24227ef2fb726de28cf6aab268da3"
+}

@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update clients set business_name = $3, contact_first_name = $4, email = $5,\n                    language = $6, forms = $7, updated_at = $8\n             where firm_id = $1 and id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec9c9ba8782d223da3f13c7d6b9d090f93c001b6788f273dd42c74f9c13e478c"
+}

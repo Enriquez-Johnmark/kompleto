@@ -76,3 +76,24 @@ impl Mailer for RecordingMailer {
         })
     }
 }
+
+/// Creates a Firm named `name` with a login email derived from it.
+pub async fn firm(pool: &sqlx::PgPool, name: &str) -> kompleto::kompleto::firms::FirmId {
+    let email = format!("{}@firm.test", name.to_lowercase().replace(' ', "."));
+    kompleto::kompleto::firms::Firms::new(pool.clone(), clock())
+        .create(name, &email)
+        .await
+        .unwrap()
+}
+
+/// A sample Client: a non-VAT sole proprietor reminded in Taglish.
+pub fn nena() -> kompleto::kompleto::clients::NewClient {
+    use kompleto::kompleto::calendar::BirForm;
+    kompleto::kompleto::clients::NewClient {
+        business_name: "Nena's Sari-Sari Store".to_owned(),
+        contact_first_name: "Nena".to_owned(),
+        email: "nena@example.test".to_owned(),
+        language: kompleto::kompleto::clients::Language::Taglish,
+        forms: vec![BirForm::F2551Q, BirForm::F1701Q],
+    }
+}

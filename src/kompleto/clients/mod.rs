@@ -1,7 +1,11 @@
 //! A Firm's Clients (B1, B2): who gets asked for documents, in which
 //! language, for which BIR forms.
 
+mod repo;
+
 use std::fmt;
+
+pub use repo::{Client, ClientError, ClientId, Clients};
 
 use super::calendar::BirForm;
 

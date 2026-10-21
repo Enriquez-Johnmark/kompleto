@@ -4,5 +4,6 @@
 pub mod calendar;
 pub mod checklist;
 pub mod clients;
+pub mod firms;
 pub mod periods;
 pub mod schedule;
