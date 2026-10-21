@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select distinct on (s.client_id) s.client_id, m.status,\n                  coalesce(m.sent_at, m.updated_at) as \"at!\"\n           from scheduled_drafts s join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n           where s.firm_id = $1\n           order by s.client_id, m.created_at desc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "scheduled_drafts",
+            "name": "client_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "outbox_messages",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "5b43e6d5fc1817dc7f480c9e880bf9f88200ead3c6331855caf7dceed125ac76"
+}

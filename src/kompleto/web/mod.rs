@@ -8,6 +8,7 @@
 //!   this stops cross-site form posts.
 
 mod clients;
+mod dashboard;
 mod drafts;
 mod hooks;
 mod import;
@@ -28,7 +29,7 @@ use axum::http::request::Parts;
 use axum::http::{Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::{MethodRouter, get};
+use axum::routing::MethodRouter;
 use secrecy::SecretString;
 use sqlx::PgPool;
 use tokio::sync::{Notify, Semaphore};
@@ -177,7 +178,7 @@ impl AppState {
 /// The web app.
 pub fn router(state: AppState) -> Router {
     Router::new()
-        .route("/", get(|| async { Redirect::to("/clients") }))
+        .merge(dashboard::routes())
         .merge(login::routes())
         .merge(clients::routes())
         .merge(drafts::routes())

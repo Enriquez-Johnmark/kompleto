@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select s.client_id, count(*) as \"drafts!\"\n           from scheduled_drafts s join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n           where s.firm_id = $1 and m.status = 'draft'\n           group by s.client_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "scheduled_drafts",
+            "name": "client_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "drafts!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "bb2a9cc02cea20db42cc9343f777c2d5d9c0536a183538b7bc79897f9938aa1b"
+}

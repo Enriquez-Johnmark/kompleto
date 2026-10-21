@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select b.client_id,\n                  bool_or(b.kind in ('bounce', 'complaint') and b.address = lower(trim(c.email))) as \"bouncing!\",\n                  bool_or(b.kind = 'soft_bounce') as \"soft!\"\n           from bounces b join clients c on c.id = b.client_id and c.firm_id = b.firm_id\n           where b.firm_id = $1\n           group by b.client_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "bounces",
+            "name": "client_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "bouncing!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "soft!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "2942ac4ec683d686cde73f6a158073dcf374c32a7a4ba98692e3ecb7c534d6bf"
+}

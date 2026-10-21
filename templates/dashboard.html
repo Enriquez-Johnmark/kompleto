@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Kompleto{% endblock %}
+{% block body %}
+{% include "nav.html" %}
+<h1>Dashboard</h1>
+{% if rows.is_empty() %}
+<p class="muted">No clients yet. <a href="/clients/new">Add a client</a> or <a href="/import">import a file</a>.</p>
+{% else %}
+<table>
+  <tr><th>Client</th><th>Next cut-off</th><th>Still missing</th><th>Last message</th></tr>
+  {% for row in rows %}
+  <tr>
+    <td><a href="/clients/{{ row.id }}">{{ row.business }}</a>
+      {% if row.paused %}<br><span class="muted">paused</span>{% endif %}
+      {% if row.bouncing %}<br><span class="error">email bounced: change the address</span>{% elif row.soft_bounced %}<br><span class="muted">a temporary bounce</span>{% endif %}
+      {% if row.replied %}<br><strong>replied</strong>{% elif row.auto_replied %}<br><span class="muted">auto-reply</span>{% endif %}</td>
+    <td>{% if row.cut_off.is_empty() %}<span class="muted">nothing due</span>{% else %}{{ row.cut_off }}<br><span class="muted">{{ row.period }}</span>{% endif %}</td>
+    <td>{% if row.missing.is_empty() %}{% if !row.cut_off.is_empty() %}<span class="muted">nothing</span>{% endif %}{% else %}<ul>{% for item in row.missing %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}</td>
+    <td>{{ row.last_message }}{% if row.drafts_waiting > 0 %}<br><a href="/drafts">{{ row.drafts_waiting }} draft{% if row.drafts_waiting != 1 %}s{% endif %} waiting</a>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}
