@@ -93,7 +93,7 @@ impl BirForm {
 
 impl fmt::Display for BirForm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.code())
+        f.pad(self.code())
     }
 }
 
@@ -160,11 +160,12 @@ impl TaxPeriod {
 
 impl fmt::Display for TaxPeriod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Month { year, month } => write!(f, "{month} {year}"),
-            Self::Quarter { year, quarter } => write!(f, "Q{quarter} {year}"),
-            Self::Year(year) => write!(f, "{year}"),
-        }
+        let text = match self {
+            Self::Month { year, month } => format!("{month} {year}"),
+            Self::Quarter { year, quarter } => format!("Q{quarter} {year}"),
+            Self::Year(year) => year.to_string(),
+        };
+        f.pad(&text)
     }
 }
 
@@ -246,6 +247,28 @@ impl Calendar {
             holidays_known_from: parse_date(&file.holidays.known_from)?,
             holidays_known_until: parse_date(&file.holidays.known_until)?,
         })
+    }
+
+    /// Every due date from `from` to `until`, inclusive, by date then form.
+    pub fn due_dates_between(&self, from: Date, until: Date) -> Vec<(BirForm, TaxPeriod, DueDate)> {
+        let mut periods = Vec::new();
+        // A Period is due at most four months after it ends.
+        for year in from.year() - 1..=until.year() {
+            periods.push(TaxPeriod::Year(year));
+            periods.extend((1..=4).map(|quarter| TaxPeriod::Quarter { year, quarter }));
+            periods.extend((1..=12).map(|n| TaxPeriod::Month {
+                year,
+                month: month_number(n),
+            }));
+        }
+        let mut due: Vec<_> = periods
+            .into_iter()
+            .flat_map(|period| BirForm::ALL.map(|form| (form, period)))
+            .filter_map(|(form, period)| self.due_date(form, period).map(|due| (form, period, due)))
+            .filter(|(_, _, due)| (from..=until).contains(&due.date))
+            .collect();
+        due.sort_by_key(|(form, period, due)| (due.date, *form, *period));
+        due
     }
 
     /// True if the national holidays are known for every day from `from`
@@ -484,6 +507,20 @@ mod tests {
         }
         assert_eq!(q(2026, 3).key(), "2026-Q3");
         assert_eq!(TaxPeriod::parse_key("2026-Q5"), None);
+    }
+
+    #[test]
+    fn b3_built_in_calendar_covers_the_next_12_months() {
+        let (from, until) = (date!(2026 - 10 - 21), date!(2027 - 10 - 21));
+        let calendar = calendar();
+        assert!(calendar.holidays_cover(from, until));
+
+        let listing: String = calendar
+            .due_dates_between(from, until)
+            .iter()
+            .map(|(form, period, due)| format!("{} {form:<8} {period:<15} {}\n", due.date, due.statutory))
+            .collect();
+        insta::assert_snapshot!(listing);
     }
 
     #[test]
