@@ -3,6 +3,9 @@
 Answers one question for the Kompleto spec: is Haiku's Taglish good enough,
 or do we need Sonnet? Not product code. Delete once the decision is recorded.
 
+Without API credits, use manual.py instead: the same test by hand in claude.ai,
+with the app's real prompt (this script's older prompt predates M3).
+
 Usage:
     ANTHROPIC_API_KEY=sk-ant-... python3 -I prototypes/taglish-test/run.py [N]
 
