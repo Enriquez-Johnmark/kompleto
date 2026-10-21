@@ -148,4 +148,10 @@ async fn d7_a_login_email_must_go_to_the_firms_login_address_with_one_login_link
         "a stray message is never sent"
     );
     assert!(reason(wrong_link).contains("Kompleto doesn't recognise"));
+    check(login(
+        "santos.bookkeeping@firm.test",
+        &format!("{BASE_URL}/replies/01a15f0b-6a2c-7529-908c-4bf9cf7406a0"),
+    ))
+    .await
+    .unwrap();
 }

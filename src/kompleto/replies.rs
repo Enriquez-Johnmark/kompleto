@@ -1,6 +1,8 @@
 //! Replies (G1): what Contacts send back to their Reminders. A human Reply
-//! stops the Period's Reminders; an automatic one (out of office) is only
-//! noted. Mail that matches no Client keeps no content.
+//! stops the Period's Reminders and tells the Firm, by an email that links
+//! to the Reply in Kompleto rather than copying it, so nothing a Contact
+//! writes is ever relayed from our domain. An automatic reply (out of
+//! office) is only noted. Mail that matches no Client keeps no content.
 //!
 //! Receiving is a system-wide worker: the message itself names the Firm,
 //! through its signed reply address or a sender address only one Client
@@ -13,14 +15,20 @@ use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use super::clients::ClientId;
+use super::calendar::TaxPeriod;
+use super::clients::{ClientId, Clients};
 use super::drafts::Drafts;
-use super::firms::FirmId;
+use super::firms::{FirmId, Firms};
+use super::presend::KompletoChecks;
 use super::upload_links::{OpenLink, UploadLinks};
 use crate::engine::clock::Clock;
 use crate::engine::ids::id_type;
 use crate::engine::inbound::InboundEmail;
-use crate::engine::outbox::OutboxError;
+use crate::engine::mail::Email;
+use crate::engine::outbox::{Outbox, OutboxError};
+
+/// The approver recorded for Reply notices, sent without a person approving.
+pub const NOTICE_APPROVER: &str = "system:replies";
 
 id_type!(
     /// One Reply.
@@ -36,9 +44,12 @@ pub enum ReplyError {
     /// The database failed.
     #[error(transparent)]
     Database(#[from] sqlx::Error),
-    /// Cancelling the Period's Reminders failed.
+    /// Cancelling the Period's Reminders or sending a notice failed.
     #[error(transparent)]
     Outbox(#[from] OutboxError),
+    /// The notice's Firm or Client couldn't be read.
+    #[error("reply notice: {0}")]
+    Notice(String),
 }
 
 /// What became of an inbound email.
@@ -80,13 +91,30 @@ pub struct Replies {
     clock: Arc<dyn Clock>,
     links: UploadLinks,
     drafts: Drafts,
+    firms: Firms,
+    clients: Clients,
+    outbox: Outbox,
+    checks: KompletoChecks,
+    base_url: String,
 }
 
 impl Replies {
-    /// Replies matched through `links`' reply addresses.
-    pub fn new(pool: PgPool, clock: Arc<dyn Clock>, links: UploadLinks) -> Self {
+    /// Replies matched through `links`' reply addresses; notices link to
+    /// pages at `base_url` and pass `checks` like every other message.
+    pub fn new(
+        pool: PgPool,
+        clock: Arc<dyn Clock>,
+        links: UploadLinks,
+        checks: KompletoChecks,
+        base_url: &str,
+    ) -> Self {
         Self {
             drafts: Drafts::new(pool.clone(), clock.clone()),
+            firms: Firms::new(pool.clone(), clock.clone()),
+            clients: Clients::new(pool.clone(), clock.clone()),
+            outbox: Outbox::new(pool.clone(), clock.clone()),
+            checks,
+            base_url: base_url.trim_end_matches('/').to_owned(),
             pool,
             clock,
             links,
@@ -120,7 +148,46 @@ impl Replies {
             return Ok(Received::Automatic(id));
         }
         self.drafts.cancel_waiting(link.firm, link.client, &link.period).await?;
+        // The Reply is kept either way; a notice that fails is logged.
+        if let Err(err) = self.notify(&link, id).await {
+            tracing::error!(firm = %link.firm, reply = %id, %err, "notifying the firm of a reply failed");
+        }
         Ok(Received::Human(id))
+    }
+
+    /// Emails the Firm that Reply `id` arrived, with a link to read it.
+    async fn notify(&self, link: &OpenLink, id: ReplyId) -> Result<(), ReplyError> {
+        let firm = self
+            .firms
+            .get(link.firm)
+            .await
+            .map_err(|err| ReplyError::Notice(err.to_string()))?;
+        let client = self
+            .clients
+            .get(link.firm, link.client)
+            .await
+            .map_err(|err| ReplyError::Notice(err.to_string()))?;
+        let period =
+            TaxPeriod::parse_key(&link.period).map_or_else(|| link.period.clone(), |period| period.to_string());
+        let (contact, business) = (&client.details.contact_first_name, &client.details.business_name);
+        let email = Email {
+            to_address: firm.login_email,
+            from_name: "Kompleto".to_owned(),
+            reply_to: None,
+            subject: format!("{contact} ({business}) replied about {period}"),
+            body_text: format!(
+                "{contact} at {business} replied to your reminder about {period}. \
+                 Their reminders for {period} have stopped.\n\n\
+                 Read the reply in Kompleto:\n{}/replies/{id}\n",
+                self.base_url
+            ),
+        };
+        let message = self.outbox.create_draft(link.firm, &email).await?;
+        let hash = self.outbox.get(link.firm, message).await?.content_hash();
+        self.outbox
+            .approve(link.firm, message, NOTICE_APPROVER, &hash, &self.checks)
+            .await?;
+        Ok(())
     }
 
     /// The link the email answers: through its reply address, or else the

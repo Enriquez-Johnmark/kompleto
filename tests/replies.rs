@@ -47,11 +47,18 @@ async fn reminded(pool: &PgPool) -> (FirmId, Arc<FixedClock>, String) {
 }
 
 fn replies(pool: &PgPool, clock: Arc<FixedClock>) -> Replies {
-    Replies::new(pool.clone(), clock.clone(), common::upload_links(pool, clock))
+    let checks = common::kompleto_checks(pool, clock.clone());
+    Replies::new(
+        pool.clone(),
+        clock.clone(),
+        common::upload_links(pool, clock),
+        checks,
+        "http://kompleto.test",
+    )
 }
 
 async fn status(pool: &PgPool) -> String {
-    sqlx::query_scalar("select status from outbox_messages")
+    sqlx::query_scalar("select m.status from outbox_messages m join scheduled_drafts s on s.message_id = m.id")
         .fetch_one(pool)
         .await
         .unwrap()
@@ -135,4 +142,29 @@ async fn g1_mail_without_a_code_matches_the_only_client_with_that_address(pool: 
 
     assert!(matches!(first, Received::Human(_)), "{first:?}");
     assert_eq!(second, Received::Unmatched);
+}
+
+#[sqlx::test]
+async fn g1_the_firm_is_told_of_a_reply_with_a_link_not_a_copy(pool: PgPool) {
+    let (_, clock, reply_to) = reminded(&pool).await;
+    let email = parse(&common::inbound("human_reply", &reply_to)).unwrap();
+
+    let Received::Human(id) = replies(&pool, clock).receive(&email).await.unwrap() else {
+        panic!("not a human reply");
+    };
+
+    let (to, subject, body, status): (String, String, String, String) = sqlx::query_as(
+        "select to_address, subject, body_text, status from outbox_messages where to_address <> 'nena@example.test'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(to, "santos.bookkeeping@firm.test");
+    assert_eq!(subject, "Nena (Nena's Sari-Sari Store) replied about October 2026");
+    assert!(body.contains(&format!("http://kompleto.test/replies/{id}")), "{body}");
+    assert!(
+        !body.contains("Ipapadala"),
+        "the Contact's text is never copied: {body}"
+    );
+    assert_eq!(status, "approved", "on its way within the sender's next drain");
 }

@@ -4,8 +4,8 @@
 //!
 //! - A reminder goes only to its Client's stored email, and carries exactly
 //!   one link: the Client's own Upload link for the reminder's Period.
-//! - A login email goes only to its Firm's login address, with exactly one
-//!   link, to our own login page.
+//! - A login email or a Reply notice goes only to its Firm's login address,
+//!   with exactly one link, to our own login page or Reply page.
 //! - Anything else isn't recognised, and never goes out.
 
 use sqlx::PgPool;
@@ -24,7 +24,8 @@ pub struct KompletoChecks {
     pool: PgPool,
     clients: Clients,
     links: UploadLinks,
-    login_link_prefix: String,
+    /// Pages a message to the Firm's login address may link to.
+    firm_link_prefixes: [String; 2],
 }
 
 impl KompletoChecks {
@@ -35,7 +36,7 @@ impl KompletoChecks {
             links,
             clients: Clients::new(pool.clone(), clock),
             pool,
-            login_link_prefix: format!("{}/login/", base_url.trim_end_matches('/')),
+            firm_link_prefixes: ["login", "replies"].map(|page| format!("{}/{page}/", base_url.trim_end_matches('/'))),
         }
     }
 
@@ -82,7 +83,11 @@ impl KompletoChecks {
         let body_links = links(&email.body_text);
         let is_login = login_email.is_some_and(|login| same_address(&email.to_address, &login))
             && body_links.len() == 1
-            && body_links.iter().all(|link| link.starts_with(&self.login_link_prefix));
+            && body_links.iter().all(|link| {
+                self.firm_link_prefixes
+                    .iter()
+                    .any(|prefix| link.starts_with(prefix.as_str()))
+            });
         if is_login {
             Ok(())
         } else {
