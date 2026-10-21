@@ -83,12 +83,18 @@ impl Auth {
             return Ok(LoginOutcome::NotSent);
         };
         let now = self.clock.now();
+        let mut tx = self.pool.begin().await?;
+        // One request per Firm at a time, so parallel requests can't all
+        // pass the hourly limit before any of them is counted.
+        sqlx::query!("select id from firms where id = $1 for update", firm.id.as_uuid())
+            .fetch_one(&mut *tx)
+            .await?;
         let recent = sqlx::query_scalar!(
             r#"select count(*) as "count!" from login_tokens where firm_id = $1 and created_at > $2"#,
             firm.id.as_uuid(),
             now - Duration::hours(1),
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await?;
         if recent >= MAX_LINKS_PER_HOUR {
             tracing::warn!(firm = %firm.id, "login emails limited this hour");
@@ -102,7 +108,7 @@ impl Auth {
             now,
             now + LINK_LIFETIME,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
         let email = Email {
             to_address: firm.login_email.clone(),
@@ -115,7 +121,8 @@ impl Auth {
                 firm.name, self.base_url
             ),
         };
-        let id = self.outbox.create_draft(firm.id, &email).await?;
+        let id = self.outbox.create_draft_in(&mut tx, firm.id, &email).await?;
+        tx.commit().await?;
         let hash = self.outbox.get(firm.id, id).await?.content_hash();
         self.outbox.approve(firm.id, id, LOGIN_APPROVER, &hash).await?;
         Ok(LoginOutcome::Sent)

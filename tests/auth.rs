@@ -115,3 +115,22 @@ async fn a1_a_session_lasts_30_days_or_until_logout(pool: PgPool) {
     assert_eq!(auth.firm_for_session(&first).await.unwrap(), None);
     assert_eq!(auth.firm_for_session("not-a-session").await.unwrap(), None);
 }
+
+#[sqlx::test]
+async fn a1_parallel_requests_still_get_at_most_five_login_emails(pool: PgPool) {
+    let (auth, _, _) = setup(&pool).await;
+
+    let requests: Vec<_> = (0..12)
+        .map(|_| {
+            let auth = auth.clone();
+            tokio::spawn(async move { auth.request_link("ana@santos.test").await.unwrap() })
+        })
+        .collect();
+    let mut sent = 0;
+    for request in requests {
+        sent += usize::from(request.await.unwrap() == LoginOutcome::Sent);
+    }
+
+    assert_eq!(sent, 5);
+    assert_eq!(login_emails(&pool).await.len(), 5);
+}
