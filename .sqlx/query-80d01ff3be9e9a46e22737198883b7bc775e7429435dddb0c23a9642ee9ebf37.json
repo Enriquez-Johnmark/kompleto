@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select firm_id from sessions where session_hash = $1 and expires_at > $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "firm_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "firm_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "80d01ff3be9e9a46e22737198883b7bc775e7429435dddb0c23a9642ee9ebf37"
+}

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update login_tokens set used_at = $2\n             where token_hash = $1 and used_at is null and expires_at > $2\n             returning firm_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "firm_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "login_tokens",
+            "name": "firm_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d92b2839ce9c2116b32c85d62087b7db6fc9aabe98a36a77ab87a7e1c4ec458f"
+}
