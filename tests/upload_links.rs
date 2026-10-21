@@ -111,3 +111,31 @@ async fn f2_a_link_stops_working_30_days_after_the_cut_off(pool: PgPool) {
     clock.advance(time::Duration::minutes(1));
     assert!(matches!(links.open(token(&url)).await, Err(LinkError::Expired(_))));
 }
+
+#[sqlx::test]
+async fn f2_a_changed_cut_off_moves_the_links_last_day(pool: PgPool) {
+    let clock = clock();
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let nena_id = Clients::new(pool.clone(), clock.clone())
+        .create(santos, &nena())
+        .await
+        .unwrap();
+    let links = UploadLinks::new(pool.clone(), clock.clone(), &master_key(), BASE_URL);
+    let url = links
+        .for_period(santos, nena_id, "2026-10", date!(2026 - 11 - 05))
+        .await
+        .unwrap();
+
+    // The Firm moves the Cut-off to 9 Nov before the next reminder.
+    let again = links
+        .for_period(santos, nena_id, "2026-10", date!(2026 - 11 - 09))
+        .await
+        .unwrap();
+
+    assert_eq!(again, url, "the same link");
+    assert_eq!(links.open(token(&url)).await.unwrap().cut_off, date!(2026 - 11 - 09));
+    clock.advance(datetime!(2026-12-09 23:59 +8) - datetime!(2026-10-21 09:00 UTC));
+    links.open(token(&url)).await.unwrap();
+    clock.advance(time::Duration::minutes(1));
+    assert!(matches!(links.open(token(&url)).await, Err(LinkError::Expired(_))));
+}

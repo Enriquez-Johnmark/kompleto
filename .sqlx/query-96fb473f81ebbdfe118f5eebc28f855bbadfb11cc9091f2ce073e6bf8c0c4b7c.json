@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into upload_links (id, firm_id, client_id, period, cut_off, expires_at, created_at)\n             values ($1, $2, $3, $4, $5, $6, $7)\n             on conflict (client_id, period) do update\n                 set cut_off = excluded.cut_off, expires_at = excluded.expires_at\n                 where upload_links.cut_off <> excluded.cut_off",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Date",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "96fb473f81ebbdfe118f5eebc28f855bbadfb11cc9091f2ce073e6bf8c0c4b7c"
+}

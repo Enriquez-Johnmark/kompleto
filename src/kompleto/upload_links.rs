@@ -81,7 +81,9 @@ impl UploadLinks {
         }
     }
 
-    /// The Client's link for `period`, created if it doesn't exist yet.
+    /// The Client's link for `period`, created if it doesn't exist yet. A
+    /// changed Cut-off (a new offset or due date) moves the link's last day
+    /// with it.
     pub async fn for_period(
         &self,
         firm: FirmId,
@@ -92,7 +94,9 @@ impl UploadLinks {
         sqlx::query!(
             "insert into upload_links (id, firm_id, client_id, period, cut_off, expires_at, created_at)
              values ($1, $2, $3, $4, $5, $6, $7)
-             on conflict (client_id, period) do nothing",
+             on conflict (client_id, period) do update
+                 set cut_off = excluded.cut_off, expires_at = excluded.expires_at
+                 where upload_links.cut_off <> excluded.cut_off",
             Uuid::now_v7(),
             firm.as_uuid(),
             client.as_uuid(),
