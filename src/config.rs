@@ -141,6 +141,13 @@ impl Config {
             .transpose()
     }
 
+    /// The domain Replies come back to: the sending address's own.
+    pub fn reply_domain(&self) -> &str {
+        self.mail_from_address
+            .rsplit_once('@')
+            .map_or(self.mail_from_address.as_str(), |(_, domain)| domain)
+    }
+
     /// The file master key; an error if it's missing or malformed.
     pub fn master_key(&self) -> Result<MasterKey, ConfigError> {
         use secrecy::ExposeSecret;

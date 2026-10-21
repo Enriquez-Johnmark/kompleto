@@ -425,6 +425,18 @@ async fn f2_every_reminder_for_a_period_carries_the_clients_one_upload_link(pool
         .await
         .unwrap();
     assert_eq!((open.firm, open.period.as_str()), (santos, "2026-10"));
+    let reply_to: Vec<Option<String>> = sqlx::query_scalar(
+        "select m.reply_to from scheduled_drafts s join outbox_messages m on m.id = s.message_id where s.period = '2026-10'",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert!(
+        reply_to.iter().all(|r| r
+            .as_deref()
+            .is_some_and(|r| r.starts_with("reply+") && Some(r) == reply_to[0].as_deref())),
+        "every reminder for the Period replies to the same signed address: {reply_to:?}"
+    );
 }
 
 #[sqlx::test]

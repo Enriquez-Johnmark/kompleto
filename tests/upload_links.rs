@@ -139,3 +139,45 @@ async fn f2_a_changed_cut_off_moves_the_links_last_day(pool: PgPool) {
     clock.advance(time::Duration::minutes(1));
     assert!(matches!(links.open(token(&url)).await, Err(LinkError::Expired(_))));
 }
+
+#[sqlx::test]
+async fn g1_each_link_has_a_signed_reply_address_naming_its_client_and_period(pool: PgPool) {
+    let clock = clock();
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let nena_id = Clients::new(pool.clone(), clock.clone())
+        .create(santos, &nena())
+        .await
+        .unwrap();
+    let links = common::upload_links(&pool, clock);
+    let issued = links
+        .issue(santos, nena_id, "2026-10", date!(2026 - 11 - 05))
+        .await
+        .unwrap();
+    let reply = issued.reply_to.unwrap();
+
+    let found = links
+        .by_reply_address(&["someone@else.test".to_owned(), reply.clone()])
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(
+        reply.starts_with("reply+") && reply.ends_with("@getkompleto.test"),
+        "{reply}"
+    );
+    assert_eq!(
+        (found.firm, found.client, found.period.as_str()),
+        (santos, nena_id, "2026-10")
+    );
+    let mut altered = reply.clone();
+    altered.replace_range(10..11, if &reply[10..11] == "0" { "1" } else { "0" });
+    let upload_code = format!("reply+{}@getkompleto.test", token(&issued.url));
+    let elsewhere = reply.replace("getkompleto.test", "evil.test");
+    for (case, address) in [
+        ("altered", altered),
+        ("the upload code", upload_code),
+        ("another domain", elsewhere),
+    ] {
+        assert!(links.by_reply_address(&[address]).await.unwrap().is_none(), "{case}");
+    }
+}

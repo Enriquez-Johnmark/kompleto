@@ -5,6 +5,10 @@
 //! a key derived from the master key. The database holds no usable link, and
 //! a guessed or altered link is simply not found. A link works until 30 days
 //! after its Period's Cut-off.
+//!
+//! Each link also has a reply address, `reply+CODE@domain`, whose code is
+//! the link's ID signed with a separate key. A Contact's Reply to a Reminder
+//! comes back to it, which names the Client and Period (G1).
 
 use std::sync::Arc;
 
@@ -57,12 +61,23 @@ pub struct OpenLink {
     pub cut_off: Date,
 }
 
-/// Creates and checks Upload links.
+/// A link as issued for a Reminder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssuedLink {
+    /// The upload page's address.
+    pub url: String,
+    /// Where the Contact's Reply goes, when replies are set up.
+    pub reply_to: Option<String>,
+}
+
+/// Creates and checks Upload links and their reply addresses.
 #[derive(Clone)]
 pub struct UploadLinks {
     pool: PgPool,
     clock: Arc<dyn Clock>,
     signer: Arc<Signer>,
+    reply_signer: Arc<Signer>,
+    reply_domain: Option<String>,
     base_url: String,
 }
 
@@ -73,8 +88,17 @@ impl UploadLinks {
             pool,
             clock,
             signer: Arc::new(Signer::new(master, "kompleto upload link v1")),
+            reply_signer: Arc::new(Signer::new(master, "kompleto reply address v1")),
+            reply_domain: None,
             base_url: base_url.trim_end_matches('/').to_owned(),
         }
+    }
+
+    /// Gives each link a reply address at `domain`.
+    #[must_use]
+    pub fn with_replies(mut self, domain: &str) -> Self {
+        self.reply_domain = Some(domain.trim().to_ascii_lowercase());
+        self
     }
 
     /// The Client's link for `period`, created if it doesn't exist yet. A
@@ -87,6 +111,17 @@ impl UploadLinks {
         period: &str,
         cut_off: Date,
     ) -> Result<String, sqlx::Error> {
+        Ok(self.issue(firm, client, period, cut_off).await?.url)
+    }
+
+    /// As [`UploadLinks::for_period`], with the link's reply address.
+    pub async fn issue(
+        &self,
+        firm: FirmId,
+        client: ClientId,
+        period: &str,
+        cut_off: Date,
+    ) -> Result<IssuedLink, sqlx::Error> {
         sqlx::query!(
             "insert into upload_links (id, firm_id, client_id, period, cut_off, expires_at, created_at)
              values ($1, $2, $3, $4, $5, $6, $7)
@@ -111,7 +146,13 @@ impl UploadLinks {
         )
         .fetch_one(&self.pool)
         .await?;
-        Ok(self.url(id))
+        Ok(IssuedLink {
+            url: self.url(id),
+            reply_to: self
+                .reply_domain
+                .as_ref()
+                .map(|domain| format!("reply+{}@{domain}", self.reply_signer.token(id))),
+        })
     }
 
     /// The Client's link for `period`, if it has one.
@@ -150,6 +191,37 @@ impl UploadLinks {
             return Err(LinkError::Expired(link));
         }
         Ok(link)
+    }
+
+    /// The link whose reply address is among `recipients`, if any; a
+    /// forged or altered code names none. The signed code is the credential,
+    /// as in [`UploadLinks::open`], so this lookup isn't scoped by a Firm. An
+    /// expired link still takes Replies.
+    pub async fn by_reply_address(&self, recipients: &[String]) -> Result<Option<OpenLink>, sqlx::Error> {
+        let Some(domain) = &self.reply_domain else {
+            return Ok(None);
+        };
+        let id = recipients.iter().find_map(|address| {
+            let (local, at) = address.rsplit_once('@')?;
+            let code = local.strip_prefix("reply+")?;
+            (at == domain).then(|| self.reply_signer.verify(code)).flatten()
+        });
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        let row = sqlx::query!(
+            "select firm_id, client_id, period, cut_off from upload_links where id = $1",
+            id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|row| OpenLink {
+            id: id.into(),
+            firm: row.firm_id.into(),
+            client: row.client_id.into(),
+            period: row.period,
+            cut_off: row.cut_off,
+        }))
     }
 
     fn url(&self, id: Uuid) -> String {

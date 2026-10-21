@@ -188,7 +188,7 @@ impl Scheduler {
         if taken.this_slot || taken.drafts >= i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4) {
             return Ok(false);
         }
-        let upload_link = self.links.for_period(firm, client.id, &key, period.cut_off).await?;
+        let link = self.links.issue(firm, client.id, &key, period.cut_off).await?;
         let brief = DraftBrief {
             business_name: client.details.business_name.clone(),
             contact_first_name: client.details.contact_first_name.clone(),
@@ -200,14 +200,14 @@ impl Scheduler {
                 Slot::FirstRequest => None,
                 Slot::Reminder { days_before } => Some(days_before),
             }),
-            upload_link,
+            upload_link: link.url,
         };
         // Drafted before the transaction, so a slow model holds no locks.
         let text = self.drafter.draft(firm, firm_name, &brief).await;
         let email = Email {
             to_address: client.details.email.clone(),
             from_name: firm_name.to_owned(),
-            reply_to: None,
+            reply_to: link.reply_to,
             subject: text.subject,
             body_text: text.body,
         };

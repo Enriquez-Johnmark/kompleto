@@ -157,7 +157,8 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
     if model.is_none() {
         tracing::warn!("ANTHROPIC_API_KEY isn't set; every reminder draft will be a template");
     }
-    let links = UploadLinks::new(pool.clone(), clock.clone(), &master, &config.public_base_url);
+    let links = UploadLinks::new(pool.clone(), clock.clone(), &master, &config.public_base_url)
+        .with_replies(config.reply_domain());
     let scheduler = Scheduler::with_model(pool.clone(), clock.clone(), links.clone(), model)?;
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(SCHEDULE_EVERY);
@@ -314,7 +315,8 @@ async fn dev_schedule(config: &Config, pool: PgPool) -> anyhow::Result<()> {
         clock.clone(),
         &config.master_key()?,
         &config.public_base_url,
-    );
+    )
+    .with_replies(config.reply_domain());
     let created = Scheduler::new(pool, clock, links)?.run_once().await?;
     println!("{created} reminder draft(s) created as of {date}; approve them on the Drafts page.");
     Ok(())

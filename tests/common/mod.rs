@@ -96,6 +96,7 @@ pub fn master_key() -> kompleto::engine::files::MasterKey {
 /// Upload links signed with the test master key, for the test base URL.
 pub fn upload_links(pool: &sqlx::PgPool, clock: Arc<FixedClock>) -> kompleto::kompleto::upload_links::UploadLinks {
     kompleto::kompleto::upload_links::UploadLinks::new(pool.clone(), clock, &master_key(), "http://kompleto.test")
+        .with_replies("getkompleto.test")
 }
 
 /// Kompleto's pre-send rules, for the test base URL.
