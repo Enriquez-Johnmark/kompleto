@@ -61,6 +61,10 @@ Implementation notes (M2):
 - The BIR calendar is one data file, `data/bir-calendar.toml`, built into the binary: each form's rule with its source, the holidays and nationwide extensions. The program warns at startup if the holidays don't cover the next 12 months.
 - An hourly scheduler sweeps all firms and creates the Drafts that are due; a unique (client, Period, slot) constraint enforces the cap.
 - Manila time is a fixed UTC+8 offset (no daylight saving since 1978), so no time-zone database is needed.
+- A Cut-off is never earlier than the day its Period opens: an offset that would put it earlier (e.g. 10 days before a 10th-of-the-month due date) gives a Cut-off on the opening day, so the first request still goes out. (Found in the M2 code review; not yet confirmed by the owner.)
+- The scheduler creates each Draft and its `scheduled_drafts` record in one transaction, and one Client's failure is logged without stopping the sweep.
+- Login emails are prepared after the login page replies, so response time doesn't reveal which addresses have accounts.
+- The Excel parser child runs with an empty environment, and the server reads at most 16 MB of output from it.
 
 The Engine scopes data by **Tenant** (`GLOSSARY.md`); Kompleto's `FirmId` maps to it.
 
