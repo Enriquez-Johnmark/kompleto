@@ -121,6 +121,16 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 
 - Stored **encrypted**; the bookkeeper downloads them from the dashboard.
 - **Deleted automatically 30 days after being marked received, and never kept longer than 90 days.** Kompleto is not a records archive (BIR and privacy limits: `docs/research/p1-kill-checks.md` §2, §4).
+- **Details (M4 round, 2026-10-21):**
+  - **Upload links:** one per Client per Period, created with that Period's first Draft and used in all its Reminders. The link is a record ID plus a 128-bit HMAC signature made with a server-only key, so the database holds no usable link. It works until 30 days after the Cut-off; after that the page says it has expired and to ask the Firm for a new one.
+  - **In messages:** Kompleto inserts the link into every Reminder and the "copy for Viber" text; the model never sees it. The pre-send check requires exactly one link, and it must be this Client's link for this Period.
+  - **The page:** the firm name, the Period and the Owed documents, each shown as uploaded or not yet; fixed text in the Client's reminder language, never written by the model. The Contact can't view, download or delete Uploads.
+  - **Labels:** each Upload is one Owed document, or "Something else" with a short note. A 2307 also carries the Payor's name, typed by the Contact until M5 adds the Firm's Payor list.
+  - **Files:** JPEG, PNG, HEIC/HEIF, WebP and PDF, up to 10 MB each, recognised by their contents rather than their names, and never opened, resized or converted. One file per request (a few lines of JavaScript send several in turn); at most 4 uploads are processed at once; at most 60 files and 200 MB per link. Pages carry `noindex` and `no-referrer`.
+  - **Storage:** each file has its own key, wrapped by the master key (`FILE_MASTER_KEY`; `kompleto gen-key` makes one) and bound to the file and its Firm. Files sit on local disk behind the engine's file store until R2 replaces it at M6; they are never stored in Postgres, so database backups never hold them.
+  - **Received and deletion:** the Client page lists each Upload with Download and Mark received. An hourly sweep deletes the file and its key 30 days after it is marked received, or 90 days after upload, whichever is first, and records each deletion in the audit log. Downloads are attachments with a generated name, never the Contact's own file name.
+  - **Stopping (G2, brought into M4):** later Reminders list only the Owed documents not yet uploaded; when none are left, no more Reminders are drafted for that Period and any waiting Draft is cancelled.
+  - **No virus scanning** in M4: nothing fits the budget. Files are only ever downloaded as attachments, never shown in the browser. Revisit before paid pilots.
 
 ### Leaving (2026-10-21)
 

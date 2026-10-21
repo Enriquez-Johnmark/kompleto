@@ -47,6 +47,15 @@ draft ──approve──► approved ──► sending ──► sent
 4. **Job queue** (enqueue → claim → finish, concurrent claimers).
 5. **Engine boundary**: a test fails if `src/engine` uses `kompleto` (ADR 0001).
 
+### Test seams for M4 (2026-10-21)
+
+1. **File encryption** (`engine::files`): a round trip, and a changed byte, a swapped key or a file moved to another Firm all fail to decrypt.
+2. **Upload links** with the test clock: created with the first Draft, one per Client and Period, a wrong or altered signature is "not found", and the link stops working 30 days after the Cut-off (F2).
+3. **Upload page in-process:** file types by content, the 10 MB limit, labels and the Payor name, and the per-link limits (F1).
+4. **Deletion** by advancing the clock: 30 days after received, 90 days after upload, with audit entries (F3).
+5. **A2 sweep** extended to Upload lists, downloads and Mark received.
+6. **Pre-send checks** accept only the Client's own Upload link.
+
 ### Test seams for M3 (2026-10-21)
 
 1. **AI client** (`engine::llm`) against a fake Anthropic server: request shape, and an inspection of every outgoing request for TIN-shaped numbers, peso amounts and file contents (D6); timeouts and bad replies.
@@ -150,6 +159,7 @@ Pinned versions from `docs/research/rust-crates.md`:
 | Tests | `#[sqlx::test]`, insta, wiremock |
 | Dependency checks | cargo-deny on every build |
 | Added at M2 (2026-10-21) | toml (calendar file), encoding_rs (Windows-1252 CSV), tower (tests), rustix (limits on the Excel child process) |
+| Added at M4 (2026-10-21) | hmac (Upload link signatures) |
 
 Lookalike crates to avoid: `resend`, `resend-rust`, `mailparser`.
 

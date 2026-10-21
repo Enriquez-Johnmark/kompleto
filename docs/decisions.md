@@ -4,6 +4,17 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **M4 round.** The owner accepted all 15 recommendations ("go ahead"):
+  - one Upload link per Client per Period, created with the Period's first Draft; the link is a record ID plus a 128-bit HMAC signature, so the database holds no usable link; it works until 30 days after the Cut-off;
+  - Kompleto inserts the link into every Reminder and the Viber text; the pre-send check requires exactly that link;
+  - the upload page: fixed text in the Client's language, Owed documents with their status, no viewing or deleting uploads; each Upload labelled as one Owed document (or "Something else" with a note), with a typed Payor name for 2307s until M5;
+  - JPEG, PNG, HEIC/HEIF, WebP and PDF up to 10 MB, detected by content and never decoded; one file per request, at most 4 at a time; at most 60 files and 200 MB per link; `noindex` and `no-referrer`;
+  - a per-file key wrapped by `FILE_MASTER_KEY` (`kompleto gen-key`), bound to the file and Firm; files on local disk behind an engine `FileStore` until R2 at M6, never in Postgres;
+  - Download and Mark received on the Client page; an hourly sweep deletes files 30 days after received or 90 days after upload, audited; generated download names;
+  - G2 brought into M4: Reminders list only Owed documents not yet uploaded and stop when none are left;
+  - six M4 test seams; no virus scanning in M4 (revisit before paid pilots).
+
+  Recorded in full in `docs/product/p1-spec.md` and `docs/architecture.md`.
 - **After M3.** The owner accepted four recommendations ("go ahead"):
   - keep the rules in `AGENTS.md`, with `CLAUDE.md` importing it (one copy, readable by other coding tools too);
   - `kompleto llm-costs` may read every Firm's AI costs: it is an operator command, never reachable from a Firm's pages. Added to the Firm isolation rule in `AGENTS.md`;
