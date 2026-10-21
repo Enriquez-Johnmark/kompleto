@@ -102,3 +102,15 @@ fn g3_bounces_and_complaints_are_read_from_the_event() {
     assert_eq!(parse(delivered), Some(DeliveryEvent::Other));
     assert_eq!(parse(b"not json"), None);
 }
+
+#[test]
+fn g3_events_about_domains_or_contacts_are_taken_and_ignored() {
+    let domain =
+        br#"{"type":"domain.updated","created_at":"2026-11-02T00:00:00Z","data":{"id":"d_1","name":"getkompleto.ph"}}"#;
+    let contact = br#"{"type":"contact.created","data":{"id":"c_1","email":"x@example.test"}}"#;
+    let idless_bounce = br#"{"type":"email.bounced","data":{"bounce":{"type":"Permanent"}}}"#;
+
+    assert_eq!(parse(domain), Some(DeliveryEvent::Other));
+    assert_eq!(parse(contact), Some(DeliveryEvent::Other));
+    assert_eq!(parse(idless_bounce), None, "a bounce must name its email");
+}
