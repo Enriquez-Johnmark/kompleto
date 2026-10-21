@@ -112,3 +112,74 @@ async fn b1_a_clients_details_can_be_edited(pool: PgPool) {
     let client = &Clients::new(pool, app.clock.clone()).list(firm).await.unwrap()[0];
     assert_eq!(client.details.language, Language::English);
 }
+
+#[sqlx::test]
+async fn d1_the_schedule_form_changes_cut_off_reminders_and_pause(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let (firm, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let page = app.post("/clients", &cookie, NENA_FORM).await.location().to_owned();
+
+    let saved = app
+        .post(
+            &format!("{page}/schedule"),
+            &cookie,
+            "cut_off_offset_days=8&reminder_days=10%2C+2&paused=on",
+        )
+        .await;
+    assert_eq!(saved.status, StatusCode::SEE_OTHER, "{}", saved.body);
+
+    let client = &Clients::new(pool, app.clock.clone()).list(firm).await.unwrap()[0];
+    assert_eq!(
+        (client.cut_off_offset_days, client.reminder_days.days(), client.paused),
+        (Some(8), &[10, 2][..], true)
+    );
+    // Q4 2026: 2551Q due 25 Jan 2027, minus 8 days.
+    assert!(app.get(&page, &cookie).await.body.contains("Cut-off: Sun 17 Jan 2027"));
+
+    let refused = app
+        .post(
+            &format!("{page}/schedule"),
+            &cookie,
+            "cut_off_offset_days=5&reminder_days=7%2C3%2C2%2C1",
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        refused.body.contains("choose at most 3 reminder days"),
+        "{}",
+        refused.body
+    );
+}
+
+#[sqlx::test]
+async fn b3_a_due_date_set_on_the_client_page_moves_only_that_clients_dates(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let page = app.post("/clients", &cookie, NENA_FORM).await.location().to_owned();
+    let other = app
+        .post("/clients", &cookie, &NENA_FORM.replace("Nena%27s", "Other"))
+        .await
+        .location()
+        .to_owned();
+
+    let saved = app
+        .post(
+            &format!("{page}/overrides"),
+            &cookie,
+            "form=2551Q&period=2026-Q4&due=2027-01-29",
+        )
+        .await;
+    assert_eq!(saved.status, StatusCode::SEE_OTHER, "{}", saved.body);
+
+    let body = app.get(&page, &cookie).await.body;
+    assert!(
+        body.contains("Fri 29 Jan 2027 <span class=\"muted\">(your date)</span>"),
+        "{body}"
+    );
+    assert!(body.contains("Cut-off: Sun 24 Jan 2027"), "{body}");
+    assert!(app.get(&other, &cookie).await.body.contains("Cut-off: Wed 20 Jan 2027"));
+
+    app.post(&format!("{page}/overrides"), &cookie, "form=2551Q&period=2026-Q4&due=")
+        .await;
+    assert!(app.get(&page, &cookie).await.body.contains("Cut-off: Wed 20 Jan 2027"));
+}

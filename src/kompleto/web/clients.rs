@@ -10,14 +10,17 @@ use axum::http::{Method, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{MethodRouter, get, post};
 use axum::{Form, Router};
+use serde::Deserialize;
+use time::Date;
 use uuid::Uuid;
 
 use super::{AppState, ClientRoute, CurrentFirm, WebError, show_date};
-use crate::kompleto::calendar::BirForm;
+use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::owed_documents;
-use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, NewClient};
+use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, NewClient, ScheduleSettings};
+use crate::kompleto::firms::FirmId;
 use crate::kompleto::periods::ClientCalendar;
-use crate::kompleto::schedule::planned_drafts;
+use crate::kompleto::schedule::{ReminderDays, planned_drafts};
 
 pub(super) fn routes() -> Router<AppState> {
     let mut by_path: BTreeMap<&str, MethodRouter<AppState>> = BTreeMap::new();
@@ -50,6 +53,22 @@ pub(super) fn client_pages() -> Vec<(ClientRoute, MethodRouter<AppState>)> {
         (page(Method::GET, "/clients/{id}", ""), get(show)),
         (page(Method::GET, "/clients/{id}/edit", ""), get(edit_form)),
         (page(Method::POST, "/clients/{id}", SAMPLE_CLIENT), post(update)),
+        (
+            page(
+                Method::POST,
+                "/clients/{id}/schedule",
+                "cut_off_offset_days=&reminder_days=7%2C3%2C1",
+            ),
+            post(set_schedule),
+        ),
+        (
+            page(
+                Method::POST,
+                "/clients/{id}/overrides",
+                "form=2551Q&period=2026-Q4&due=2027-01-29",
+            ),
+            post(set_override),
+        ),
     ]
 }
 
@@ -206,6 +225,8 @@ async fn update(
 struct FilingView {
     form: BirForm,
     period: String,
+    period_key: String,
+    due_iso: String,
     due: String,
     overridden: bool,
     extension: Option<String>,
@@ -226,6 +247,10 @@ struct ClientPage {
     client: Client,
     language: &'static str,
     periods: Vec<PeriodView>,
+    firm_offset: u8,
+    offset_value: String,
+    reminder_days: String,
+    error: Option<String>,
 }
 
 async fn show(
@@ -233,7 +258,15 @@ async fn show(
     CurrentFirm(firm): CurrentFirm,
     Path(id): Path<Uuid>,
 ) -> Result<ClientPage, WebError> {
-    let id = ClientId::from(id);
+    client_page(&state, firm, ClientId::from(id), None).await
+}
+
+async fn client_page(
+    state: &AppState,
+    firm: FirmId,
+    id: ClientId,
+    error: Option<String>,
+) -> Result<ClientPage, WebError> {
     let client = state.clients.get(firm, id).await?;
     let overrides = state.clients.due_overrides(firm, id).await?;
     let edits = state.clients.checklist_edits(firm, id).await?;
@@ -262,6 +295,8 @@ async fn show(
                 .map(|filing| FilingView {
                     form: filing.form,
                     period: filing.period.to_string(),
+                    period_key: filing.period.key(),
+                    due_iso: filing.due.to_string(),
                     due: show_date(filing.due),
                     overridden: filing.overridden,
                     extension: filing.extension,
@@ -274,8 +309,103 @@ async fn show(
         crate::kompleto::clients::Language::English => "English",
     };
     Ok(ClientPage {
+        offset_value: client.cut_off_offset_days.map(|d| d.to_string()).unwrap_or_default(),
+        reminder_days: client
+            .reminder_days
+            .days()
+            .iter()
+            .map(u8::to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
         client,
         language,
         periods,
+        firm_offset,
+        error,
     })
+}
+
+/// Shows the client page again with `error`, as the answer to a refused form.
+async fn refuse(state: &AppState, firm: FirmId, id: ClientId, error: String) -> Result<Response, WebError> {
+    let page = client_page(state, firm, id, Some(error)).await?;
+    Ok((StatusCode::UNPROCESSABLE_ENTITY, page).into_response())
+}
+
+fn back_to(id: ClientId) -> Response {
+    Redirect::to(&format!("/clients/{id}")).into_response()
+}
+
+#[derive(Deserialize)]
+struct ScheduleForm {
+    cut_off_offset_days: String,
+    reminder_days: String,
+    paused: Option<String>,
+}
+
+async fn set_schedule(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+    Form(form): Form<ScheduleForm>,
+) -> Result<Response, WebError> {
+    let id = ClientId::from(id);
+    state.clients.get(firm, id).await?;
+    let offset = form.cut_off_offset_days.trim();
+    let offset = match offset.parse::<u8>() {
+        _ if offset.is_empty() => None,
+        Ok(days) if days <= 30 => Some(days),
+        _ => return refuse(&state, firm, id, "The cut-off offset is 0 to 30 days.".to_owned()).await,
+    };
+    let days: Result<Vec<u8>, _> = form
+        .reminder_days
+        .split([',', ' '])
+        .filter(|day| !day.is_empty())
+        .map(str::parse)
+        .collect();
+    let Ok(days) = days else {
+        return refuse(&state, firm, id, "Reminder days are numbers, e.g. 7, 3, 1.".to_owned()).await;
+    };
+    let reminder_days = match ReminderDays::new(&days) {
+        Ok(days) => days,
+        Err(err) => return refuse(&state, firm, id, err.to_string()).await,
+    };
+    let settings = ScheduleSettings {
+        cut_off_offset_days: offset,
+        reminder_days,
+        paused: form.paused.is_some(),
+    };
+    state.clients.set_schedule(firm, id, &settings).await?;
+    Ok(back_to(id))
+}
+
+#[derive(Deserialize)]
+struct OverrideForm {
+    form: String,
+    period: String,
+    due: String,
+}
+
+async fn set_override(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+    Form(form): Form<OverrideForm>,
+) -> Result<Response, WebError> {
+    let id = ClientId::from(id);
+    state.clients.get(firm, id).await?;
+    let filing = BirForm::parse(&form.form)
+        .zip(TaxPeriod::parse_key(&form.period))
+        .filter(|(bir_form, period)| state.calendar.due_date(*bir_form, *period).is_some());
+    let Some((bir_form, period)) = filing else {
+        return refuse(&state, firm, id, "That form isn't filed for that period.".to_owned()).await;
+    };
+    let due = match form.due.trim() {
+        "" => None,
+        text => match Date::parse(text, time::macros::format_description!("[year]-[month]-[day]")) {
+            Ok(date) => Some(date),
+            Err(_) => return refuse(&state, firm, id, format!("{text:?} isn't a date.")).await,
+        },
+    };
+    state.clients.set_due_override(firm, id, bir_form, period, due).await?;
+    Ok(back_to(id))
 }

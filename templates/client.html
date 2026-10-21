@@ -3,9 +3,20 @@
 {% block body %}
 {% include "nav.html" %}
 <h1>{{ client.details.business_name }}</h1>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
 <p>{{ client.details.contact_first_name }} · {{ client.details.email }} · {{ language }}{% if client.paused %} · <strong>reminders paused</strong>{% endif %}<br>
 Forms: {% for form in client.details.forms %}{{ form }}{% if !loop.last %}, {% endif %}{% endfor %}<br>
 <a href="/clients/{{ client.id }}/edit">Edit details</a></p>
+
+<h2>Reminder schedule</h2>
+<form method="post" action="/clients/{{ client.id }}/schedule">
+  <label for="cut_off_offset_days">Cut-off: days before the earliest due date</label>
+  <input type="number" id="cut_off_offset_days" name="cut_off_offset_days" min="0" max="30" value="{{ offset_value }}" placeholder="{{ firm_offset }} (your default)">
+  <label for="reminder_days">Reminders: days before the cut-off (up to 3, each 1 to 14)</label>
+  <input type="text" id="reminder_days" name="reminder_days" value="{{ reminder_days }}">
+  <label><input type="checkbox" name="paused"{% if client.paused %} checked{% endif %}> Pause reminders for this client</label>
+  <p><button>Save schedule</button></p>
+</form>
 
 <h2>Next 12 months</h2>
 {% if periods.is_empty() %}<p class="muted">Nothing due in the next 12 months.</p>{% endif %}
@@ -15,9 +26,17 @@ Forms: {% for form in client.details.forms %}{{ form }}{% if !loop.last %}, {% e
   <p><strong>Cut-off: {{ period.cut_off }}</strong><br>
   <span class="muted">Drafts: {% for draft in period.drafts %}{{ draft }}{% if !loop.last %}, {% endif %}{% endfor %}</span></p>
   <table>
-    <tr><th>Form</th><th>Period</th><th>Due</th></tr>
+    <tr><th>Form</th><th>Period</th><th>Due</th><th>This client's date</th></tr>
     {% for filing in period.filings %}
-    <tr><td>{{ filing.form }}</td><td>{{ filing.period }}</td><td>{{ filing.due }}{% if filing.overridden %} <span class="muted">(your date)</span>{% endif %}{% if let Some(extension) = filing.extension %} <span class="muted">(extended, {{ extension }})</span>{% endif %}</td></tr>
+    <tr><td>{{ filing.form }}</td><td>{{ filing.period }}</td><td>{{ filing.due }}{% if filing.overridden %} <span class="muted">(your date)</span>{% endif %}{% if let Some(extension) = filing.extension %} <span class="muted">(extended, {{ extension }})</span>{% endif %}</td>
+      <td><form method="post" action="/clients/{{ client.id }}/overrides" class="inline">
+        <input type="hidden" name="form" value="{{ filing.form }}"><input type="hidden" name="period" value="{{ filing.period_key }}">
+        <input type="date" name="due" value="{{ filing.due_iso }}" aria-label="Due date for this client"> <button>Set</button>
+      </form>{% if filing.overridden %}
+      <form method="post" action="/clients/{{ client.id }}/overrides" class="inline">
+        <input type="hidden" name="form" value="{{ filing.form }}"><input type="hidden" name="period" value="{{ filing.period_key }}">
+        <input type="hidden" name="due" value=""><button>Use calendar date</button>
+      </form>{% endif %}</td></tr>
     {% endfor %}
   </table>
   <p>Owed documents:</p>
