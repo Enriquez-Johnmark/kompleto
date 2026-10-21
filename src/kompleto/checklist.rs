@@ -130,6 +130,17 @@ pub struct ChecklistEdits {
     pub removed: BTreeSet<String>,
     /// Items added for this Client.
     pub extra: Vec<ExtraItem>,
+    /// The Client's Payors (H2), each owing its own 2307 in place of the
+    /// general "2307s received" item.
+    pub payors: Vec<String>,
+}
+
+/// The default item that the Client's Payors replace.
+const RECEIVED_2307_KEY: &str = "2307-received";
+
+/// The Owed document for one Payor's 2307.
+pub fn payor_2307(payor: &str) -> String {
+    format!("BIR Form 2307 from {payor}")
 }
 
 /// The labels of the documents a Client filing `forms` owes for the
@@ -140,7 +151,13 @@ pub fn owed_documents(forms: &[BirForm], month: Month, edits: &ChecklistEdits) -
         .filter(|item| item.recurs.includes(month))
         .filter(|item| item.when_filing.is_empty() || item.when_filing.iter().any(|form| forms.contains(form)))
         .filter(|item| !edits.removed.contains(item.key))
-        .map(|item| item.label.to_owned());
+        .flat_map(|item| {
+            if item.key == RECEIVED_2307_KEY && !edits.payors.is_empty() {
+                edits.payors.iter().map(|payor| payor_2307(payor)).collect()
+            } else {
+                vec![item.label.to_owned()]
+            }
+        });
     let extra = edits
         .extra
         .iter()
@@ -191,6 +208,7 @@ mod tests {
                     recurs: Recurs::YearEnd,
                 },
             ],
+            ..ChecklistEdits::default()
         };
 
         assert_eq!(

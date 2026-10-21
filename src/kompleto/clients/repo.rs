@@ -359,7 +359,14 @@ impl Clients {
         .await?
         .into_iter()
         .collect();
-        Ok(ChecklistEdits { removed, extra })
+        let payors = sqlx::query_scalar!(
+            "select name from payors where firm_id = $1 and client_id = $2 order by lower(name)",
+            firm.as_uuid(),
+            id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(ChecklistEdits { removed, extra, payors })
     }
 
     /// `NotFound` unless the Client exists and is this Firm's.
