@@ -50,3 +50,69 @@ async fn f3_a_saved_file_is_encrypted_on_disk_and_reads_back_for_its_firm_only(p
     assert_eq!(stored.len(), 1);
     assert!(!stored[0].windows(photo.len()).any(|w| w == photo.as_slice()));
 }
+
+#[sqlx::test]
+async fn f3_a_file_is_deleted_at_its_deadline_and_the_deletion_audited(pool: PgPool) {
+    let clock = clock();
+    let (files, root) = files(&pool, clock.clone());
+    let santos = TenantId::new();
+    let due = files
+        .save(santos, b"receipt", clock.now_plus(Duration::days(90)))
+        .await
+        .unwrap();
+    let kept = files
+        .save(santos, b"statement", clock.now_plus(Duration::days(91)))
+        .await
+        .unwrap();
+
+    clock.advance(Duration::days(90) - Duration::minutes(1));
+    assert_eq!(files.sweep().await.unwrap(), 0);
+    clock.advance(Duration::minutes(1));
+    assert_eq!(files.sweep().await.unwrap(), 1);
+    assert_eq!(files.sweep().await.unwrap(), 0, "a deleted file is deleted once");
+
+    assert!(matches!(files.read(santos, due).await, Err(FileError::NotFound)));
+    files.read(santos, kept).await.unwrap();
+    assert_eq!(on_disk(&root).len(), 1, "the file itself is gone from disk");
+    let key: Option<Vec<u8>> = sqlx::query_scalar("select wrapped_key from stored_files where id = $1")
+        .bind(due.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(key.is_none(), "and so is its key");
+    let (action, actor): (String, String) =
+        sqlx::query_as("select action, actor from audit_events where subject_id = $1 and tenant_id = $2")
+            .bind(due.as_uuid())
+            .bind(santos.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!((action.as_str(), actor.as_str()), ("file.deleted", "system"));
+}
+
+#[sqlx::test]
+async fn f3_a_deadline_only_ever_moves_earlier(pool: PgPool) {
+    let clock = clock();
+    let (files, _root) = files(&pool, clock.clone());
+    let (santos, reyes) = (TenantId::new(), TenantId::new());
+    let id = files
+        .save(santos, b"2307", clock.now_plus(Duration::days(90)))
+        .await
+        .unwrap();
+
+    files
+        .delete_no_later_than(santos, id, clock.now_plus(Duration::days(30)))
+        .await
+        .unwrap();
+    files
+        .delete_no_later_than(santos, id, clock.now_plus(Duration::days(60)))
+        .await
+        .unwrap();
+    let foreign = files
+        .delete_no_later_than(reyes, id, clock.now_plus(Duration::days(1)))
+        .await;
+
+    assert!(matches!(foreign, Err(FileError::NotFound)), "{foreign:?}");
+    clock.advance(Duration::days(30));
+    assert_eq!(files.sweep().await.unwrap(), 1);
+}
