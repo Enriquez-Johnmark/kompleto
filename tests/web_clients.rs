@@ -87,3 +87,28 @@ async fn b4_the_client_page_lists_each_periods_owed_documents_and_cut_off(pool: 
         assert!(page.body.contains(expected), "missing {expected:?} in {}", page.body);
     }
 }
+
+#[sqlx::test]
+async fn b1_a_clients_details_can_be_edited(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let (firm, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let page = app.post("/clients", &cookie, NENA_FORM).await.location().to_owned();
+    let edit = app.get(&format!("{page}/edit"), &cookie).await;
+    assert!(
+        edit.body.contains(r#"value="Nena&#39;s Store""#) || edit.body.contains(r#"value="Nena&#x27;s Store""#),
+        "{}",
+        edit.body
+    );
+
+    let saved = app
+        .post(
+            &page,
+            &cookie,
+            &NENA_FORM.replace("language=taglish", "language=english"),
+        )
+        .await;
+
+    assert_eq!(saved.status, StatusCode::SEE_OTHER, "{}", saved.body);
+    let client = &Clients::new(pool, app.clock.clone()).list(firm).await.unwrap()[0];
+    assert_eq!(client.details.language, Language::English);
+}

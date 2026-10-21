@@ -3,14 +3,16 @@
 
 use askama::Template;
 use askama_web::WebTemplate;
+use std::collections::BTreeMap;
+
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{Method, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::get;
+use axum::routing::{MethodRouter, get, post};
 use axum::{Form, Router};
 use uuid::Uuid;
 
-use super::{AppState, CurrentFirm, WebError, show_date};
+use super::{AppState, ClientRoute, CurrentFirm, WebError, show_date};
 use crate::kompleto::calendar::BirForm;
 use crate::kompleto::checklist::owed_documents;
 use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, NewClient};
@@ -18,10 +20,37 @@ use crate::kompleto::periods::ClientCalendar;
 use crate::kompleto::schedule::planned_drafts;
 
 pub(super) fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/clients", get(list).post(create))
-        .route("/clients/new", get(new_form))
-        .route("/clients/{id}", get(show))
+    let mut by_path: BTreeMap<&str, MethodRouter<AppState>> = BTreeMap::new();
+    for (route, handler) in client_pages() {
+        let merged = match by_path.remove(route.path) {
+            Some(existing) => existing.merge(handler),
+            None => handler,
+        };
+        by_path.insert(route.path, merged);
+    }
+    by_path.into_iter().fold(
+        Router::new()
+            .route("/clients", get(list).post(create))
+            .route("/clients/new", get(new_form)),
+        |router, (path, handler)| router.route(path, handler),
+    )
+}
+
+const SAMPLE_CLIENT: &str =
+    "business_name=Sample+Store&contact_first_name=Ana&email=ana%40example.test&language=english&forms=2551Q";
+
+/// Every page about one Client (A2).
+pub(super) fn client_pages() -> Vec<(ClientRoute, MethodRouter<AppState>)> {
+    let page = |method, path, sample_form| ClientRoute {
+        method,
+        path,
+        sample_form,
+    };
+    vec![
+        (page(Method::GET, "/clients/{id}", ""), get(show)),
+        (page(Method::GET, "/clients/{id}/edit", ""), get(edit_form)),
+        (page(Method::POST, "/clients/{id}", SAMPLE_CLIENT), post(update)),
+    ]
 }
 
 #[derive(Template, WebTemplate)]
@@ -71,6 +100,13 @@ impl ClientForm {
             errors,
         }
     }
+
+    fn editing(state: &AppState, id: ClientId, input: ClientInput, errors: Vec<String>) -> Self {
+        Self {
+            editing: true,
+            ..Self::new(state, format!("/clients/{id}"), input, errors)
+        }
+    }
 }
 
 async fn new_form(State(state): State<AppState>, _firm: CurrentFirm) -> ClientForm {
@@ -116,6 +152,51 @@ async fn create(
     };
     match state.clients.create(firm, &client).await {
         Ok(id) => Ok(Redirect::to(&format!("/clients/{id}")).into_response()),
+        Err(err @ ClientError::DuplicateName(_)) => Ok(refused(vec![err.to_string()])),
+        Err(err) => Err(err.into()),
+    }
+}
+
+async fn edit_form(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+) -> Result<ClientForm, WebError> {
+    let id = ClientId::from(id);
+    let details = state.clients.get(firm, id).await?.details;
+    let input = ClientInput {
+        business_name: details.business_name,
+        contact_first_name: details.contact_first_name,
+        email: details.email,
+        language: details.language.as_str().to_owned(),
+        forms: details.forms.iter().map(|form| form.code().to_owned()).collect(),
+    };
+    Ok(ClientForm::editing(&state, id, input, Vec::new()))
+}
+
+async fn update(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+    Form(pairs): Form<Vec<(String, String)>>,
+) -> Result<Response, WebError> {
+    let id = ClientId::from(id);
+    // Another Firm's Client is "not found" before any field is checked.
+    state.clients.get(firm, id).await?;
+    let input = client_input(pairs);
+    let refused = |errors: Vec<String>| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            ClientForm::editing(&state, id, input.clone(), errors),
+        )
+            .into_response()
+    };
+    let client = match NewClient::parse(&input) {
+        Ok(client) => client,
+        Err(errors) => return Ok(refused(errors.iter().map(ToString::to_string).collect())),
+    };
+    match state.clients.update(firm, id, &client).await {
+        Ok(()) => Ok(Redirect::to(&format!("/clients/{id}")).into_response()),
         Err(err @ ClientError::DuplicateName(_)) => Ok(refused(vec![err.to_string()])),
         Err(err) => Err(err.into()),
     }

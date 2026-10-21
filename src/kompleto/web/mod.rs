@@ -105,6 +105,23 @@ async fn same_origin_posts(State(state): State<AppState>, request: Request, next
     }
 }
 
+/// A page about one Client. The router is built from these, and a test
+/// requests each with another Firm's IDs, expecting "not found" (A2).
+#[derive(Debug, Clone)]
+pub struct ClientRoute {
+    /// GET or POST.
+    pub method: Method,
+    /// The path; `{id}` is the Client, `{item}` one of its extra checklist items.
+    pub path: &'static str,
+    /// A form body the page accepts, for tests.
+    pub sample_form: &'static str,
+}
+
+/// Every page about one Client.
+pub fn client_routes() -> Vec<ClientRoute> {
+    clients::client_pages().into_iter().map(|(route, _)| route).collect()
+}
+
 /// The logged-in Firm. Pages that take it send visitors without a live
 /// session to the login page.
 #[derive(Debug, Clone, Copy)]
