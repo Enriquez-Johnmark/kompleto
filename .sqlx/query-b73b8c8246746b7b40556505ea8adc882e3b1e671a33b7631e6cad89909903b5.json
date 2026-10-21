@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update replies r set subject = null, body_text = null\n         from (select id, firm_id from replies where body_text is not null and received_at <= $1) old\n         where r.id = old.id and r.firm_id = old.firm_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b73b8c8246746b7b40556505ea8adc882e3b1e671a33b7631e6cad89909903b5"
+}

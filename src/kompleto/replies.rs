@@ -375,8 +375,9 @@ pub const TEXT_KEPT_DAYS: i64 = 90;
 /// <date>", for every Firm.
 pub async fn forget_old_text(pool: &PgPool, now: OffsetDateTime) -> Result<u64, sqlx::Error> {
     let forgotten = sqlx::query!(
-        "update replies set subject = null, body_text = null
-         where body_text is not null and received_at <= $1",
+        "update replies r set subject = null, body_text = null
+         from (select id, firm_id from replies where body_text is not null and received_at <= $1) old
+         where r.id = old.id and r.firm_id = old.firm_id",
         now - time::Duration::days(TEXT_KEPT_DAYS),
     )
     .execute(pool)
