@@ -93,10 +93,21 @@ impl Drafts {
     /// Cancels the Client's reminders for `period` that haven't gone out,
     /// because everything owed has arrived (G2); returns how many.
     pub async fn cancel_waiting(&self, firm: FirmId, client: ClientId, period: &str) -> Result<usize, OutboxError> {
+        self.cancel(firm, client, Some(period)).await
+    }
+
+    /// Cancels the Client's Reminders in every Period that haven't gone
+    /// out, because its address bounced (G3); returns how many.
+    pub async fn cancel_waiting_for_client(&self, firm: FirmId, client: ClientId) -> Result<usize, OutboxError> {
+        self.cancel(firm, client, None).await
+    }
+
+    async fn cancel(&self, firm: FirmId, client: ClientId, period: Option<&str>) -> Result<usize, OutboxError> {
         let waiting = sqlx::query_scalar!(
             "select s.message_id from scheduled_drafts s
              join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
-             where s.firm_id = $1 and s.client_id = $2 and s.period = $3 and m.status in ('draft', 'approved')",
+             where s.firm_id = $1 and s.client_id = $2 and ($3::text is null or s.period = $3)
+               and m.status in ('draft', 'approved')",
             firm.as_uuid(),
             client.as_uuid(),
             period,

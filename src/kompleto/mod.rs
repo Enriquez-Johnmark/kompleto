@@ -2,6 +2,7 @@
 //! checklists and the reminder schedule. Built on `crate::engine`.
 
 pub mod auth;
+pub mod bounces;
 pub mod calendar;
 pub mod checklist;
 pub mod clients;

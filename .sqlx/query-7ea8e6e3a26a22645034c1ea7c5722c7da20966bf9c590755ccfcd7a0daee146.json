@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select s.message_id from scheduled_drafts s\n             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n             where s.firm_id = $1 and s.client_id = $2 and s.period = $3 and m.status in ('draft', 'approved')",
+  "query": "select s.message_id from scheduled_drafts s\n             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n             where s.firm_id = $1 and s.client_id = $2 and ($3::text is null or s.period = $3)\n               and m.status in ('draft', 'approved')",
   "describe": {
     "columns": [
       {
@@ -26,5 +26,5 @@
       false
     ]
   },
-  "hash": "b31aadc8ea5ba42e54902f1bd8daed30cb798a65b69a617790429250b6fb2c00"
+  "hash": "7ea8e6e3a26a22645034c1ea7c5722c7da20966bf9c590755ccfcd7a0daee146"
 }

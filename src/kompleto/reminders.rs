@@ -11,6 +11,8 @@
 //! - A Draft lists only the Owed documents not yet uploaded; once all
 //!   have been, no more are created for the Period and any waiting one is
 //!   cancelled (G2).
+//! - A Client whose email has bounced or complained (G3) gets no Drafts
+//!   until its email changes.
 //! - Each Draft is recorded in `scheduled_drafts` in the same transaction
 //!   that creates it; that table's constraints allow at most four per
 //!   Client per Period.
@@ -101,6 +103,10 @@ impl Scheduler {
             "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset
              from clients c join firms f on f.id = c.firm_id
              where not c.paused
+               and not exists (
+                   select 1 from bounces b
+                   where b.firm_id = c.firm_id and b.client_id = c.id
+                     and b.kind in ('bounce', 'complaint') and b.address = lower(trim(c.email)))
              order by c.created_at, c.id"
         )
         .fetch_all(&self.pool)

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset\n             from clients c join firms f on f.id = c.firm_id\n             where not c.paused\n             order by c.created_at, c.id",
+  "query": "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset\n             from clients c join firms f on f.id = c.firm_id\n             where not c.paused\n               and not exists (\n                   select 1 from bounces b\n                   where b.firm_id = c.firm_id and b.client_id = c.id\n                     and b.kind in ('bounce', 'complaint') and b.address = lower(trim(c.email)))\n             order by c.created_at, c.id",
   "describe": {
     "columns": [
       {
@@ -70,5 +70,5 @@
       false
     ]
   },
-  "hash": "c533f693ea47e0b05f9c45b96b684ad3aba1ee839fd0edc4c08ed9844362b276"
+  "hash": "b9dde227334a15a780a691cd7b8e054df53a631af71237134b812d758cf04d00"
 }
