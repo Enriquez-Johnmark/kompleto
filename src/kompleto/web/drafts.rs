@@ -21,7 +21,10 @@ use crate::kompleto::drafts::Reminder;
 use crate::kompleto::firms::FirmId;
 
 pub(super) fn routes() -> Router<AppState> {
-    super::scoped_router(draft_pages()).route("/drafts", get(list))
+    super::scoped_router(draft_pages())
+        .route("/drafts", get(list))
+        .route("/drafts/review", post(review))
+        .route("/drafts/approve", post(approve_batch))
 }
 
 /// Every page about one Draft (A2).
@@ -254,4 +257,87 @@ async fn save_edit(
         },
     )
         .into_response())
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "drafts_review.html")]
+struct ReviewPage {
+    drafts: Vec<ReminderView>,
+}
+
+/// D3: the ticked Drafts, each in full, before any is approved. Another
+/// Firm's ID makes the whole page "not found" (A2).
+async fn review(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Form(pairs): Form<Vec<(String, String)>>,
+) -> Result<Response, WebError> {
+    let mut drafts = Vec::new();
+    for (name, value) in pairs {
+        if name != "ids" {
+            continue;
+        }
+        let id = Uuid::parse_str(&value).map_err(|_| WebError::NotFound)?;
+        drafts.push(ReminderView::from(reminder(&state, firm, id).await?));
+    }
+    if drafts.is_empty() {
+        return refuse(
+            &state,
+            firm,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Tick the drafts to review first.",
+        )
+        .await;
+    }
+    Ok(ReviewPage { drafts }.into_response())
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "drafts_result.html")]
+struct ResultPage {
+    approved: usize,
+    refused: Vec<(String, String)>,
+}
+
+/// Approves each reviewed Draft against the text the review page showed;
+/// one that changed meanwhile, or fails a check, is reported, not approved.
+async fn approve_batch(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Form(pairs): Form<Vec<(String, String)>>,
+) -> Result<Response, WebError> {
+    let mut reviewed = Vec::new();
+    for (name, value) in pairs {
+        if name != "approve" {
+            continue;
+        }
+        let (id, hash) = value.split_once(':').ok_or(WebError::NotFound)?;
+        let id = Uuid::parse_str(id).map_err(|_| WebError::NotFound)?;
+        // Every ID is checked before anything is approved (A2).
+        reviewed.push((reminder(&state, firm, id).await?, ContentHash::from_hex(hash)));
+    }
+    let approver = actor(&state, firm).await?;
+    let mut page = ResultPage {
+        approved: 0,
+        refused: Vec::new(),
+    };
+    for (reminder, seen) in reviewed {
+        let Some(seen) = seen else {
+            page.refused
+                .push((reminder.client, "the approval form was damaged".to_owned()));
+            continue;
+        };
+        match state
+            .outbox
+            .approve(firm, reminder.id, &approver, &seen, &state.checks)
+            .await
+        {
+            Ok(()) => page.approved += 1,
+            Err(err) => page.refused.push((reminder.client, approval_refusal(err)?.1)),
+        }
+    }
+    if page.approved > 0 {
+        state.wake_sender.notify_one();
+    }
+    Ok(page.into_response())
 }

@@ -186,3 +186,128 @@ async fn d2_editing_a_draft_changes_its_text_and_voids_any_approval(pool: PgPool
         .unwrap();
     assert_eq!(editor, "santos.bookkeeping@firm.test");
 }
+
+/// Two clients' Drafts for one firm, on 1 Nov 2026.
+async fn firm_with_two_drafts(app: &TestApp) -> (FirmId, String, Vec<Uuid>) {
+    let (firm, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    app.post("/clients", &cookie, EMPLOYER).await;
+    app.post(
+        "/clients",
+        &cookie,
+        &EMPLOYER
+            .replace("Lito+Hardware", "Ben+Bakery")
+            .replace("lito%40", "ben%40"),
+    )
+    .await;
+    app.clock.advance(Duration::days(11));
+    Scheduler::new(app.pool.clone(), app.clock.clone())
+        .unwrap()
+        .run_once()
+        .await
+        .unwrap();
+    let drafts = sqlx::query_scalar("select message_id from scheduled_drafts where firm_id = $1 order by message_id")
+        .bind(firm.as_uuid())
+        .fetch_all(&app.pool)
+        .await
+        .unwrap();
+    (firm, cookie, drafts)
+}
+
+/// The hidden `approve` fields of a review page, as a form body.
+fn approval_fields(review: &str) -> String {
+    review
+        .match_indices(r#"name="approve" value=""#)
+        .map(|(at, marker)| {
+            let value = &review[at + marker.len()..];
+            format!("approve={}", &value[..value.find('"').unwrap()])
+        })
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+#[sqlx::test]
+async fn d3_batch_approval_shows_every_draft_in_full_before_approving_any(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (firm, cookie, drafts) = firm_with_two_drafts(&app).await;
+    let outbox = Outbox::new(app.pool.clone(), app.clock.clone());
+
+    let review = app
+        .post(
+            "/drafts/review",
+            &cookie,
+            &format!("ids={}&ids={}", drafts[0], drafts[1]),
+        )
+        .await;
+
+    assert_eq!(review.status, StatusCode::OK, "{}", review.body);
+    for draft in &drafts {
+        let body = outbox.get(firm, (*draft).into()).await.unwrap().email.body_text;
+        assert!(unescape(&review.body).contains(&body), "every draft is shown in full");
+        assert_eq!(
+            status(&app, firm, *draft).await,
+            MessageStatus::Draft,
+            "reviewing approves nothing"
+        );
+    }
+    assert!(review.body.contains("Approve these 2"), "{}", review.body);
+
+    let approved = app
+        .post("/drafts/approve", &cookie, &approval_fields(&review.body))
+        .await;
+
+    assert_eq!(approved.status, StatusCode::OK, "{}", approved.body);
+    assert!(approved.body.contains("2 approved"), "{}", approved.body);
+    for draft in &drafts {
+        assert_eq!(status(&app, firm, *draft).await, MessageStatus::Approved);
+    }
+}
+
+#[sqlx::test]
+async fn d3_a_draft_changed_after_the_review_is_not_approved(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (firm, cookie, drafts) = firm_with_two_drafts(&app).await;
+    let review = app
+        .post(
+            "/drafts/review",
+            &cookie,
+            &format!("ids={}&ids={}", drafts[0], drafts[1]),
+        )
+        .await;
+    app.post(
+        &format!("/drafts/{}", drafts[0]),
+        &cookie,
+        "subject=Changed&body=Changed+text.",
+    )
+    .await;
+
+    let result = app
+        .post("/drafts/approve", &cookie, &approval_fields(&review.body))
+        .await;
+
+    assert!(
+        result.body.contains("1 approved") && result.body.contains("changed since you saw it"),
+        "{}",
+        result.body
+    );
+    assert_eq!(status(&app, firm, drafts[0]).await, MessageStatus::Draft);
+    assert_eq!(status(&app, firm, drafts[1]).await, MessageStatus::Approved);
+}
+
+#[sqlx::test]
+async fn a2_batch_pages_refuse_another_firms_drafts(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (firm, _, drafts) = firm_with_two_drafts(&app).await;
+    let (_, reyes) = app.logged_in_firm("Reyes CPA").await;
+    let hash = hash_hex(&app, firm, drafts[0]).await;
+
+    let review = app.post("/drafts/review", &reyes, &format!("ids={}", drafts[0])).await;
+    let approve = app
+        .post("/drafts/approve", &reyes, &format!("approve={}:{hash}", drafts[0]))
+        .await;
+
+    assert_eq!(
+        (review.status, approve.status),
+        (StatusCode::NOT_FOUND, StatusCode::NOT_FOUND)
+    );
+    assert_eq!(status(&app, firm, drafts[0]).await, MessageStatus::Draft);
+}
