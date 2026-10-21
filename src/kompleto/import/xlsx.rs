@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use calamine::{Reader, Xlsx};
 use rustix::process::{Resource, Rlimit, setrlimit};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::{ImportError, ImportRow, MAX_BYTES, MAX_ROWS, rows_from_cells};
 
@@ -21,6 +21,8 @@ pub const CHILD_COMMAND: &str = "parse-xlsx";
 const MEMORY_LIMIT_BYTES: u64 = 512 * 1024 * 1024;
 /// The child's CPU-time limit.
 const CPU_LIMIT_SECONDS: u64 = 10;
+/// The most JSON the server reads back from the child.
+const MAX_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
 /// How long the server waits for the child.
 const WAIT_LIMIT: Duration = Duration::from_secs(15);
 
@@ -41,27 +43,43 @@ impl XlsxReader {
         if bytes.len() > MAX_BYTES {
             return Err(ImportError::TooLarge);
         }
-        let unreadable = |_| ImportError::Unreadable("it isn't a readable Excel (.xlsx) file".to_owned());
+        let unreadable = || ImportError::Unreadable("it isn't a readable Excel (.xlsx) file".to_owned());
+        // No environment: a parser taken over by a crafted file finds no
+        // database URL or API keys.
         let mut child = tokio::process::Command::new(&self.program)
             .arg(CHILD_COMMAND)
+            .env_clear()
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(true)
             .spawn()
             .map_err(|err| ImportError::Unreadable(format!("the Excel reader didn't start: {err}")))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            // A child that dies early closes the pipe; its exit status says why.
-            let _ = stdin.write_all(bytes).await;
-        }
-        let output = tokio::time::timeout(WAIT_LIMIT, child.wait_with_output())
+        let (stdin, stdout) = (child.stdin.take(), child.stdout.take());
+        let talk = async {
+            if let Some(mut stdin) = stdin {
+                // A child that dies early closes the pipe; its exit status says why.
+                let _ = stdin.write_all(bytes).await;
+            }
+            let mut output = Vec::new();
+            if let Some(stdout) = stdout {
+                stdout.take(MAX_OUTPUT_BYTES + 1).read_to_end(&mut output).await?;
+            }
+            if output.len() as u64 > MAX_OUTPUT_BYTES {
+                // Dropping the child kills it.
+                return Ok(None);
+            }
+            Ok::<_, std::io::Error>(Some((output, child.wait().await?)))
+        };
+        let (output, status) = tokio::time::timeout(WAIT_LIMIT, talk)
             .await
             .map_err(|_| ImportError::Unreadable("it took too long to read".to_owned()))?
-            .map_err(|err| ImportError::Unreadable(err.to_string()))?;
-        if !output.status.success() {
-            return Err(unreadable(()));
+            .map_err(|err| ImportError::Unreadable(err.to_string()))?
+            .ok_or_else(unreadable)?;
+        if !status.success() {
+            return Err(unreadable());
         }
-        let cells: Vec<Vec<String>> = serde_json::from_slice(&output.stdout).map_err(|_| unreadable(()))?;
+        let cells: Vec<Vec<String>> = serde_json::from_slice(&output).map_err(|_| unreadable())?;
         rows_from_cells(cells)
     }
 }
