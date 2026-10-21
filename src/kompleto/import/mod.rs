@@ -73,26 +73,38 @@ pub fn read_csv(bytes: &[u8]) -> Result<Vec<ImportRow>, ImportError> {
         .flexible(true)
         .from_reader(text.as_bytes());
     let mut records = Vec::new();
-    let (mut counted_to, mut line) = (0, 1);
+    // Rows as a spreadsheet numbers them: blank lines count (the csv crate
+    // skips them), line breaks inside a quoted cell don't, and \r, \n and
+    // \r\n all end a line.
+    let (mut counted_to, mut line, mut breaks_in_previous) = (0, 1, 0);
     for record in reader.records() {
         let record = record.map_err(|err| ImportError::Unreadable(err.to_string()))?;
-        // The csv crate's line count skips blank lines; count them, as a
-        // spreadsheet shows them.
         // Its position can point at blank lines before it.
         let start = record.position().map_or(0, |p| usize::try_from(p.byte()).unwrap_or(0));
+        let bytes = text.as_bytes();
         let start = start
-            + text
-                .as_bytes()
+            + bytes
                 .iter()
                 .skip(start)
                 .take_while(|b| matches!(b, b'\r' | b'\n'))
                 .count();
-        let newlines = text.as_bytes().get(counted_to..start).unwrap_or_default();
-        line += newlines.iter().filter(|&&b| b == b'\n').count();
+        line += line_breaks(bytes.get(counted_to..start).unwrap_or_default()).saturating_sub(breaks_in_previous);
         counted_to = start;
+        breaks_in_previous = record.iter().map(|cell| line_breaks(cell.as_bytes())).sum();
         records.push((line, record.iter().map(str::to_owned).collect()));
     }
     rows_from_records(records)
+}
+
+/// Line breaks in `bytes`, counting `\r\n` once.
+fn line_breaks(bytes: &[u8]) -> usize {
+    let newlines = bytes.iter().filter(|&&b| b == b'\n').count();
+    let lone_returns = bytes
+        .iter()
+        .enumerate()
+        .filter(|&(i, &b)| b == b'\r' && bytes.get(i + 1) != Some(&b'\n'))
+        .count();
+    newlines + lone_returns
 }
 
 /// Turns a sheet's cells, header row first, into rows.

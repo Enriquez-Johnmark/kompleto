@@ -125,3 +125,18 @@ fn b2_blank_rows_are_skipped() {
 
     assert_eq!(rows.iter().map(|r| r.row).collect::<Vec<_>>(), [2, 5]);
 }
+
+#[test]
+fn b2_row_numbers_match_the_spreadsheet_with_multi_line_cells_and_mac_line_endings() {
+    let multi_line = read_csv(&csv(
+        "Shop,Ana,a@b.test,English,\"2551Q\n1701Q\"\n\nOther,Bo,b@b.test,English,2551Q\n",
+    ))
+    .unwrap();
+    let mac_file =
+        format!("{HEADER}Shop,Ana,a@b.test,English,2551Q\nOther,Bo,b@b.test,English,2551Q\n").replace('\n', "\r");
+    let mac = read_csv(mac_file.as_bytes()).unwrap();
+
+    assert_eq!(multi_line.iter().map(|r| r.row).collect::<Vec<_>>(), [2, 4]);
+    assert_eq!(multi_line[0].input.forms, ["2551Q", "1701Q"]);
+    assert_eq!(mac.iter().map(|r| r.row).collect::<Vec<_>>(), [2, 3]);
+}
