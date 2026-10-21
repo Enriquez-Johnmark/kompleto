@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into scheduled_drafts (firm_id, client_id, period, slot, ordinal, message_id, created_at, source)\n               select $1, $2, $3, $4, count(*)::smallint, $5, $6, $8\n               from scheduled_drafts where client_id = $2 and period = $3\n               having count(*) < $7\n               on conflict do nothing\n               returning 1 as \"recorded!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recorded!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "403a266d79e5ed9c57b8c4aa8fd80d07014046253bf7c2daf9f74ad9c38a48aa"
+}
