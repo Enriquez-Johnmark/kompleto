@@ -32,6 +32,8 @@ use crate::kompleto::uploads::{Label, LabelProblem, MAX_FILE_BYTES, UploadError,
 
 /// How many uploads are processed at once.
 pub const UPLOAD_SLOTS: usize = 4;
+/// How long one upload may take to arrive: 10 MB at about 0.7 Mbit/s.
+const UPLOAD_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(120);
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
@@ -243,16 +245,19 @@ async fn page(State(state): State<AppState>, Path(token): Path<String>, Query(qu
 }
 
 async fn upload(State(state): State<AppState>, Path(token): Path<String>, multipart: Multipart) -> Response {
-    let Ok(_slot) = state.upload_slots.acquire().await else {
-        return WebError::Internal.into_response();
-    };
+    // The link is checked before taking a slot, so bad links can't take them.
     let opened = match open(&state, &token).await {
         Ok(opened) => opened,
         Err(closed) => return closed.into_response(),
     };
-    let form = match read_form(multipart).await {
-        Ok(form) => form,
-        Err(err) => return refusal(&state, &opened, &err).await,
+    let Ok(_slot) = state.upload_slots.acquire().await else {
+        return WebError::Internal.into_response();
+    };
+    // A sender that trickles its file can't keep a slot for long.
+    let form = match tokio::time::timeout(UPLOAD_TIME_LIMIT, read_form(multipart)).await {
+        Ok(Ok(form)) => form,
+        Ok(Err(err)) => return refusal(&state, &opened, &err).await,
+        Err(_) => return refusal(&state, &opened, &UploadError::Incomplete).await,
     };
     let label = match form.document.as_str() {
         "other" => Label::SomethingElse { note: form.note },
