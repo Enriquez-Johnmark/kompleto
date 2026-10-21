@@ -144,7 +144,18 @@ pub const ANOTHER_PAYOR_2307: &str = "BIR Form 2307 from another business";
 
 /// The Owed document for one Payor's 2307.
 pub fn payor_2307(payor: &str) -> String {
-    format!("BIR Form 2307 from {payor}")
+    format!("{PAYOR_2307_PREFIX}{payor}")
+}
+
+const PAYOR_2307_PREFIX: &str = "BIR Form 2307 from ";
+
+/// Whether `document` is a 2307 a customer gave the Client: the general
+/// item, a listed Payor's, or one from another business.
+pub fn is_received_2307(document: &str) -> bool {
+    document.starts_with(PAYOR_2307_PREFIX)
+        || DEFAULT_ITEMS
+            .iter()
+            .any(|item| item.key == RECEIVED_2307_KEY && item.label == document)
 }
 
 /// The labels of the documents a Client filing `forms` owes for the
