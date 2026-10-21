@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, client_id, period, from_address, subject, body_text, automatic, received_at\n             from replies where firm_id = $1 and client_id = $2 order by received_at desc, id desc",
+  "query": "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments\n             from replies where firm_id = $1 and client_id = $2 order by received_at desc, id desc",
   "describe": {
     "columns": [
       {
@@ -90,6 +90,17 @@
             "name": "received_at"
           }
         }
+      },
+      {
+        "ordinal": 8,
+        "name": "attachments",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "attachments"
+          }
+        }
       }
     ],
     "parameters": {
@@ -106,8 +117,9 @@
       true,
       true,
       false,
+      false,
       false
     ]
   },
-  "hash": "d1af27cc3627e91a70cf0199a1fa6a6f4d38dad7ee9ef9bbf768fec221b220ec"
+  "hash": "9cea5e062c2fd988ce2af6c5746ea4eb2248104fbd8b4630170485210e2df1ee"
 }

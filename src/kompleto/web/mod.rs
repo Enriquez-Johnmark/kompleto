@@ -137,7 +137,8 @@ impl AppState {
                 links,
                 self.checks.clone(),
                 &base_url,
-            ),
+            )
+            .with_uploads(self.uploads.clone()),
         }));
         self
     }

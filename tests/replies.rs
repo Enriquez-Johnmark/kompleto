@@ -14,6 +14,7 @@ use kompleto::kompleto::clients::{Clients, NewClient};
 use kompleto::kompleto::firms::FirmId;
 use kompleto::kompleto::reminders::Scheduler;
 use kompleto::kompleto::replies::{Received, Replies};
+use kompleto::kompleto::uploads::{Label, Uploads};
 use sqlx::PgPool;
 use time::Duration;
 
@@ -48,6 +49,7 @@ async fn reminded(pool: &PgPool) -> (FirmId, Arc<FixedClock>, String) {
 
 fn replies(pool: &PgPool, clock: Arc<FixedClock>) -> Replies {
     let checks = common::kompleto_checks(pool, clock.clone());
+    let uploads = Uploads::new(pool.clone(), clock.clone(), common::files(pool, clock.clone()));
     Replies::new(
         pool.clone(),
         clock.clone(),
@@ -55,6 +57,7 @@ fn replies(pool: &PgPool, clock: Arc<FixedClock>) -> Replies {
         checks,
         "http://kompleto.test",
     )
+    .with_uploads(uploads)
 }
 
 async fn status(pool: &PgPool) -> String {
@@ -167,4 +170,32 @@ async fn g1_the_firm_is_told_of_a_reply_with_a_link_not_a_copy(pool: PgPool) {
         "the Contact's text is never copied: {body}"
     );
     assert_eq!(status, "approved", "on its way within the sender's next drain");
+}
+
+#[sqlx::test]
+async fn g1_photo_and_pdf_attachments_are_kept_as_uploads_and_the_rest_dropped(pool: PgPool) {
+    let (santos, clock, reply_to) = reminded(&pool).await;
+    let email = parse(&common::inbound("with_attachments", &reply_to)).unwrap();
+
+    let Received::Human(id) = replies(&pool, clock.clone()).receive(&email).await.unwrap() else {
+        panic!("not a human reply");
+    };
+
+    let reply = replies(&pool, clock.clone()).get(santos, id).await.unwrap();
+    assert_eq!(reply.attachments, 1, "the JPEG kept, the .exe dropped");
+    let client: uuid::Uuid = sqlx::query_scalar("select id from clients")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let kept = Uploads::new(pool.clone(), clock.clone(), common::files(&pool, clock))
+        .for_client(santos, client.into())
+        .await
+        .unwrap();
+    assert_eq!(kept.len(), 1);
+    assert_eq!(
+        kept[0].label,
+        Label::SomethingElse {
+            note: "Sent by email".to_owned()
+        }
+    );
 }

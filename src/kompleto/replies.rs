@@ -21,6 +21,7 @@ use super::drafts::Drafts;
 use super::firms::{FirmId, Firms};
 use super::presend::KompletoChecks;
 use super::upload_links::{OpenLink, UploadLinks};
+use super::uploads::{Label, UploadError, Uploads};
 use crate::engine::clock::Clock;
 use crate::engine::ids::id_type;
 use crate::engine::inbound::InboundEmail;
@@ -82,6 +83,8 @@ pub struct Reply {
     pub automatic: bool,
     /// When it arrived.
     pub received_at: OffsetDateTime,
+    /// How many attachments were kept as Uploads.
+    pub attachments: i32,
 }
 
 /// Receives and lists Replies.
@@ -96,7 +99,11 @@ pub struct Replies {
     outbox: Outbox,
     checks: KompletoChecks,
     base_url: String,
+    uploads: Option<Uploads>,
 }
+
+/// The label a Reply's attachments get as Uploads.
+pub const ATTACHMENT_NOTE: &str = "Sent by email";
 
 impl Replies {
     /// Replies matched through `links`' reply addresses; notices link to
@@ -118,7 +125,15 @@ impl Replies {
             pool,
             clock,
             links,
+            uploads: None,
         }
+    }
+
+    /// Keeps a human Reply's photo and PDF attachments as Uploads.
+    #[must_use]
+    pub fn with_uploads(mut self, uploads: Uploads) -> Self {
+        self.uploads = Some(uploads);
+        self
     }
 
     /// Takes in one inbound email.
@@ -147,12 +162,46 @@ impl Replies {
         if email.automatic {
             return Ok(Received::Automatic(id));
         }
+        let kept = self.keep_attachments(&link, &email.attachments).await;
+        if kept > 0 {
+            sqlx::query!(
+                "update replies set attachments = $3 where id = $1 and firm_id = $2",
+                id.as_uuid(),
+                link.firm.as_uuid(),
+                kept,
+            )
+            .execute(&self.pool)
+            .await?;
+        }
         self.drafts.cancel_waiting(link.firm, link.client, &link.period).await?;
         // The Reply is kept either way; a notice that fails is logged.
         if let Err(err) = self.notify(&link, id).await {
             tracing::error!(firm = %link.firm, reply = %id, %err, "notifying the firm of a reply failed");
         }
         Ok(Received::Human(id))
+    }
+
+    /// Keeps each attachment the upload rules accept (photos and PDFs, the
+    /// size and per-link limits) as an Upload; returns how many.
+    async fn keep_attachments(&self, link: &OpenLink, attachments: &[Vec<u8>]) -> i32 {
+        let Some(uploads) = &self.uploads else {
+            return 0;
+        };
+        let mut kept = 0;
+        for bytes in attachments {
+            let label = Label::SomethingElse {
+                note: ATTACHMENT_NOTE.to_owned(),
+            };
+            match uploads.add(link, &[], label, bytes).await {
+                Ok(_) => kept += 1,
+                Err(err @ (UploadError::File(_) | UploadError::Database(_))) => {
+                    tracing::error!(firm = %link.firm, %err, "keeping a reply's attachment failed");
+                }
+                // Not a photo or PDF, too big, or the link is full: dropped.
+                Err(_) => {}
+            }
+        }
+        kept
     }
 
     /// Emails the Firm that Reply `id` arrived, with a link to read it.
@@ -227,7 +276,7 @@ impl Replies {
     /// A Client's Replies, newest first.
     pub async fn for_client(&self, firm: FirmId, client: ClientId) -> Result<Vec<Reply>, ReplyError> {
         let rows = sqlx::query!(
-            "select id, client_id, period, from_address, subject, body_text, automatic, received_at
+            "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments
              from replies where firm_id = $1 and client_id = $2 order by received_at desc, id desc",
             firm.as_uuid(),
             client.as_uuid(),
@@ -245,6 +294,7 @@ impl Replies {
                 text: row.body_text,
                 automatic: row.automatic,
                 received_at: row.received_at,
+                attachments: row.attachments,
             })
             .collect())
     }
@@ -252,7 +302,7 @@ impl Replies {
     /// Reply `id` of `firm`.
     pub async fn get(&self, firm: FirmId, id: ReplyId) -> Result<Reply, ReplyError> {
         let row = sqlx::query!(
-            "select id, client_id, period, from_address, subject, body_text, automatic, received_at
+            "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments
              from replies where firm_id = $1 and id = $2",
             firm.as_uuid(),
             id.as_uuid(),
@@ -269,6 +319,7 @@ impl Replies {
             text: row.body_text,
             automatic: row.automatic,
             received_at: row.received_at,
+            attachments: row.attachments,
         })
     }
 }

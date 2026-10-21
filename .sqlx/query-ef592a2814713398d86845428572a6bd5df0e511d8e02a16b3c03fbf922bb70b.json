@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update replies set attachments = $3 where id = $1 and firm_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ef592a2814713398d86845428572a6bd5df0e511d8e02a16b3c03fbf922bb70b"
+}
