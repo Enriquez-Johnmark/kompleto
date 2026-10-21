@@ -6,6 +6,8 @@
 //!   so a Client never gets a burst of catch-up messages.
 //! - A newly added Client is chased from the first Period whose Cut-off is
 //!   after the day it was added.
+//! - An unapproved Draft expires at the end of its Period's Cut-off day
+//!   (D4); each run also sweeps overdue Drafts to `expired`.
 //! - Each Draft is recorded in `scheduled_drafts` in the same transaction
 //!   that creates it; that table's constraints allow at most four per
 //!   Client per Period.
@@ -78,6 +80,10 @@ impl Scheduler {
     /// Creates every Draft due now; returns how many. Safe to run again.
     /// One Client's failure is logged and doesn't stop the others.
     pub async fn run_once(&self) -> Result<usize, SchedulerError> {
+        let expired = self.outbox.expire_overdue().await?;
+        if expired > 0 {
+            tracing::info!(expired, "unapproved drafts expired at their cut-off");
+        }
         let rows = sqlx::query_as!(
             SweepRow,
             "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset
@@ -178,7 +184,14 @@ impl Scheduler {
             body_text: text.body,
         };
         let mut tx = self.pool.begin().await?;
-        let message = self.outbox.create_draft_in(&mut tx, firm, &email, None).await?;
+        // D4: unapproved, it expires at the end of the Cut-off day (Manila).
+        let expires_at = (period.cut_off + time::Duration::days(1))
+            .midnight()
+            .assume_offset(MANILA);
+        let message = self
+            .outbox
+            .create_draft_in(&mut tx, firm, &email, Some(expires_at))
+            .await?;
         // A concurrent run that recorded this slot first, or a full Period,
         // makes this insert a no-op, and the Draft rolls back with it.
         let recorded = sqlx::query_scalar!(

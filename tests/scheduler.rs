@@ -87,7 +87,11 @@ async fn d1_drafts_appear_on_the_schedule_and_never_more_than_four_per_period(po
         .fetch_all(&pool)
         .await
         .unwrap();
-    assert_eq!(statuses, ["draft"], "the scheduler never approves anything");
+    // Old Drafts have expired by now (D4); none was ever approved.
+    assert!(
+        statuses.iter().all(|s| s == "draft" || s == "expired"),
+        "the scheduler never approves anything: {statuses:?}"
+    );
 }
 
 #[sqlx::test]
@@ -269,4 +273,63 @@ async fn d5_the_scheduler_drafts_with_the_model_and_labels_each_draft(pool: PgPo
         body.starts_with("Hi Nena! Kailangan pa po namin ito:") && body.contains("Santos Bookkeeping"),
         "{body}"
     );
+}
+
+#[sqlx::test]
+async fn d4_a_reminder_draft_expires_at_the_end_of_its_cut_off_day(pool: PgPool) {
+    use kompleto::engine::outbox::{MessageStatus, Outbox, OutboxError};
+    use kompleto::kompleto::presend::KompletoChecks;
+
+    let clock = clock();
+    clock.advance(Duration::days(11)); // 1 Nov 2026, 17:00 Manila: October's first request
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    Clients::new(pool.clone(), clock.clone())
+        .create(santos, &employer())
+        .await
+        .unwrap();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone()).unwrap();
+    scheduler.run_once().await.unwrap();
+    let id: uuid::Uuid = sqlx::query_scalar("select message_id from scheduled_drafts")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let outbox = Outbox::new(pool.clone(), clock.clone());
+    let seen = outbox.get(santos, id.into()).await.unwrap().content_hash();
+    let checks = KompletoChecks::new(pool.clone(), clock.clone(), "http://kompleto.test");
+
+    // October's cut-off is Thu 5 Nov; 23:59 Manila is 15:59 UTC.
+    clock.advance(Duration::days(4) + Duration::hours(6) + Duration::minutes(59)); // 5 Nov, 23:59 Manila
+    scheduler.run_once().await.unwrap();
+    assert_eq!(
+        outbox.get(santos, id.into()).await.unwrap().status,
+        MessageStatus::Draft
+    );
+
+    clock.advance(Duration::minutes(1)); // 6 Nov, 00:00 Manila
+    let late = outbox
+        .approve(santos, id.into(), "ana@santos.test", &seen, &checks)
+        .await;
+    assert!(matches!(late, Err(OutboxError::Expired)), "{late:?}");
+}
+
+#[sqlx::test]
+async fn d4_the_hourly_run_marks_overdue_drafts_expired(pool: PgPool) {
+    let clock = clock();
+    clock.advance(Duration::days(11));
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    Clients::new(pool.clone(), clock.clone())
+        .create(santos, &employer())
+        .await
+        .unwrap();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone()).unwrap();
+    scheduler.run_once().await.unwrap();
+
+    clock.advance(Duration::days(5)); // 6 Nov, past the cut-off day
+    scheduler.run_once().await.unwrap();
+
+    let statuses: Vec<String> = sqlx::query_scalar("select status from outbox_messages order by created_at")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(statuses[0], "expired");
 }
