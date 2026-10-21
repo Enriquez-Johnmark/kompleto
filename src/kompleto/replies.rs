@@ -129,6 +129,14 @@ impl Replies {
         }
     }
 
+    /// Matches Replies through `links` instead, e.g. ones with reply
+    /// addresses.
+    #[must_use]
+    pub fn matching(mut self, links: UploadLinks) -> Self {
+        self.links = links;
+        self
+    }
+
     /// Keeps a human Reply's photo and PDF attachments as Uploads.
     #[must_use]
     pub fn with_uploads(mut self, uploads: Uploads) -> Self {

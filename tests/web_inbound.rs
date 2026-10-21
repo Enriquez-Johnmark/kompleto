@@ -82,6 +82,23 @@ async fn g1_a_signed_reply_is_taken_in_and_stops_the_periods_reminders(pool: PgP
 }
 
 #[sqlx::test]
+async fn g1_the_firms_notice_links_to_the_reply_under_the_apps_path(pool: PgPool) {
+    let app = TestApp::at(pool, "http://kompleto.test/app");
+    let reply_to = reminded(&app).await;
+    let body = common::inbound("human_reply", &reply_to);
+
+    deliver(&app, body.clone(), &signature(&body)).await;
+
+    let (status, text): (String, String) =
+        sqlx::query_as("select status, body_text from outbox_messages where reply_to is null")
+            .fetch_one(&app.pool)
+            .await
+            .unwrap();
+    assert_eq!(status, "approved", "passes the pre-send checks");
+    assert!(text.contains("http://kompleto.test/app/replies/"), "{text}");
+}
+
+#[sqlx::test]
 async fn g1_unsigned_or_wrongly_signed_mail_is_refused_and_nothing_kept(pool: PgPool) {
     let app = TestApp::new(pool);
     let reply_to = reminded(&app).await;

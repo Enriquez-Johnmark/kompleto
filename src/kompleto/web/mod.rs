@@ -159,17 +159,9 @@ impl AppState {
     #[must_use]
     pub fn with_inbound(mut self, secret: SecretString, reply_domain: &str) -> Self {
         let links = self.links.clone().with_replies(reply_domain);
-        let base_url = self.origin.clone();
         self.inbound = Some(Arc::new(Inbound {
             secret,
-            replies: Replies::new(
-                self.pool.clone(),
-                self.clock.clone(),
-                links,
-                self.checks.clone(),
-                &base_url,
-            )
-            .with_uploads(self.uploads.clone()),
+            replies: self.replies.clone().matching(links).with_uploads(self.uploads.clone()),
         }));
         self
     }

@@ -54,13 +54,18 @@ impl Response {
 
 impl TestApp {
     pub fn new(pool: PgPool) -> Self {
+        Self::at(pool, BASE_URL)
+    }
+
+    /// The app served at `base_url`, which may have a path.
+    pub fn at(pool: PgPool, base_url: &str) -> Self {
         let clock = super::clock();
         let xlsx = kompleto::kompleto::import::xlsx::XlsxReader::new(env!("CARGO_BIN_EXE_kompleto").into());
         let files = super::files(&pool, clock.clone());
         let state = AppState::new(
             pool.clone(),
             clock.clone(),
-            BASE_URL,
+            base_url,
             xlsx,
             &super::master_key(),
             files.clone(),
