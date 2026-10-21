@@ -199,3 +199,25 @@ async fn g1_photo_and_pdf_attachments_are_kept_as_uploads_and_the_rest_dropped(p
         }
     );
 }
+
+#[sqlx::test]
+async fn g1_a_replys_text_is_deleted_after_90_days_and_the_reply_kept(pool: PgPool) {
+    let (santos, clock, reply_to) = reminded(&pool).await;
+    let email = parse(&common::inbound("human_reply", &reply_to)).unwrap();
+    let Received::Human(id) = replies(&pool, clock.clone()).receive(&email).await.unwrap() else {
+        panic!("not a human reply");
+    };
+
+    let early =
+        kompleto::kompleto::replies::forget_old_text(&pool, clock.now_plus(Duration::days(90) - Duration::minutes(1)))
+            .await
+            .unwrap();
+    let due = kompleto::kompleto::replies::forget_old_text(&pool, clock.now_plus(Duration::days(90)))
+        .await
+        .unwrap();
+
+    assert_eq!((early, due), (0, 1));
+    let reply = replies(&pool, clock).get(santos, id).await.unwrap();
+    assert_eq!((reply.subject, reply.text), (None, None));
+    assert_eq!(reply.period, "2026-10", "the reply itself stays");
+}

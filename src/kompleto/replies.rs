@@ -323,3 +323,20 @@ impl Replies {
         })
     }
 }
+
+/// How long a Reply's text is kept.
+pub const TEXT_KEPT_DAYS: i64 = 90;
+
+/// Deletes the subject and text of every Reply older than 90 days at `now`;
+/// returns how many. A system-wide sweep: the row stays, as "replied on
+/// <date>", for every Firm.
+pub async fn forget_old_text(pool: &PgPool, now: OffsetDateTime) -> Result<u64, sqlx::Error> {
+    let forgotten = sqlx::query!(
+        "update replies set subject = null, body_text = null
+         where body_text is not null and received_at <= $1",
+        now - time::Duration::days(TEXT_KEPT_DAYS),
+    )
+    .execute(pool)
+    .await?;
+    Ok(forgotten.rows_affected())
+}

@@ -35,6 +35,7 @@ use kompleto::kompleto::firms::Firms;
 use kompleto::kompleto::import::xlsx::{self, XlsxReader};
 use kompleto::kompleto::presend::KompletoChecks;
 use kompleto::kompleto::reminders::Scheduler;
+use kompleto::kompleto::replies;
 use kompleto::kompleto::schedule::MANILA;
 use kompleto::kompleto::upload_links::UploadLinks;
 use kompleto::kompleto::web::{AppState, router};
@@ -167,6 +168,7 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
     let links = UploadLinks::new(pool.clone(), clock.clone(), &master, &config.public_base_url)
         .with_replies(config.reply_domain());
     let scheduler = Scheduler::with_model(pool.clone(), clock.clone(), links.clone(), model)?;
+    let (sweep_pool, sweep_clock) = (pool.clone(), clock.clone());
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(SCHEDULE_EVERY);
         loop {
@@ -178,6 +180,10 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
             match files.sweep().await {
                 Ok(deleted) => tracing::info!(deleted, "files past their deadline deleted"),
                 Err(err) => tracing::error!(%err, "deleting files failed"),
+            }
+            match replies::forget_old_text(&sweep_pool, sweep_clock.now()).await {
+                Ok(forgotten) => tracing::info!(forgotten, "reply text past 90 days deleted"),
+                Err(err) => tracing::error!(%err, "deleting old reply text failed"),
             }
         }
     });
