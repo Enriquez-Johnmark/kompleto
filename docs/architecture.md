@@ -56,6 +56,14 @@ draft ──approve──► approved ──► sending ──► sent
 5. **A2 sweep** extended to Upload lists, downloads and Mark received.
 6. **Pre-send checks** accept only the Client's own Upload link.
 
+Implementation notes (M4):
+- `engine::files` owns encryption (XChaCha20-Poly1305: a random key per file, wrapped by a key derived from `FILE_MASTER_KEY`, both bound to the file ID and tenant), the `FileStore` interface (local disk until R2) and the `stored_files` table. A file's row is written before the file itself, so every stored file has a deadline the hourly sweep acts on; deleting removes the file, then its key, and is audited. A deadline only ever moves earlier. One file that can't be deleted doesn't stop the sweep.
+- Upload links are the link's ID plus the first 128 bits of an HMAC-SHA256 over it, with a key derived from the master key, checked in constant time. Looking a link up by its token is the one query not scoped by a Firm: the token is the credential. A changed Cut-off moves the link's last day with it.
+- An Upload's ID is its stored file's ID. Labels name an Owed document by its text; a 2307 also carries a typed Payor name until M5's Payor list.
+- The upload page sends `Referrer-Policy: same-origin`, not `no-referrer`: with `no-referrer`, browsers send `Origin: null` with the page's own uploads, and the same-origin check refuses them. The link still never reaches another site.
+- The link is checked before an upload takes one of the 4 slots, and an upload has 2 minutes to arrive.
+- G2: the scheduler lists only Owed documents without an Upload and, on every run, cancels the Period's waiting reminders once all have one; the upload page does the same at once after the last upload.
+
 ### Test seams for M3 (2026-10-21)
 
 1. **AI client** (`engine::llm`) against a fake Anthropic server: request shape, and an inspection of every outgoing request for TIN-shaped numbers, peso amounts and file contents (D6); timeouts and bad replies.
