@@ -47,13 +47,18 @@ struct LoginForm {
     email: String,
 }
 
-async fn request_link(State(state): State<AppState>, Form(form): Form<LoginForm>) -> Result<LinkSentPage, WebError> {
-    let outcome = state.auth.request_link(&form.email).await.map_err(WebError::internal)?;
-    if outcome == LoginOutcome::Sent {
-        state.wake_sender.notify_one();
-    }
-    // The same page either way, so it never reveals who has an account.
-    Ok(LinkSentPage)
+async fn request_link(State(state): State<AppState>, Form(form): Form<LoginForm>) -> LinkSentPage {
+    // The lookup and the email happen after the reply, so neither the page
+    // nor how long it takes reveals who has an account (A1).
+    let (auth, wake_sender) = (state.auth, state.wake_sender);
+    tokio::spawn(async move {
+        match auth.request_link(&form.email).await {
+            Ok(LoginOutcome::Sent) => wake_sender.notify_one(),
+            Ok(LoginOutcome::NotSent) => {}
+            Err(err) => tracing::error!(%err, "sending a login link failed"),
+        }
+    });
+    LinkSentPage
 }
 
 async fn link_page(Path(token): Path<String>) -> LinkPage {

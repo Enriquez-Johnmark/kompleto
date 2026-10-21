@@ -103,18 +103,31 @@ impl TestApp {
             .unwrap();
         self.request(Method::POST, "/login", None, Some(&format!("email={email}")))
             .await;
-        let token = self.latest_login_token().await;
+        let token = self.login_token_for(&email).await;
         let response = self.request(Method::POST, &format!("/login/{token}"), None, None).await;
         (firm, response.session_cookie().unwrap())
     }
 
-    /// The token in the newest login email.
-    pub async fn latest_login_token(&self) -> String {
-        let body: String =
-            sqlx::query_scalar("select body_text from outbox_messages order by created_at desc, id desc limit 1")
-                .fetch_one(&self.pool)
-                .await
-                .unwrap();
+    /// The token in the newest login email to `email`. The email is made
+    /// after the login page replies, so this waits for it.
+    pub async fn login_token_for(&self, email: &str) -> String {
+        let mut body = None;
+        for _ in 0..100 {
+            body = sqlx::query_scalar(
+                "select body_text from outbox_messages where to_address = $1 order by created_at desc, id desc limit 1",
+            )
+            .bind(email)
+            .fetch_optional(&self.pool)
+            .await
+            .unwrap();
+            if body.is_some() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let Some(body): Option<String> = body else {
+            panic!("no login email to {email} arrived");
+        };
         let marker = format!("{BASE_URL}/login/");
         let start = body.find(&marker).unwrap() + marker.len();
         body[start..].chars().take_while(char::is_ascii_alphanumeric).collect()

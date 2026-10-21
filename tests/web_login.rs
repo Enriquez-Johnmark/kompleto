@@ -39,7 +39,7 @@ async fn a1_opening_a_link_shows_a_button_and_only_the_button_logs_in(pool: PgPo
         .unwrap();
     app.request(Method::POST, "/login", None, Some("email=ana%40santos.test"))
         .await;
-    let token = app.latest_login_token().await;
+    let token = app.login_token_for("ana@santos.test").await;
 
     // A link scanner opening the link twice doesn't use it up.
     for _ in 0..2 {
