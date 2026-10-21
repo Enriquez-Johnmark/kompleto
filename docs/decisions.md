@@ -4,6 +4,7 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **Cut-off never before the Period opens.** If the cut-off offset would put a Period's Cut-off before the day its documents become due, the Cut-off is that opening day, so the first request still goes out. Found in the M2 code review. Recorded in `docs/product/p1-spec.md`.
 - **M2 round.** The owner accepted all 22 recommendations ("go ahead"):
   - a session-start hook that starts Docker, falls back to `mirror.gcr.io`, migrates and installs sqlx-cli; and removing the stale duplicate sections from `AGENTS.md`;
   - six M2 test seams (`docs/architecture.md`);

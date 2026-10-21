@@ -62,7 +62,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 ### Collection periods and documents (M2 round, 2026-10-21)
 
 - **One collection per month.** A Client is asked once a month for the month that just ended. That Period covers all of the client's forms whose period ends that month: monthly forms every month, quarterly forms in March, June, September and December, annual forms in December. A client that files only quarterly forms is asked once per quarter.
-- **Cut-off** = the earliest Due date among the Period's forms, minus the cut-off offset (5 days by default, set per firm and changeable per client).
+- **Cut-off** = the earliest Due date among the Period's forms, minus the cut-off offset (5 days by default, set per firm and changeable per client), but never before the day the Period opens (2026-10-21).
 - **Default Owed documents** (the bookkeeper edits them per Client; edits apply to future Periods). This list is a synthesis, not an official BIR list:
   - every month: sales invoices issued (including cancelled ones); purchase and expense invoices and receipts; bank and e-wallet (GCash, Maya) statements;
   - with 1601-C: payroll register and SSS, PhilHealth and Pag-IBIG reports;
