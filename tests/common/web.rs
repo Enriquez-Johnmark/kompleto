@@ -13,6 +13,8 @@ use sqlx::PgPool;
 use tower::ServiceExt;
 
 pub const BASE_URL: &str = "http://kompleto.test";
+/// The secret the test app's inbound email is signed with.
+pub const INBOUND_SECRET: &str = "test-inbound-secret";
 
 pub struct TestApp {
     pub router: Router,
@@ -61,7 +63,8 @@ impl TestApp {
             &super::master_key(),
             files.clone(),
         )
-        .unwrap();
+        .unwrap()
+        .with_inbound(INBOUND_SECRET.to_owned().into(), "getkompleto.test");
         Self {
             router: router(state),
             pool,

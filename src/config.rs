@@ -66,6 +66,9 @@ pub struct Config {
     pub file_master_key: Option<SecretString>,
     /// Where encrypted Uploads are kept (`UPLOAD_DIR`, default `uploads`).
     pub upload_dir: PathBuf,
+    /// Proves inbound email comes from our provider (`INBOUND_SECRET`);
+    /// without it, no Replies are taken in.
+    pub inbound_secret: Option<SecretString>,
 }
 
 /// Where and which model drafts.
@@ -118,6 +121,7 @@ impl Config {
             }),
             file_master_key: optional("FILE_MASTER_KEY").map(SecretString::from),
             upload_dir: optional("UPLOAD_DIR").map_or_else(|| PathBuf::from("uploads"), PathBuf::from),
+            inbound_secret: optional("INBOUND_SECRET").map(SecretString::from),
         })
     }
 

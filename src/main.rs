@@ -152,6 +152,13 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         &master,
         files.clone(),
     )?;
+    let state = match &config.inbound_secret {
+        Some(secret) => state.with_inbound(secret.clone(), config.reply_domain()),
+        None => {
+            tracing::warn!("INBOUND_SECRET isn't set; client replies won't be taken in");
+            state
+        }
+    };
     let wake_up = state.sender_wake_up();
     let model = config.language_model()?;
     if model.is_none() {

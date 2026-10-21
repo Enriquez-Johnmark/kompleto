@@ -9,6 +9,7 @@
 
 mod clients;
 mod drafts;
+mod hooks;
 mod import;
 mod login;
 mod settings;
@@ -27,6 +28,7 @@ use axum::http::{Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{MethodRouter, get};
+use secrecy::SecretString;
 use sqlx::PgPool;
 use tokio::sync::{Notify, Semaphore};
 use tower_http::trace::TraceLayer;
@@ -39,6 +41,7 @@ use super::drafts::Drafts;
 use super::firms::{FirmError, FirmId, Firms};
 use super::import::xlsx::XlsxReader;
 use super::presend::KompletoChecks;
+use super::replies::Replies;
 use super::upload_links::UploadLinks;
 use super::uploads::Uploads;
 use crate::engine::clock::Clock;
@@ -71,6 +74,14 @@ pub struct AppState {
     origin: String,
     /// Mark cookies `Secure` (when served over HTTPS).
     secure_cookies: bool,
+    /// Inbound email, when `INBOUND_SECRET` is set.
+    inbound: Option<Arc<Inbound>>,
+}
+
+/// Taking in Replies.
+struct Inbound {
+    secret: SecretString,
+    replies: Replies,
 }
 
 impl AppState {
@@ -108,7 +119,27 @@ impl AppState {
             wake_sender: Arc::new(Notify::new()),
             secure_cookies: base_url.starts_with("https://"),
             origin,
+            inbound: None,
         })
+    }
+
+    /// Takes in Replies signed with `secret`, at reply addresses on
+    /// `reply_domain`.
+    #[must_use]
+    pub fn with_inbound(mut self, secret: SecretString, reply_domain: &str) -> Self {
+        let links = self.links.clone().with_replies(reply_domain);
+        let base_url = self.origin.clone();
+        self.inbound = Some(Arc::new(Inbound {
+            secret,
+            replies: Replies::new(
+                self.pool.clone(),
+                self.clock.clone(),
+                links,
+                self.checks.clone(),
+                &base_url,
+            ),
+        }));
+        self
     }
 
     /// Notified whenever an email is approved and should go out now.
@@ -128,6 +159,7 @@ pub fn router(state: AppState) -> Router {
         .merge(settings::routes())
         .merge(upload::routes())
         .merge(uploads::routes())
+        .merge(hooks::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -135,7 +167,8 @@ pub fn router(state: AppState) -> Router {
 
 /// Refuses form posts whose `Origin` isn't our own.
 async fn same_origin_posts(State(state): State<AppState>, request: Request, next: Next) -> Response {
-    let safe = matches!(*request.method(), Method::GET | Method::HEAD);
+    // Machine endpoints prove themselves with signatures instead.
+    let safe = matches!(*request.method(), Method::GET | Method::HEAD) || request.uri().path().starts_with("/hooks/");
     let ours = request
         .headers()
         .get(header::ORIGIN)
