@@ -7,9 +7,8 @@ create table scheduled_drafts (
     period      text not null,
     slot        text not null,
     ordinal     smallint not null check (ordinal between 0 and 3),
-    -- Set once the Draft exists; the row is claimed first so two runs can't
-    -- both create it.
-    message_id  uuid,
+    -- Inserted in the same transaction as the Draft itself.
+    message_id  uuid not null,
     created_at  timestamptz not null,
     primary key (client_id, period, slot),
     unique (client_id, period, ordinal),

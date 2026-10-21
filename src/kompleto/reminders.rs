@@ -7,8 +7,9 @@
 //!   so a Client never gets a burst of catch-up messages.
 //! - A newly added Client is chased from the first Period whose Cut-off is
 //!   after the day it was added.
-//! - Each Draft is claimed in `scheduled_drafts` before it's created, and
-//!   that table's constraints allow at most four per Client per Period.
+//! - Each Draft is recorded in `scheduled_drafts` in the same transaction
+//!   that creates it; that table's constraints allow at most four per
+//!   Client per Period.
 //!
 //! This is a system-wide worker: it reads every Firm's Clients, and names
 //! the Firm in every row it writes.
@@ -64,48 +65,63 @@ impl Scheduler {
     }
 
     /// Creates every Draft due now; returns how many. Safe to run again.
+    /// One Client's failure is logged and doesn't stop the others.
     pub async fn run_once(&self) -> Result<usize, SchedulerError> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query_as!(
+            SweepRow,
             "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset
              from clients c join firms f on f.id = c.firm_id
-             where not c.paused"
+             where not c.paused
+             order by c.created_at, c.id"
         )
         .fetch_all(&self.pool)
         .await?;
         let mut created = 0;
         for row in rows {
-            let (firm, id) = (FirmId::from(row.firm_id), ClientId::from(row.id));
-            let client = self.clients.get(firm, id).await?;
-            let overrides = self.clients.due_overrides(firm, id).await?;
-            let calendar = ClientCalendar {
-                calendar: &self.calendar,
-                forms: &client.details.forms,
-                overrides: &overrides,
-                cut_off_offset_days: client
-                    .cut_off_offset_days
-                    .unwrap_or_else(|| u8::try_from(row.firm_offset).unwrap_or(5)),
-            };
-            let now = self.clock.now();
-            let added_on = row.created_at.to_offset(MANILA).date();
-            for period in calendar.upcoming(now.to_offset(MANILA).date()) {
-                if period.cut_off <= added_on {
-                    continue;
-                }
-                let latest_due = planned_drafts(&period, &client.reminder_days)
-                    .into_iter()
-                    .rfind(|draft| appears_at(draft.on) <= now);
-                if let Some(draft) = latest_due
-                    && self.create(&row.firm_name, &client, firm, &period, draft).await?
-                {
-                    created += 1;
+            match self.schedule_client(&row).await {
+                Ok(n) => created += n,
+                Err(err) => {
+                    tracing::error!(firm = %row.firm_id, client = %row.id, %err, "creating a reminder draft failed")
                 }
             }
         }
         Ok(created)
     }
 
-    /// Claims the slot and creates its Draft; false if it already exists or
-    /// the Period has had its four.
+    /// Creates the Drafts due now for one Client.
+    async fn schedule_client(&self, row: &SweepRow) -> Result<usize, SchedulerError> {
+        let (firm, id) = (FirmId::from(row.firm_id), ClientId::from(row.id));
+        let client = self.clients.get(firm, id).await?;
+        let overrides = self.clients.due_overrides(firm, id).await?;
+        let calendar = ClientCalendar {
+            calendar: &self.calendar,
+            forms: &client.details.forms,
+            overrides: &overrides,
+            cut_off_offset_days: client
+                .cut_off_offset_days
+                .unwrap_or_else(|| u8::try_from(row.firm_offset).unwrap_or(5)),
+        };
+        let now = self.clock.now();
+        let added_on = row.created_at.to_offset(MANILA).date();
+        let mut created = 0;
+        for period in calendar.upcoming(now.to_offset(MANILA).date()) {
+            if period.cut_off <= added_on {
+                continue;
+            }
+            let latest_due = planned_drafts(&period, &client.reminder_days)
+                .into_iter()
+                .rfind(|draft| appears_at(draft.on) <= now);
+            if let Some(draft) = latest_due
+                && self.create(&row.firm_name, &client, firm, &period, draft).await?
+            {
+                created += 1;
+            }
+        }
+        Ok(created)
+    }
+
+    /// Creates the slot's Draft and records it, in one transaction; false if
+    /// the slot already has one or the Period has had its four.
     async fn create(
         &self,
         firm_name: &str,
@@ -115,44 +131,61 @@ impl Scheduler {
         draft: PlannedDraft,
     ) -> Result<bool, SchedulerError> {
         let (key, slot) = (period.key(), slot_key(draft.slot));
-        let claimed = sqlx::query_scalar!(
-            r#"insert into scheduled_drafts (firm_id, client_id, period, slot, ordinal, created_at)
-               select $1, $2, $3, $4, count(*)::smallint, $5
-               from scheduled_drafts where client_id = $2 and period = $3
-               having count(*) < $6
-               on conflict do nothing
-               returning 1 as "claimed!""#,
+        let exists = sqlx::query_scalar!(
+            r#"select exists (select 1 from scheduled_drafts
+                              where firm_id = $1 and client_id = $2 and period = $3 and slot = $4) as "exists!""#,
             firm.as_uuid(),
             client.id.as_uuid(),
             key,
             slot,
-            self.clock.now(),
-            i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4),
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
-        if claimed.is_none() {
+        if exists {
             return Ok(false);
         }
         let edits = self.clients.checklist_edits(firm, client.id).await?;
         let owed = owed_documents(&client.details.forms, period.month, &edits);
+        let mut tx = self.pool.begin().await?;
         let message = self
             .outbox
-            .create_draft(firm, &template(firm_name, client, period, draft.slot, &owed))
+            .create_draft_in(&mut tx, firm, &template(firm_name, client, period, draft.slot, &owed))
             .await?;
-        sqlx::query!(
-            "update scheduled_drafts set message_id = $5
-             where firm_id = $1 and client_id = $2 and period = $3 and slot = $4",
+        // A concurrent run that recorded this slot first, or a full Period,
+        // makes this insert a no-op, and the Draft rolls back with it.
+        let recorded = sqlx::query_scalar!(
+            r#"insert into scheduled_drafts (firm_id, client_id, period, slot, ordinal, message_id, created_at)
+               select $1, $2, $3, $4, count(*)::smallint, $5, $6
+               from scheduled_drafts where client_id = $2 and period = $3
+               having count(*) < $7
+               on conflict do nothing
+               returning 1 as "recorded!""#,
             firm.as_uuid(),
             client.id.as_uuid(),
             key,
             slot,
             message.as_uuid(),
+            self.clock.now(),
+            i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4),
         )
-        .execute(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?;
+        if recorded.is_none() {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+        tx.commit().await?;
         Ok(true)
     }
+}
+
+/// One Client as the sweep sees it.
+struct SweepRow {
+    id: uuid::Uuid,
+    firm_id: uuid::Uuid,
+    created_at: time::OffsetDateTime,
+    firm_name: String,
+    firm_offset: i16,
 }
 
 fn slot_key(slot: Slot) -> String {

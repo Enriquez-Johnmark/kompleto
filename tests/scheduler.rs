@@ -170,3 +170,53 @@ async fn d1_a_draft_lists_the_owed_documents_and_cut_off_in_the_clients_language
         assert!(body.contains(expected), "missing {expected:?} in {body}");
     }
 }
+
+#[sqlx::test]
+async fn d1_one_clients_failed_draft_neither_stops_the_others_nor_uses_up_its_slot(pool: PgPool) {
+    let clock = clock();
+    clock.advance(Duration::days(11)); // 1 Nov 2026, 17:00 Manila: October's first request is due
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let clients = Clients::new(pool.clone(), clock.clone());
+    let broken = clients
+        .create(
+            santos,
+            &NewClient {
+                business_name: "A Broken".to_owned(),
+                ..employer()
+            },
+        )
+        .await
+        .unwrap();
+    clients
+        .create(
+            santos,
+            &NewClient {
+                business_name: "B Fine".to_owned(),
+                ..employer()
+            },
+        )
+        .await
+        .unwrap();
+    // An address the outbox refuses, as if the row had been damaged.
+    sqlx::query("update clients set email = 'no-at-sign' where id = $1")
+        .bind(broken.as_uuid())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone()).unwrap();
+
+    assert_eq!(scheduler.run_once().await.unwrap(), 1);
+    let claims: i64 = sqlx::query_scalar("select count(*) from scheduled_drafts where client_id = $1")
+        .bind(broken.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(claims, 0, "a failed draft leaves no claim behind");
+
+    sqlx::query("update clients set email = 'nena@example.test' where id = $1")
+        .bind(broken.as_uuid())
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(scheduler.run_once().await.unwrap(), 1, "the next run creates it");
+}
