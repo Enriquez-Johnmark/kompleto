@@ -90,6 +90,12 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 - **Every message waits for the bookkeeper's approval.** There is no automatic sending in the first version.
 - Approve one at a time, or a whole batch after seeing the list.
 - Unapproved drafts **expire once the deadline passes**.
+- **Details (M3 round, 2026-10-21):**
+  - A **Drafts page** lists every waiting Draft, nearest Cut-off first, with its recipient, full text and an "AI" or "Template" label. Each Draft can be approved, edited (which voids any earlier approval) or discarded.
+  - **Batch approval:** the bookkeeper ticks Drafts (or selects all), reviews all of them in full on one page, then approves them. Each approval binds the exact text shown, so a Draft changed meanwhile isn't approved.
+  - **Expiry:** an unapproved Draft expires at the end of its Period's Cut-off day (23:59 Manila time).
+  - **Pre-send checks** run at approval (the approval is refused, with the reason) and again just before sending (the message is blocked). They block a message whose recipient isn't the Client's stored email, that has more than one link or any link other than the Client's own upload link, or whose body is empty or over 2,000 characters. Login emails must go to the Firm's login address with exactly one login link.
+  - **Copy for Viber** is on every Draft and approved message. It copies the same body text; it doesn't approve or send anything.
 
 ### Channels and sender identity (2026-10-21)
 
@@ -127,6 +133,14 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 - The choice is confirmed by a **blind Taglish test** before Phase 6 closes (`prototypes/taglish-test/`).
 - Paid API with no training on our data, behind our own small client so the provider can be swapped.
 - If the AI is unavailable, Kompleto **falls back to fixed message templates**, so reminders still go out.
+- **Details (M3 round, 2026-10-21):**
+  - The API key is optional: without `ANTHROPIC_API_KEY` every Draft is a template. The blind Taglish test runs once Anthropic credits are bought.
+  - Thinking off, JSON-schema output, a 15-second timeout and no retry; any failure gives a template Draft at once. The model is a configuration value.
+  - **The model writes only the wording:** a subject, an opening and a closing in the Client's language. Kompleto inserts the exact Owed documents, the Cut-off date, the firm's name and (from M4) the upload link, so the model can't garble or invent facts and never sees the firm name or a link.
+  - **Tone:** first request friendly; 7 days before the Cut-off a friendly reminder; 3 days firmer; 1 day urgent but polite.
+  - **Invalid output** (gives a template instead): anything but the exact JSON shape; a subject over 120 characters or more than one line; an opening or closing over 600 characters; any link, email address, `₱`/`PHP` amount or run of 9 or more digits.
+  - **Costs:** every call is recorded with firm, time, model, tokens, US$ cost and Anthropic's request ID. Settings shows the month's AI cost; `kompleto llm-costs --month YYYY-MM` lists every Firm's.
+  - Drafting runs inside the hourly scheduler, one call per Draft due.
 
 ### What the AI sees (2026-10-21)
 

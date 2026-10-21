@@ -47,6 +47,15 @@ draft ──approve──► approved ──► sending ──► sent
 4. **Job queue** (enqueue → claim → finish, concurrent claimers).
 5. **Engine boundary**: a test fails if `src/engine` uses `kompleto` (ADR 0001).
 
+### Test seams for M3 (2026-10-21)
+
+1. **AI client** (`engine::llm`) against a fake Anthropic server: request shape, and an inspection of every outgoing request for TIN-shaped numbers, peso amounts and file contents (D6); timeouts and bad replies.
+2. **Drafting** with a fake model: valid output gives an "AI" Draft, anything else a "Template" Draft (D5); every call recorded with model, tokens, cost and request ID (J1).
+3. **Pre-send checks** against Postgres (D7), at approval and at sending. The engine defines the check as an interface the product supplies, so the engine still never depends on Kompleto.
+4. **Approval pages in-process** with the test clock: batch review (D3), expiry (D4), edit voiding approval (D2), the Viber text (E3).
+5. **A2 sweep** extended to every Draft page.
+6. **Cost report** per Firm per month (J1).
+
 ### Test seams for M2 (2026-10-21)
 
 1. **Calendar and schedule logic**, pure functions with no database or clock: due dates, roll-forward, extensions, overrides, Cut-off, reminder dates and the cap. Table-driven: B3, B4, D1's dates.

@@ -4,6 +4,16 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **M3 round.** The owner accepted all 14 recommendations ("go ahead"):
+  - six M3 test seams (`docs/architecture.md`);
+  - the API key is optional (no key: every Draft is a template); the blind Taglish test runs once Anthropic credits are bought;
+  - Haiku 5.5, thinking off, JSON-schema output, 15-second timeout, no retry; the model writes only a subject, opening and closing, while Kompleto inserts the Owed documents, Cut-off, firm name and (M4) upload link;
+  - tone by reminder, and the rules for invalid model output;
+  - a Drafts page with approve, edit and discard; batch approval after reviewing every Draft in full; expiry at the end of the Cut-off day;
+  - pre-send checks at approval and at sending, supplied by the product through an engine interface;
+  - "copy for Viber" on every Draft and approved message; a cost record for every AI call with a monthly cost report; drafting inside the hourly run.
+
+  Recorded in full in `docs/product/p1-spec.md` and `docs/architecture.md`.
 - **Cut-off never before the Period opens.** If the cut-off offset would put a Period's Cut-off before the day its documents become due, the Cut-off is that opening day, so the first request still goes out. Found in the M2 code review. Recorded in `docs/product/p1-spec.md`.
 - **M2 round.** The owner accepted all 22 recommendations ("go ahead"):
   - a session-start hook that starts Docker, falls back to `mirror.gcr.io`, migrates and installs sqlx-cli; and removing the stale duplicate sections from `AGENTS.md`;
