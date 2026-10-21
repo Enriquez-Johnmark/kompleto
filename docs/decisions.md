@@ -4,6 +4,11 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **After M3.** The owner accepted four recommendations ("go ahead"):
+  - keep the rules in `AGENTS.md`, with `CLAUDE.md` importing it (one copy, readable by other coding tools too);
+  - `kompleto llm-costs` may read every Firm's AI costs: it is an operator command, never reachable from a Firm's pages. Added to the Firm isolation rule in `AGENTS.md`;
+  - M3 is done;
+  - M4 starts with a grilling round.
 - **M3 round.** The owner accepted all 14 recommendations ("go ahead"):
   - six M3 test seams (`docs/architecture.md`);
   - the API key is optional (no key: every Draft is a template); the blind Taglish test runs once Anthropic credits are bought;
