@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id from upload_links where firm_id = $1 and client_id = $2 and period = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "upload_links",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e9b4953cd1832338cada5a2103c79f91af0f5b9cee30b4786d34ad6c3aa1f647"
+}

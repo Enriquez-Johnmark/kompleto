@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select firm_id, client_id, period, cut_off, expires_at from upload_links where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "firm_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "upload_links",
+            "name": "firm_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "client_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "upload_links",
+            "name": "client_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "period",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "upload_links",
+            "name": "period"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "cut_off",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "upload_links",
+            "name": "cut_off"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "expires_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "upload_links",
+            "name": "expires_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1d661b22daa978b86c91715d5eb13cdeb26a8b06ecbc0d4f5c4387e93a8f16ec"
+}

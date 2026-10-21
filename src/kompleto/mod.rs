@@ -14,4 +14,5 @@ pub mod periods;
 pub mod presend;
 pub mod reminders;
 pub mod schedule;
+pub mod upload_links;
 pub mod web;

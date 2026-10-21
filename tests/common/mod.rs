@@ -88,6 +88,11 @@ pub async fn firm(pool: &sqlx::PgPool, name: &str) -> kompleto::kompleto::firms:
         .unwrap()
 }
 
+/// The file master key tests use.
+pub fn master_key() -> kompleto::engine::files::MasterKey {
+    kompleto::engine::files::MasterKey::from_hex(&"ab".repeat(32)).unwrap()
+}
+
 /// A sample Client: a non-VAT sole proprietor reminded in Taglish.
 pub fn nena() -> kompleto::kompleto::clients::NewClient {
     use kompleto::kompleto::calendar::BirForm;

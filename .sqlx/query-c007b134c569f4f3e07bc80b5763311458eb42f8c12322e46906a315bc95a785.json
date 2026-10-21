@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into upload_links (id, firm_id, client_id, period, cut_off, expires_at, created_at)\n             values ($1, $2, $3, $4, $5, $6, $7)\n             on conflict (client_id, period) do nothing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Date",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c007b134c569f4f3e07bc80b5763311458eb42f8c12322e46906a315bc95a785"
+}
