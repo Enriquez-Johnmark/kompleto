@@ -81,7 +81,7 @@ impl Config {
                 name: "BIND_ADDR",
                 reason: err.to_string(),
             })?;
-        let public_base_url = optional("PUBLIC_BASE_URL").unwrap_or_else(|| format!("http://{bind_addr}"));
+        let public_base_url = public_base_url(optional("PUBLIC_BASE_URL").as_deref(), bind_addr)?;
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             bind_addr,
@@ -108,10 +108,80 @@ impl Config {
     }
 }
 
+/// The URL people open, as `scheme://host[:port]` in lowercase without a
+/// default port, which is exactly the `Origin` browsers send with form
+/// posts. Without `PUBLIC_BASE_URL` it's the bind address, unless that is
+/// "all interfaces", which no browser can open.
+fn public_base_url(setting: Option<&str>, bind_addr: SocketAddr) -> Result<String, ConfigError> {
+    let invalid = |reason: &str| ConfigError::Invalid {
+        name: "PUBLIC_BASE_URL",
+        reason: reason.to_owned(),
+    };
+    let Some(setting) = setting else {
+        if bind_addr.ip().is_unspecified() {
+            return Err(ConfigError::Missing("PUBLIC_BASE_URL"));
+        }
+        return Ok(format!("http://{bind_addr}"));
+    };
+    let lower = setting.trim().trim_end_matches('/').to_ascii_lowercase();
+    let (scheme, host) = lower
+        .split_once("://")
+        .filter(|(scheme, _)| matches!(*scheme, "http" | "https"))
+        .ok_or_else(|| invalid("must start with http:// or https://"))?;
+    if host.is_empty() || host.contains('/') {
+        return Err(invalid("must be just scheme://host[:port], with no path"));
+    }
+    let default_port = if scheme == "https" { ":443" } else { ":80" };
+    Ok(format!(
+        "{scheme}://{}",
+        host.strip_suffix(default_port).unwrap_or(host)
+    ))
+}
+
 fn optional(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.trim().is_empty())
 }
 
 fn required(name: &'static str) -> Result<String, ConfigError> {
     optional(name).ok_or(ConfigError::Missing(name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn addr(text: &str) -> SocketAddr {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn the_base_url_is_normalised_so_browser_origins_match_it() {
+        let local = addr("127.0.0.1:3000");
+        assert_eq!(
+            public_base_url(Some("HTTPS://App.Getkompleto.com:443/"), local).unwrap(),
+            "https://app.getkompleto.com"
+        );
+        assert_eq!(
+            public_base_url(Some("http://localhost:80"), local).unwrap(),
+            "http://localhost"
+        );
+        assert_eq!(
+            public_base_url(Some("http://127.0.0.1:3000"), local).unwrap(),
+            "http://127.0.0.1:3000"
+        );
+        assert!(public_base_url(Some("app.getkompleto.com"), local).is_err());
+        assert!(public_base_url(Some("https://app.getkompleto.com/kompleto"), local).is_err());
+    }
+
+    #[test]
+    fn the_base_url_defaults_to_the_bind_address_only_when_browsers_can_use_it() {
+        assert_eq!(
+            public_base_url(None, addr("127.0.0.1:3000")).unwrap(),
+            "http://127.0.0.1:3000"
+        );
+        assert!(matches!(
+            public_base_url(None, addr("0.0.0.0:3000")),
+            Err(ConfigError::Missing("PUBLIC_BASE_URL"))
+        ));
+    }
 }
