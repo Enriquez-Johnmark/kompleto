@@ -34,6 +34,11 @@ fn j1_cost_follows_the_models_price_per_token() {
         cost_log::cost_nano_usd("claude-sonnet-5-5", usage),
         Some(12_000_000_000)
     );
+    assert_eq!(
+        cost_log::cost_nano_usd("claude-haiku-5-5-20261001", usage),
+        Some(600_000_000),
+        "a dated snapshot of the same model"
+    );
     assert_eq!(cost_log::cost_nano_usd("some-new-model", usage), None);
 }
 
