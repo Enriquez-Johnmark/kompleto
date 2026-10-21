@@ -32,6 +32,15 @@ pub(super) fn draft_pages() -> Vec<(ScopedRoute, MethodRouter<AppState>)> {
         sample_form,
     };
     vec![
+        (page(Method::GET, "/drafts/{draft}/edit", ""), get(edit_form)),
+        (
+            page(
+                Method::POST,
+                "/drafts/{draft}",
+                "subject=Kulang+pa+po&body=Paki-send+po.",
+            ),
+            post(save_edit),
+        ),
         (
             page(Method::POST, "/drafts/{draft}/approve", "hash={hash}"),
             post(approve),
@@ -187,4 +196,62 @@ async fn discard(
         Err(err @ OutboxError::WrongStatus(_)) => refused(&state, firm, err).await,
         Err(err) => Err(err.into()),
     }
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "draft_edit.html")]
+struct EditPage {
+    draft: ReminderView,
+    error: Option<String>,
+}
+
+async fn edit_form(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+) -> Result<EditPage, WebError> {
+    Ok(EditPage {
+        draft: reminder(&state, firm, id).await?.into(),
+        error: None,
+    })
+}
+
+#[derive(Deserialize)]
+struct EditForm {
+    subject: String,
+    body: String,
+}
+
+/// Saves new text. Only the subject and body change; any earlier approval
+/// is void (D2), and the new text is checked again when approved (D7).
+async fn save_edit(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+    Form(form): Form<EditForm>,
+) -> Result<Response, WebError> {
+    let reminder = reminder(&state, firm, id).await?;
+    let mut email = reminder.email.clone();
+    email.subject = form.subject.trim().to_owned();
+    // Browsers send CRLF line endings; store plain newlines.
+    email.body_text = form.body.replace("\r\n", "\n");
+    let editor = actor(&state, firm).await?;
+    let (status, error) = match state.outbox.edit(firm, reminder.id, &email, &editor).await {
+        Ok(()) => return Ok(Redirect::to("/drafts").into_response()),
+        Err(OutboxError::InvalidMessage(reason)) => (StatusCode::UNPROCESSABLE_ENTITY, format!("Not saved: {reason}.")),
+        Err(err) => approval_refusal(err)?,
+    };
+    let draft = ReminderView {
+        subject: email.subject,
+        body: email.body_text,
+        ..reminder.into()
+    };
+    Ok((
+        status,
+        EditPage {
+            draft,
+            error: Some(error),
+        },
+    )
+        .into_response())
 }

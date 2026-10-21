@@ -67,7 +67,10 @@ async fn d2_edit_after_approval_voids_it_so_nothing_is_sent(pool: PgPool) {
         body_text: "Edited after approval".to_owned(),
         ..sample_email()
     };
-    outbox.edit(tenant, id, &edited).await.unwrap();
+    outbox
+        .edit(tenant, id, &edited, "bookkeeper@santos.test")
+        .await
+        .unwrap();
     let mailer = RecordingMailer::idempotent();
 
     Sender::new(pool, mailer.clone(), clock, Arc::new(NoExtraChecks))
@@ -120,7 +123,10 @@ async fn d2_approving_content_the_approver_never_saw_is_refused(pool: PgPool) {
         subject: "Changed while the approver was looking".to_owned(),
         ..sample_email()
     };
-    outbox.edit(tenant, id, &edited).await.unwrap();
+    outbox
+        .edit(tenant, id, &edited, "bookkeeper@santos.test")
+        .await
+        .unwrap();
 
     let result = outbox
         .approve(tenant, id, "bookkeeper@santos.test", &seen, &NoExtraChecks)

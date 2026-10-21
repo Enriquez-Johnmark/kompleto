@@ -150,3 +150,39 @@ async fn d4_an_expired_draft_leaves_the_list_and_cant_be_approved(pool: PgPool) 
     assert!(late.body.contains("expired"), "{}", late.body);
     assert_eq!(status(&app, firm, draft).await, MessageStatus::Expired);
 }
+
+#[sqlx::test]
+async fn d2_editing_a_draft_changes_its_text_and_voids_any_approval(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (firm, cookie, draft) = firm_with_draft(&app, "Santos Bookkeeping").await;
+    let hash = hash_hex(&app, firm, draft).await;
+    app.post(&format!("/drafts/{draft}/approve"), &cookie, &format!("hash={hash}"))
+        .await;
+    let form = app.get(&format!("/drafts/{draft}/edit"), &cookie).await;
+    assert!(form.body.contains("Documents for October 2026"), "{}", form.body);
+
+    let saved = app
+        .post(
+            &format!("/drafts/{draft}"),
+            &cookie,
+            "subject=Kulang+pa+po&body=Hi+Lito%2C+paki-send+po+ang+October+receipts.",
+        )
+        .await;
+
+    assert_eq!(saved.status, StatusCode::SEE_OTHER, "{}", saved.body);
+    let message = Outbox::new(app.pool.clone(), app.clock.clone())
+        .get(firm, draft.into())
+        .await
+        .unwrap();
+    assert_eq!(message.status, MessageStatus::Draft, "the earlier approval is void");
+    assert_eq!(message.email.subject, "Kulang pa po");
+    assert_eq!(
+        message.email.to_address, "lito@example.test",
+        "the recipient can't be edited"
+    );
+    let editor: String = sqlx::query_scalar("select actor from audit_events where action = 'outbox.edited'")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    assert_eq!(editor, "santos.bookkeeping@firm.test");
+}

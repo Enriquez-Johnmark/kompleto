@@ -90,7 +90,7 @@ async fn d7_a_reminder_with_a_link_that_isnt_the_clients_upload_link_is_refused(
     email
         .body_text
         .push_str("\nI-upload po dito: https://drive.example/folder\n");
-    outbox.edit(firm, id, &email).await.unwrap();
+    outbox.edit(firm, id, &email, "ana@santos.test").await.unwrap();
 
     assert!(reason(approve(&pool, &outbox, firm, id).await).contains("isn't the client's own upload link"));
 }
