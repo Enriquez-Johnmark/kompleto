@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select login_email from firms where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "login_email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "firms",
+            "name": "login_email"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8fe5b464dcbbafe613c3c0c3b89f803f7ec29c5fcdb7d69bc758bbb207447e89"
+}

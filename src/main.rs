@@ -26,6 +26,7 @@ use kompleto::engine::outbox::{NoExtraChecks, Outbox, Sender};
 use kompleto::kompleto::calendar::Calendar;
 use kompleto::kompleto::firms::Firms;
 use kompleto::kompleto::import::xlsx::{self, XlsxReader};
+use kompleto::kompleto::presend::KompletoChecks;
 use kompleto::kompleto::reminders::Scheduler;
 use kompleto::kompleto::web::{AppState, router};
 use sqlx::PgPool;
@@ -80,7 +81,12 @@ async fn run() -> anyhow::Result<()> {
         Some("serve") => serve(&config, pool, clock).await,
         Some("migrate") => migrate(&pool).await,
         Some("outbox-drain") => {
-            let report = Sender::new(pool, config.mailer()?, clock, Arc::new(NoExtraChecks))
+            let checks = Arc::new(KompletoChecks::new(
+                pool.clone(),
+                clock.clone(),
+                &config.public_base_url,
+            ));
+            let report = Sender::new(pool, config.mailer()?, clock, checks)
                 .drain_once(DRAIN_BATCH)
                 .await?;
             tracing::info!(?report, "outbox drained");
@@ -122,7 +128,12 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
             }
         }
     });
-    let sender = Sender::new(pool, config.mailer()?, clock, Arc::new(NoExtraChecks));
+    let checks = Arc::new(KompletoChecks::new(
+        pool.clone(),
+        clock.clone(),
+        &config.public_base_url,
+    ));
+    let sender = Sender::new(pool, config.mailer()?, clock, checks);
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(DRAIN_EVERY);
         loop {

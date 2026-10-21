@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 
 use common::{clock, sample_email};
 use kompleto::engine::ids::{MessageId, TenantId};
+use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{MessageStatus, NoExtraChecks, Outbox};
 use serde_json::json;
 use sqlx::PgPool;
@@ -19,6 +20,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 const FAILPOINT: &str = "after_send_before_record";
+const BASE_URL: &str = "http://kompleto.test";
 
 #[sqlx::test]
 async fn e1_crash_mid_send_with_resend_delivers_exactly_one_email(pool: PgPool) {
@@ -100,10 +102,17 @@ async fn fake_provider(route: &str, body: serde_json::Value) -> MockServer {
     server
 }
 
+/// An approved login email: a message the real binary's pre-send checks
+/// (D7) accept, so the crash is what's under test.
 async fn approved(pool: &PgPool) -> (TenantId, MessageId) {
     let outbox = Outbox::new(pool.clone(), clock());
-    let tenant = TenantId::new();
-    let id = outbox.create_draft(tenant, &sample_email()).await.unwrap();
+    let tenant = common::firm(pool, "Santos Bookkeeping").await;
+    let login = Email {
+        to_address: "santos.bookkeeping@firm.test".to_owned(),
+        body_text: format!("Open this link to log in:\n\n{BASE_URL}/login/abc123\n"),
+        ..sample_email()
+    };
+    let id = outbox.create_draft(tenant, &login).await.unwrap();
     let seen = outbox.get(tenant, id).await.unwrap().content_hash();
     outbox
         .approve(tenant, id, "bookkeeper@santos.test", &seen, &NoExtraChecks)
@@ -134,6 +143,7 @@ async fn drain(pool: &PgPool, env: &[(&'static str, String)], failpoint: Option<
     cmd.arg("outbox-drain")
         .env("DATABASE_URL", database_url(pool).await)
         .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
+        .env("PUBLIC_BASE_URL", BASE_URL)
         .env("RUST_LOG", "warn")
         .envs(env.iter().map(|(k, v)| (*k, v.as_str())));
     match failpoint {

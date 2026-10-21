@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select client_id from scheduled_drafts where firm_id = $1 and message_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "scheduled_drafts",
+            "name": "client_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "088bce31d054c946a5ccee1c4e5833664a58240a6c9ac27c3cdff98d3ec305b3"
+}

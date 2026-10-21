@@ -16,9 +16,10 @@ use sqlx::PgPool;
 use time::Duration;
 
 use super::firms::{FirmError, FirmId, Firms};
+use super::presend::KompletoChecks;
 use crate::engine::clock::Clock;
 use crate::engine::mail::Email;
-use crate::engine::outbox::{NoExtraChecks, Outbox, OutboxError};
+use crate::engine::outbox::{Outbox, OutboxError};
 
 /// How long a login link works.
 pub const LINK_LIFETIME: Duration = Duration::minutes(15);
@@ -62,6 +63,7 @@ pub struct Auth {
     clock: Arc<dyn Clock>,
     firms: Firms,
     outbox: Outbox,
+    checks: KompletoChecks,
     base_url: String,
 }
 
@@ -71,6 +73,7 @@ impl Auth {
         Self {
             firms: Firms::new(pool.clone(), clock.clone()),
             outbox: Outbox::new(pool.clone(), clock.clone()),
+            checks: KompletoChecks::new(pool.clone(), clock.clone(), base_url),
             pool,
             clock,
             base_url: base_url.trim_end_matches('/').to_owned(),
@@ -125,7 +128,7 @@ impl Auth {
         tx.commit().await?;
         let hash = self.outbox.get(firm.id, id).await?.content_hash();
         self.outbox
-            .approve(firm.id, id, LOGIN_APPROVER, &hash, &NoExtraChecks)
+            .approve(firm.id, id, LOGIN_APPROVER, &hash, &self.checks)
             .await?;
         Ok(LoginOutcome::Sent)
     }
