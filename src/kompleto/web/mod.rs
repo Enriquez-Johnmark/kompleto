@@ -8,10 +8,12 @@
 //!   this stops cross-site form posts.
 
 mod clients;
+mod drafts;
 mod import;
 mod login;
 mod settings;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use askama::Template;
@@ -22,7 +24,7 @@ use axum::http::request::Parts;
 use axum::http::{Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::get;
+use axum::routing::{MethodRouter, get};
 use sqlx::PgPool;
 use tokio::sync::Notify;
 use tower_http::trace::TraceLayer;
@@ -31,9 +33,12 @@ use super::auth::Auth;
 use super::calendar::{Calendar, CalendarError};
 use super::clients::{ClientError, Clients};
 use super::dates::show_date;
+use super::drafts::Drafts;
 use super::firms::{FirmError, FirmId, Firms};
 use super::import::xlsx::XlsxReader;
+use super::presend::KompletoChecks;
 use crate::engine::clock::Clock;
+use crate::engine::outbox::{Outbox, OutboxError};
 
 /// The session cookie's name.
 const SESSION_COOKIE: &str = "kompleto_session";
@@ -46,6 +51,9 @@ pub struct AppState {
     auth: Auth,
     firms: Firms,
     clients: Clients,
+    drafts: Drafts,
+    outbox: Outbox,
+    checks: KompletoChecks,
     xlsx: XlsxReader,
     /// Wakes the outbox sender so a login email goes out at once.
     wake_sender: Arc<Notify>,
@@ -67,7 +75,10 @@ impl AppState {
             calendar: Arc::new(Calendar::built_in()?),
             auth: Auth::new(pool.clone(), clock.clone(), base_url),
             firms: Firms::new(pool.clone(), clock.clone()),
-            clients: Clients::new(pool, clock.clone()),
+            clients: Clients::new(pool.clone(), clock.clone()),
+            drafts: Drafts::new(pool.clone(), clock.clone()),
+            outbox: Outbox::new(pool.clone(), clock.clone()),
+            checks: KompletoChecks::new(pool, clock.clone(), base_url),
             clock,
             xlsx,
             wake_sender: Arc::new(Notify::new()),
@@ -88,6 +99,7 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(|| async { Redirect::to("/clients") }))
         .merge(login::routes())
         .merge(clients::routes())
+        .merge(drafts::routes())
         .merge(import::routes())
         .merge(settings::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
@@ -109,21 +121,43 @@ async fn same_origin_posts(State(state): State<AppState>, request: Request, next
     }
 }
 
-/// A page about one Client. The router is built from these, and a test
-/// requests each with another Firm's IDs, expecting "not found" (A2).
+/// A page about one of a Firm's records. The router is built from these,
+/// and a test requests each with another Firm's IDs, expecting "not found"
+/// (A2).
 #[derive(Debug, Clone)]
-pub struct ClientRoute {
+pub struct ScopedRoute {
     /// GET or POST.
     pub method: Method,
-    /// The path; `{id}` is the Client, `{item}` one of its extra checklist items.
+    /// The path: `{id}` is a Client, `{item}` one of its extra checklist
+    /// items, `{draft}` a reminder Draft.
     pub path: &'static str,
-    /// A form body the page accepts, for tests.
+    /// A form body the page accepts, for tests; `{hash}` stands for the
+    /// Draft's content hash.
     pub sample_form: &'static str,
 }
 
-/// Every page about one Client.
-pub fn client_routes() -> Vec<ClientRoute> {
-    clients::client_pages().into_iter().map(|(route, _)| route).collect()
+/// Every page about one of a Firm's records.
+pub fn scoped_routes() -> Vec<ScopedRoute> {
+    clients::client_pages()
+        .into_iter()
+        .chain(drafts::draft_pages())
+        .map(|(route, _)| route)
+        .collect()
+}
+
+/// A router for `pages`, merging methods that share a path.
+fn scoped_router(pages: Vec<(ScopedRoute, MethodRouter<AppState>)>) -> Router<AppState> {
+    let mut by_path: BTreeMap<&str, MethodRouter<AppState>> = BTreeMap::new();
+    for (route, handler) in pages {
+        let merged = match by_path.remove(route.path) {
+            Some(existing) => existing.merge(handler),
+            None => handler,
+        };
+        by_path.insert(route.path, merged);
+    }
+    by_path
+        .into_iter()
+        .fold(Router::new(), |router, (path, handler)| router.route(path, handler))
 }
 
 /// The logged-in Firm. Pages that take it send visitors without a live
@@ -179,6 +213,15 @@ impl From<ClientError> for WebError {
     fn from(err: ClientError) -> Self {
         match err {
             ClientError::NotFound => Self::NotFound,
+            other => Self::internal(other),
+        }
+    }
+}
+
+impl From<OutboxError> for WebError {
+    fn from(err: OutboxError) -> Self {
+        match err {
+            OutboxError::NotFound => Self::NotFound,
             other => Self::internal(other),
         }
     }

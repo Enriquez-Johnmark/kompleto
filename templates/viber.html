@@ -1,0 +1,4 @@
+<details><summary>Copy for Viber</summary>
+  <textarea id="viber-{{ draft.id }}" readonly rows="8" cols="60">{{ draft.body }}</textarea>
+  <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('viber-{{ draft.id }}').value)">Copy</button>
+</details>

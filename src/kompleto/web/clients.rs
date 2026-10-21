@@ -3,8 +3,6 @@
 
 use askama::Template;
 use askama_web::WebTemplate;
-use std::collections::BTreeMap;
-
 use axum::extract::{Path, State};
 use axum::http::{Method, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
@@ -14,7 +12,7 @@ use serde::Deserialize;
 use time::Date;
 use uuid::Uuid;
 
-use super::{AppState, ClientRoute, CurrentFirm, WebError, show_date};
+use super::{AppState, CurrentFirm, ScopedRoute, WebError, show_date};
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::{DEFAULT_ITEMS, ExtraItem, Recurs, owed_documents};
 use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, ExtraItemId, NewClient, ScheduleSettings};
@@ -23,28 +21,17 @@ use crate::kompleto::periods::ClientCalendar;
 use crate::kompleto::schedule::{ReminderDays, planned_drafts};
 
 pub(super) fn routes() -> Router<AppState> {
-    let mut by_path: BTreeMap<&str, MethodRouter<AppState>> = BTreeMap::new();
-    for (route, handler) in client_pages() {
-        let merged = match by_path.remove(route.path) {
-            Some(existing) => existing.merge(handler),
-            None => handler,
-        };
-        by_path.insert(route.path, merged);
-    }
-    by_path.into_iter().fold(
-        Router::new()
-            .route("/clients", get(list).post(create))
-            .route("/clients/new", get(new_form)),
-        |router, (path, handler)| router.route(path, handler),
-    )
+    super::scoped_router(client_pages())
+        .route("/clients", get(list).post(create))
+        .route("/clients/new", get(new_form))
 }
 
 const SAMPLE_CLIENT: &str =
     "business_name=Sample+Store&contact_first_name=Ana&email=ana%40example.test&language=english&forms=2551Q";
 
 /// Every page about one Client (A2).
-pub(super) fn client_pages() -> Vec<(ClientRoute, MethodRouter<AppState>)> {
-    let page = |method, path, sample_form| ClientRoute {
+pub(super) fn client_pages() -> Vec<(ScopedRoute, MethodRouter<AppState>)> {
+    let page = |method, path, sample_form| ScopedRoute {
         method,
         path,
         sample_form,
