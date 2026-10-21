@@ -53,6 +53,7 @@ fn g3_a_forged_altered_or_replayed_delivery_is_refused() {
         ("another body", timestamp.as_str(), good.as_str(), altered.as_slice()),
         ("over 5 minutes old", old.as_str(), replayed.as_str(), BOUNCE),
         ("not a v1 signature", timestamp.as_str(), "v2,abc", BOUNCE),
+        ("an absurd timestamp", "-9223372036854775808", good.as_str(), BOUNCE),
     ] {
         let given = Signature {
             id: "msg_1",
