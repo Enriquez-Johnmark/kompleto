@@ -8,9 +8,6 @@
 
 use std::sync::Arc;
 
-use hmac::{Hmac, KeyInit, Mac};
-use secrecy::{ExposeSecret, SecretBox};
-use sha2::Sha256;
 use sqlx::PgPool;
 use time::{Date, Duration, OffsetDateTime};
 use uuid::Uuid;
@@ -21,6 +18,7 @@ use super::schedule::MANILA;
 use crate::engine::clock::Clock;
 use crate::engine::files::MasterKey;
 use crate::engine::ids::id_type;
+use crate::engine::signed::Signer;
 
 id_type!(
     /// One Upload link.
@@ -29,8 +27,6 @@ id_type!(
 
 /// How long a link works after its Period's Cut-off (F2).
 pub const WORKS_FOR_DAYS_AFTER_CUT_OFF: i64 = 30;
-/// Signature length in bytes: 128 bits.
-const SIGNATURE_LEN: usize = 16;
 
 /// Why a link doesn't open.
 #[derive(Debug, thiserror::Error)]
@@ -66,7 +62,7 @@ pub struct OpenLink {
 pub struct UploadLinks {
     pool: PgPool,
     clock: Arc<dyn Clock>,
-    key: Arc<SecretBox<[u8; 32]>>,
+    signer: Arc<Signer>,
     base_url: String,
 }
 
@@ -76,7 +72,7 @@ impl UploadLinks {
         Self {
             pool,
             clock,
-            key: Arc::new(master.derive("kompleto upload link v1")),
+            signer: Arc::new(Signer::new(master, "kompleto upload link v1")),
             base_url: base_url.trim_end_matches('/').to_owned(),
         }
     }
@@ -135,7 +131,7 @@ impl UploadLinks {
     /// genuine and still works. The token itself is the credential, so this
     /// is the one lookup not scoped by a Firm.
     pub async fn open(&self, token: &str) -> Result<OpenLink, LinkError> {
-        let id = self.verify(token).ok_or(LinkError::NotFound)?;
+        let id = self.signer.verify(token).ok_or(LinkError::NotFound)?;
         let row = sqlx::query!(
             "select firm_id, client_id, period, cut_off, expires_at from upload_links where id = $1",
             id,
@@ -157,45 +153,8 @@ impl UploadLinks {
     }
 
     fn url(&self, id: Uuid) -> String {
-        let signature: String = self.sign(id)[..SIGNATURE_LEN]
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
-        format!("{}/u/{}{signature}", self.base_url, id.simple())
+        format!("{}/u/{}", self.base_url, self.signer.token(id))
     }
-
-    fn mac(&self, id: Uuid) -> Hmac<Sha256> {
-        let mut padded = [0_u8; 64];
-        padded[..32].copy_from_slice(self.key.expose_secret());
-        <Hmac<Sha256> as KeyInit>::new(&padded.into()).chain_update(id.as_bytes())
-    }
-
-    fn sign(&self, id: Uuid) -> [u8; 32] {
-        self.mac(id).finalize().into_bytes().into()
-    }
-
-    /// The ID in `token`, if its signature is right (compared in constant time).
-    fn verify(&self, token: &str) -> Option<Uuid> {
-        let bytes = from_hex(token)?;
-        let (id, signature) = bytes.split_at_checked(16)?;
-        if signature.len() != SIGNATURE_LEN {
-            return None;
-        }
-        let id = Uuid::from_slice(id).ok()?;
-        self.mac(id).verify_truncated_left(signature).ok()?;
-        Some(id)
-    }
-}
-
-/// Decodes lowercase or uppercase hex; `None` if it isn't hex.
-fn from_hex(text: &str) -> Option<Vec<u8>> {
-    if !text.len().is_multiple_of(2) || !text.is_ascii() {
-        return None;
-    }
-    text.as_bytes()
-        .chunks(2)
-        .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok())
-        .collect()
 }
 
 /// When a link stops working: the end of the 30th day after the Cut-off,
