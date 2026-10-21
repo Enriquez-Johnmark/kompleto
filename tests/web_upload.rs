@@ -391,4 +391,14 @@ async fn h2_the_client_picks_a_listed_payors_2307_or_names_another_business(pool
             (ANOTHER_PAYOR_2307.to_owned(), "Puregold".to_owned()),
         ]
     );
+
+    // The Firm lists the Payor afterwards: its 2307 has already arrived.
+    payors.add(santos, client, "PUREGOLD").await.unwrap();
+    let page = app.request(axum::http::Method::GET, &link, None, None).await;
+    let item = page
+        .body
+        .split("<li>")
+        .find(|li| li.starts_with("BIR Form 2307 from PUREGOLD"))
+        .unwrap();
+    assert!(item.contains("Na-upload na"), "{item}");
 }

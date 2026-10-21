@@ -14,6 +14,7 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use time::{Duration, OffsetDateTime};
 
+use super::checklist::{is_received_2307, payor_2307};
 use super::clients::ClientId;
 use super::firms::FirmId;
 use super::upload_links::OpenLink;
@@ -462,22 +463,32 @@ impl Uploads {
 }
 
 /// The Owed documents with at least one Upload for the Client's `period`.
+/// A 2307 from a business listed as a Payor since counts as that Payor's.
 pub async fn uploaded_documents(
     pool: &PgPool,
     firm: FirmId,
     client: ClientId,
     period: &str,
 ) -> Result<BTreeSet<String>, sqlx::Error> {
-    let documents = sqlx::query_scalar!(
-        r#"select distinct owed_document as "document!" from uploads
-           where firm_id = $1 and client_id = $2 and period = $3 and owed_document is not null"#,
+    let rows = sqlx::query!(
+        r#"select u.owed_document as "document!", p.name as "listed?" from uploads u
+           left join payors p
+             on p.firm_id = u.firm_id and p.client_id = u.client_id and lower(p.name) = lower(trim(u.payor))
+           where u.firm_id = $1 and u.client_id = $2 and u.period = $3 and u.owed_document is not null"#,
         firm.as_uuid(),
         client.as_uuid(),
         period,
     )
     .fetch_all(pool)
     .await?;
-    Ok(documents.into_iter().collect())
+    let mut documents = BTreeSet::new();
+    for row in rows {
+        if let Some(payor) = row.listed.filter(|_| is_received_2307(&row.document)) {
+            documents.insert(payor_2307(&payor));
+        }
+        documents.insert(row.document);
+    }
+    Ok(documents)
 }
 
 /// `label`, trimmed, if it names one of `owed` (with a Payor for a 2307),

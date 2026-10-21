@@ -219,16 +219,10 @@ async fn details(state: &AppState, link: OpenLink) -> Result<Opened, WebError> {
 }
 
 async fn render(state: &AppState, opened: &Opened, error: Option<String>, sent: bool) -> Result<UploadPage, WebError> {
-    let uploads = state
-        .uploads
-        .for_period(opened.link.firm, opened.link.client, &opened.link.period)
+    let link = &opened.link;
+    let uploaded = uploaded_documents(&state.pool, link.firm, link.client, &link.period)
         .await
         .map_err(WebError::internal)?;
-    let uploaded = |document: &str| {
-        uploads
-            .iter()
-            .any(|upload| matches!(&upload.label, Label::Owed { document: d, .. } if d == document))
-    };
     let cut_off = show_date(opened.link.cut_off);
     let intro = match opened.client.details.language {
         Language::Taglish => format!("Kailangan po ng {} ang mga ito bago {cut_off}:", opened.firm_name),
@@ -242,7 +236,7 @@ async fn render(state: &AppState, opened: &Opened, error: Option<String>, sent: 
             .iter()
             .map(|label| Item {
                 label: label.clone(),
-                uploaded: uploaded(label),
+                uploaded: uploaded.contains(label),
             })
             .collect(),
         another: opened.choices.get(opened.owed.len()).cloned(),
