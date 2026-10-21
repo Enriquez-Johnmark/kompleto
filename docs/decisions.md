@@ -4,6 +4,20 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **M5 round.** The owner accepted all 14 recommendations ("go ahead"):
+  - the app gets a secured endpoint for raw inbound email now; which provider delivers it (Cloudflare Email Routing or Resend inbound) is chosen at M6;
+  - each Reminder's reply address carries a signed code naming its Client and Period; mail without a code matches only when exactly one Client has the sender's address; unmatched mail keeps no content;
+  - generous auto-reply detection (headers and subject prefixes); auto-replies never stop Reminders;
+  - a human Reply cancels the Period's waiting Reminders and shows on the dashboard and Client page;
+  - the Firm gets a notification email with one link to read the Reply in Kompleto, not a copy of the Contact's text (changes "forwards a copy");
+  - photo and PDF attachments in Replies are kept as Uploads labelled "Sent by email", under the upload rules;
+  - Reply text is deleted after 90 days;
+  - Resend's signed webhook reports Bounces and complaints, matched to messages we sent; a permanent Bounce or a complaint stops all Reminders to that address until the Firm changes it;
+  - the home page becomes the dashboard (H1);
+  - a Payor list per Client, picked on the upload page; one Owed document per missing Payor; a quarterly tracker page (H2);
+  - the M5 test seams; `mail-parser` 0.11 and `base64` 0.22.
+
+  Recorded in full in `docs/product/p1-spec.md` and `docs/architecture.md`. Sources: `docs/research/inbound-email.md`.
 - **After M4.** The owner accepted eight recommendations ("go ahead"):
   - **budget ₱0 until pilots** (the owner has no money to spend for now). Supersedes "~₱600/month until a business pays". The first spend is the domain, just before pilots; the first ₱1,500 payment from a Firm covers running costs after that;
   - **the domain waits:** getkompleto.com is bought just before M6 (hosting and real email), not before 1 Nov 2026, accepting the .com price rise and the small risk of losing the name (renaming is a configuration change plus docs). Supersedes the "buy before 1 Nov" plan in the P1 spec round 3;

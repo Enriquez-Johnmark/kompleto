@@ -110,12 +110,33 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
   - shows the reply on the dashboard;
   - forwards a copy to the bookkeeper's own email.
 - The AI never answers clients by itself.
+- **Details (M5 round, 2026-10-21):**
+  - **Receiving:** the app takes raw inbound email at a secured endpoint. Which provider delivers it (Cloudflare Email Routing or Resend's inbound email) is chosen at M6 with the domain (`docs/research/inbound-email.md`).
+  - **Matching:** each Reminder's reply address carries a signed code (`reply+CODE@…`) naming its Client and Period. Mail without a valid code matches only when exactly one Client has the sender's address, and then counts against that Client's latest Reminder. Unmatched mail is logged by time and sender domain only; its content isn't kept.
+  - **Auto-replies:** a message is automatic if `Auto-Submitted` is anything but `no`, it has `X-Autoreply` or `X-Autorespond`, `Precedence` is bulk, list, junk or auto_reply, it has `List-Id`, or its subject starts with "Automatic reply", "Out of Office" or "Auto:". When unsure it counts as automatic: a missed Reply only means Reminders continue.
+  - **A human Reply** cancels the Client's waiting Reminders for that Period (as G2 does) and shows on the dashboard and the Client page.
+  - **Notifying the Firm** (refines "forwards a copy"): within 5 minutes the Firm's login address gets "Nena (Nena's Store) replied about October 2026" with one link to read the Reply in Kompleto after logging in. The Contact's text is never copied into email, so our domain never relays content that could be phishing.
+  - **Attachments:** photo and PDF attachments are kept as Uploads labelled "Sent by email", under the upload rules (types, sizes, per-link limits, deletion). Anything else is dropped.
+  - **Retention:** Reply text is deleted after 90 days; only "replied on <date>" remains.
+
+### Bounces (M5 round, 2026-10-21)
+
+- Resend reports Bounces and spam complaints to a signed webhook. Only events matching a message we sent count (G3).
+- A permanent Bounce or a complaint stops all Reminders to that Client's address, for every Period, until the Firm changes the Client's email. Temporary Bounces only show on the dashboard.
+
+### Dashboard (M5 round, 2026-10-21)
+
+- The home page is the dashboard (H1): one row per Client, nearest Cut-off first, with what's still missing, the next Cut-off, the last message and its status, and badges for replied, auto-reply, bounced and Drafts waiting. Paused Clients come last.
 
 ### 2307 tracker (2026-10-21)
 
 - For each client, the bookkeeper lists the **Payors** (businesses that withhold tax and owe the client a 2307) expected to send 2307s each quarter.
 - The client picks which Payor an uploaded 2307 is from, and the bookkeeper confirms it as received.
 - The tracker shows what is still missing. **The AI does not read documents** in the first version.
+- **Details (M5 round, 2026-10-21):**
+  - The Payor list is names only, never TINs. On the upload page a 2307 is labelled by picking a listed Payor, or "Other" with a typed name.
+  - For a Client with Payors, the general "2307s received from customers" Owed document becomes one per missing Payor ("BIR Form 2307 from Jollibee Foods"), so Reminders and the upload page ask for exactly those.
+  - A tracker page per quarter shows every Client's Payors as received (the Firm marked it received), uploaded (waiting to be checked) or missing. A 2307 from an unlisted Payor shows as unexpected, with "add to list".
 
 ### Uploaded files (2026-10-21)
 

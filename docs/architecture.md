@@ -47,6 +47,15 @@ draft ──approve──► approved ──► sending ──► sent
 4. **Job queue** (enqueue → claim → finish, concurrent claimers).
 5. **Engine boundary**: a test fails if `src/engine` uses `kompleto` (ADR 0001).
 
+### Test seams for M5 (2026-10-21)
+
+1. **Inbound email** from sample raw messages: a human Reply, Outlook and Gmail out-of-office replies, attachments, a forged or missing reply code, unmatched mail (G1).
+2. **Bounce webhooks** from signed sample payloads: valid, forged signature, stale timestamp, unknown message (G3).
+3. **Dashboard** in-process with the test clock: order, missing items and badges (H1).
+4. **Payors and the tracker**: per-Payor Owed documents, upload labels, received/uploaded/missing/unexpected (H2).
+5. **A2 sweep** extended to Replies, Payors and the tracker.
+6. **The Reply notification** through the outbox, with its own pre-send rule.
+
 ### Test seams for M4 (2026-10-21)
 
 1. **File encryption** (`engine::files`): a round trip, and a changed byte, a swapped key or a file moved to another Firm all fail to decrypt.
@@ -168,6 +177,7 @@ Pinned versions from `docs/research/rust-crates.md`:
 | Dependency checks | cargo-deny on every build |
 | Added at M2 (2026-10-21) | toml (calendar file), encoding_rs (Windows-1252 CSV), tower (tests), rustix (limits on the Excel child process) |
 | Added at M4 (2026-10-21) | hmac (Upload link signatures) |
+| Added at M5 (2026-10-21) | mail-parser (already listed for inbound mail), base64 (Resend webhook signatures) |
 
 Lookalike crates to avoid: `resend`, `resend-rust`, `mailparser`.
 
