@@ -49,3 +49,15 @@ fn g1_unreadable_or_oversized_mail_is_refused() {
         Err(InboundError::TooLarge)
     ));
 }
+
+#[test]
+fn g1_nul_characters_are_dropped_so_the_reply_can_be_stored() {
+    let raw = b"From: nena@example.test\r\nTo: reply+abc@getkompleto.test\r\n\
+Subject: =?utf-8?Q?Re:=00_docs?=\r\nContent-Type: text/plain; charset=utf-8\r\n\
+Content-Transfer-Encoding: quoted-printable\r\n\r\nHi=00 po\r\n";
+
+    let email = parse(raw).unwrap();
+
+    assert_eq!(email.subject, "Re: docs");
+    assert_eq!(email.text.trim(), "Hi po");
+}
