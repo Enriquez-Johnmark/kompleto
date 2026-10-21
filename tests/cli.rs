@@ -120,3 +120,53 @@ async fn f3_the_server_refuses_to_start_without_a_file_master_key(pool: PgPool) 
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("FILE_MASTER_KEY"));
 }
+
+#[sqlx::test]
+async fn dev_schedule_creates_the_drafts_due_on_a_chosen_date(pool: PgPool) {
+    let santos = common::firm(&pool, "Santos Bookkeeping").await;
+    let employer = kompleto::kompleto::clients::NewClient {
+        forms: vec![kompleto::kompleto::calendar::BirForm::F1601C],
+        ..common::nena()
+    };
+    kompleto::kompleto::clients::Clients::new(pool.clone(), clock())
+        .create(santos, &employer)
+        .await
+        .unwrap();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kompleto"));
+    cmd.args(["dev-schedule", "--date", "2026-11-01"])
+        .env("DATABASE_URL", common::database_url(&pool).await)
+        .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
+        .env("PUBLIC_BASE_URL", "http://127.0.0.1:3000")
+        .env("FILE_MASTER_KEY", "ab".repeat(32))
+        .env("RUST_LOG", "warn");
+
+    let out = tokio::task::spawn_blocking(move || cmd.output().unwrap())
+        .await
+        .unwrap();
+
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let body: String = sqlx::query_scalar("select body_text from outbox_messages")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(body.contains("http://127.0.0.1:3000/u/"), "{body}");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("1 reminder draft"));
+}
+
+#[sqlx::test]
+async fn dev_schedule_only_runs_against_the_local_test_mailbox(pool: PgPool) {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kompleto"));
+    cmd.args(["dev-schedule", "--date", "2026-11-01"])
+        .env("DATABASE_URL", common::database_url(&pool).await)
+        .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
+        .env("MAIL_PROVIDER", "resend")
+        .env("RESEND_API_KEY", "re_test")
+        .env("FILE_MASTER_KEY", "ab".repeat(32));
+
+    let out = tokio::task::spawn_blocking(move || cmd.output().unwrap())
+        .await
+        .unwrap();
+
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("development only"));
+}

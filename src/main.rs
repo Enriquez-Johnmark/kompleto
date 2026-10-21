@@ -9,6 +9,8 @@
 //! kompleto llm-costs --month YYYY-MM
 //!                         every Firm's AI cost for a month (J1)
 //! kompleto gen-key        print a new FILE_MASTER_KEY
+//! kompleto dev-schedule --date YYYY-MM-DD
+//!                         (development) create the reminder Drafts due on that date
 //! kompleto demo           (development) put one approved email through the outbox
 //! kompleto parse-xlsx     (internal) the Excel import's sandboxed parser
 //! ```
@@ -22,7 +24,7 @@ use axum::Router;
 use axum::routing::get;
 use kompleto::config::Config;
 use kompleto::config::MailConfig;
-use kompleto::engine::clock::{Clock, SystemClock};
+use kompleto::engine::clock::{Clock, FixedClock, SystemClock};
 use kompleto::engine::cost_log;
 use kompleto::engine::files::{FileCipher, Files, LocalDisk, MasterKey};
 use kompleto::engine::ids::TenantId;
@@ -33,6 +35,7 @@ use kompleto::kompleto::firms::Firms;
 use kompleto::kompleto::import::xlsx::{self, XlsxReader};
 use kompleto::kompleto::presend::KompletoChecks;
 use kompleto::kompleto::reminders::Scheduler;
+use kompleto::kompleto::schedule::MANILA;
 use kompleto::kompleto::upload_links::UploadLinks;
 use kompleto::kompleto::web::{AppState, router};
 use sqlx::PgPool;
@@ -112,8 +115,11 @@ async fn run() -> anyhow::Result<()> {
         Some("firm") => add_firm(pool, clock).await,
         Some("llm-costs") => llm_costs(pool, clock).await,
         Some("demo") => demo(&config, pool, clock).await,
+        Some("dev-schedule") => dev_schedule(&config, pool).await,
         other => {
-            bail!("unknown command {other:?}; use serve, migrate, outbox-drain, firm add, llm-costs, gen-key or demo")
+            bail!(
+                "unknown command {other:?}; use serve, migrate, outbox-drain, firm add, llm-costs, gen-key, demo or dev-schedule"
+            )
         }
     }
 }
@@ -281,5 +287,35 @@ async fn demo(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::R
         .drain_once(DRAIN_BATCH)
         .await?;
     tracing::info!(?report, "demo email sent; open http://localhost:8025 to see it");
+    Ok(())
+}
+
+/// `kompleto dev-schedule --date YYYY-MM-DD` (development only): creates the
+/// reminder Drafts due on that date, as if it were 07:30 there in Manila, so
+/// the whole loop can be tried before real dates come round. They are then
+/// approved and sent from the Drafts page as usual.
+async fn dev_schedule(config: &Config, pool: PgPool) -> anyhow::Result<()> {
+    if !matches!(config.mail, MailConfig::Mailpit { .. }) {
+        bail!("dev-schedule is for development only and runs only with MAIL_PROVIDER=mailpit");
+    }
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    let date = args
+        .iter()
+        .position(|a| a == "--date")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|d| time::Date::parse(d, time::macros::format_description!("[year]-[month]-[day]")).ok());
+    let Some(date) = date else {
+        bail!("usage: kompleto dev-schedule --date YYYY-MM-DD");
+    };
+    migrate(&pool).await?;
+    let clock: Arc<dyn Clock> = Arc::new(FixedClock::new(date.with_hms(7, 30, 0)?.assume_offset(MANILA)));
+    let links = UploadLinks::new(
+        pool.clone(),
+        clock.clone(),
+        &config.master_key()?,
+        &config.public_base_url,
+    );
+    let created = Scheduler::new(pool, clock, links)?.run_once().await?;
+    println!("{created} reminder draft(s) created as of {date}; approve them on the Drafts page.");
     Ok(())
 }
