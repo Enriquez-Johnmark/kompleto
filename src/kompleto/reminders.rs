@@ -148,9 +148,11 @@ impl Scheduler {
         draft: PlannedDraft,
     ) -> Result<bool, SchedulerError> {
         let (key, slot) = (period.key(), slot_key(draft.slot));
-        let exists = sqlx::query_scalar!(
-            r#"select exists (select 1 from scheduled_drafts
-                              where firm_id = $1 and client_id = $2 and period = $3 and slot = $4) as "exists!""#,
+        // Checked before drafting, so a slot that can't be recorded never
+        // costs a model call.
+        let taken = sqlx::query!(
+            r#"select count(*) as "drafts!", coalesce(bool_or(slot = $4), false) as "this_slot!"
+               from scheduled_drafts where firm_id = $1 and client_id = $2 and period = $3"#,
             firm.as_uuid(),
             client.id.as_uuid(),
             key,
@@ -158,7 +160,7 @@ impl Scheduler {
         )
         .fetch_one(&self.pool)
         .await?;
-        if exists {
+        if taken.this_slot || taken.drafts >= i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4) {
             return Ok(false);
         }
         let edits = self.clients.checklist_edits(firm, client.id).await?;

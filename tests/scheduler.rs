@@ -333,3 +333,54 @@ async fn d4_the_hourly_run_marks_overdue_drafts_expired(pool: PgPool) {
         .unwrap();
     assert_eq!(statuses[0], "expired");
 }
+
+#[sqlx::test]
+async fn d1_a_period_with_its_four_drafts_costs_no_more_model_calls(pool: PgPool) {
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(wiremock::matchers::method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    let model = kompleto::engine::llm::AnthropicClient::new(
+        &server.uri(),
+        secrecy::SecretString::from("k"),
+        "claude-haiku-5-5",
+        std::time::Duration::from_secs(2),
+    )
+    .unwrap();
+    let clock = clock();
+    clock.advance(Duration::days(11)); // 1 Nov 2026: October's first request is due
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let client = Clients::new(pool.clone(), clock.clone())
+        .create(santos, &employer())
+        .await
+        .unwrap();
+    // As if the reminder days changed after October already had four Drafts.
+    for (ordinal, slot) in ["before-9", "before-8", "before-6", "before-5"].into_iter().enumerate() {
+        sqlx::query(
+            "insert into scheduled_drafts (firm_id, client_id, period, slot, ordinal, message_id, created_at)
+             values ($1, $2, '2026-10', $3, $4, $5, now())",
+        )
+        .bind(santos.as_uuid())
+        .bind(client.as_uuid())
+        .bind(slot)
+        .bind(i16::try_from(ordinal).unwrap())
+        .bind(uuid::Uuid::now_v7())
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    Scheduler::with_model(pool.clone(), clock.clone(), Some(model))
+        .unwrap()
+        .run_once()
+        .await
+        .unwrap();
+
+    assert!(
+        server.received_requests().await.unwrap().is_empty(),
+        "no model call for a full Period"
+    );
+}
