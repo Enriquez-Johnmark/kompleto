@@ -203,3 +203,17 @@ async fn b4_a_clients_checklist_edits_are_kept_for_that_client(pool: PgPool) {
     clients.delete_extra_item(santos, id, extra).await.unwrap();
     assert_eq!(clients.checklist_edits(santos, id).await.unwrap(), Default::default());
 }
+
+#[sqlx::test]
+async fn d7_a_firm_name_that_looks_like_a_link_is_refused(pool: PgPool) {
+    let firms = Firms::new(pool, clock());
+
+    for name in ["www.santosbooks.ph", "santosbooks.ph", "https://santos.example"] {
+        let refused = firms.create(name, "ana@santos.test").await;
+        assert!(matches!(refused, Err(FirmError::Invalid(_))), "{name}: {refused:?}");
+    }
+    firms
+        .create("Santos Bookkeeping Inc.", "ana@santos.test")
+        .await
+        .unwrap();
+}

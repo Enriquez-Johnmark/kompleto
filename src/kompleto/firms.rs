@@ -7,6 +7,7 @@ use sqlx::PgPool;
 
 use crate::engine::clock::Clock;
 use crate::engine::ids::TenantId;
+use crate::engine::outbox::links;
 
 /// A Firm's ID; the same value is its engine `TenantId`.
 pub type FirmId = TenantId;
@@ -59,6 +60,13 @@ impl Firms {
         let (name, login_email) = (name.trim(), login_email.trim());
         if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
             return Err(FirmError::Invalid("a firm name is 1 to 100 characters".to_owned()));
+        }
+        // The name signs every email; one that reads as a link would make
+        // the pre-send checks (D7) refuse them all.
+        if !links(name).is_empty() {
+            return Err(FirmError::Invalid(format!(
+                "{name:?} looks like a web address; use the business name"
+            )));
         }
         if !login_email.contains('@') || login_email.chars().any(|c| c.is_whitespace() || c.is_control()) {
             return Err(FirmError::Invalid(format!("{login_email:?} is not an email address")));
