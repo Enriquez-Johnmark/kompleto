@@ -22,6 +22,7 @@ dotenvy = "0.15.7"
 encoding_rs = "0.8.42"
 getrandom = "0.4.3"
 hmac = "0.13.0"
+mail-parser = "0.11.9"
 reqwest = { version = "0.13.5", features = ["json"] }
 rustix = { version = "1.1.5", features = ["process"] }
 secrecy = "0.10.3"
