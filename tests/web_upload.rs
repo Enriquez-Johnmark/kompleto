@@ -237,3 +237,69 @@ async fn f3_an_upload_never_marked_received_is_deleted_after_90_days(pool: PgPoo
     let gone = app.get(&format!("/clients/{client}/uploads/{upload}"), &cookie).await;
     assert_eq!(gone.status, StatusCode::NOT_FOUND);
 }
+
+#[sqlx::test]
+async fn g2_the_last_missing_document_cancels_the_periods_waiting_reminders(pool: PgPool) {
+    use kompleto::kompleto::calendar::BirForm;
+    use kompleto::kompleto::reminders::Scheduler;
+
+    let app = TestApp::new(pool);
+    let santos = common::firm(&app.pool, "Santos Bookkeeping").await;
+    let employer = kompleto::kompleto::clients::NewClient {
+        forms: vec![BirForm::F1601C],
+        ..nena()
+    };
+    Clients::new(app.pool.clone(), app.clock.clone())
+        .create(santos, &employer)
+        .await
+        .unwrap();
+    app.clock.advance(time::Duration::days(11)); // 1 Nov: October's first request
+    Scheduler::new(
+        app.pool.clone(),
+        app.clock.clone(),
+        common::upload_links(&app.pool, app.clock.clone()),
+    )
+    .unwrap()
+    .run_once()
+    .await
+    .unwrap();
+    let body: String = sqlx::query_scalar("select body_text from outbox_messages")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    let link = body
+        .split_whitespace()
+        .find(|word| word.starts_with("http://kompleto.test/u/"))
+        .unwrap()
+        .trim_start_matches(common::web::BASE_URL)
+        .to_owned();
+    let owed = owed_documents(&employer.forms, Month::October, &Default::default());
+
+    for index in 0..owed.len() {
+        let status = || async {
+            sqlx::query_scalar::<_, String>("select status from outbox_messages")
+                .fetch_one(&app.pool)
+                .await
+                .unwrap()
+        };
+        assert_eq!(status().await, "draft", "still waiting before upload {index}");
+        let index = index.to_string();
+        let sent = app
+            .post_multipart(
+                &link,
+                &[
+                    ("document", index.as_bytes()),
+                    ("payor", b"Jollibee Foods Corp"),
+                    ("file", JPEG),
+                ],
+            )
+            .await;
+        assert_eq!(sent.status, StatusCode::SEE_OTHER, "{}", sent.body);
+    }
+
+    let status: String = sqlx::query_scalar("select status from outbox_messages")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "cancelled");
+}

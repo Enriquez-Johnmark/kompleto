@@ -24,7 +24,7 @@ use crate::kompleto::calendar::TaxPeriod;
 use crate::kompleto::checklist::owed_documents;
 use crate::kompleto::clients::{Client, Language};
 use crate::kompleto::upload_links::{LinkError, OpenLink};
-use crate::kompleto::uploads::{Label, LabelProblem, MAX_FILE_BYTES, UploadError, is_2307};
+use crate::kompleto::uploads::{Label, LabelProblem, MAX_FILE_BYTES, UploadError, is_2307, uploaded_documents};
 
 /// How many uploads are processed at once.
 pub const UPLOAD_SLOTS: usize = 4;
@@ -264,10 +264,34 @@ async fn upload(State(state): State<AppState>, Path(token): Path<String>, multip
         },
     };
     match state.uploads.add(&opened.link, &opened.owed, label, &form.file).await {
-        Ok(_) => Redirect::to(&format!("/u/{token}?sent=1")).into_response(),
+        Ok(_) => {
+            stop_if_complete(&state, &opened).await;
+            Redirect::to(&format!("/u/{token}?sent=1")).into_response()
+        }
         Err(UploadError::File(err)) => WebError::internal(err).into_response(),
         Err(UploadError::Database(err)) => WebError::internal(err).into_response(),
         Err(err) => refusal(&state, &opened, &err).await,
+    }
+}
+
+/// Once every Owed document has arrived, cancels the Period's waiting
+/// reminders (G2). A failure is logged; the scheduler's next run retries.
+async fn stop_if_complete(state: &AppState, opened: &Opened) {
+    let link = &opened.link;
+    let uploaded = match uploaded_documents(&state.pool, link.firm, link.client, &link.period).await {
+        Ok(uploaded) => uploaded,
+        Err(err) => {
+            tracing::error!(firm = %link.firm, %err, "checking what's still owed failed");
+            return;
+        }
+    };
+    if !opened.owed.iter().all(|document| uploaded.contains(document)) {
+        return;
+    }
+    match state.drafts.cancel_waiting(link.firm, link.client, &link.period).await {
+        Ok(0) => {}
+        Ok(cancelled) => tracing::info!(firm = %link.firm, cancelled, "everything uploaded; reminders stopped"),
+        Err(err) => tracing::error!(firm = %link.firm, %err, "stopping reminders after an upload failed"),
     }
 }
 

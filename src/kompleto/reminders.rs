@@ -8,6 +8,9 @@
 //!   after the day it was added.
 //! - An unapproved Draft expires at the end of its Period's Cut-off day
 //!   (D4); each run also sweeps overdue Drafts to `expired`.
+//! - A Draft lists only the Owed documents not yet uploaded; once all
+//!   have been, no more are created for the Period and any waiting one is
+//!   cancelled (G2).
 //! - Each Draft is recorded in `scheduled_drafts` in the same transaction
 //!   that creates it; that table's constraints allow at most four per
 //!   Client per Period.
@@ -23,10 +26,12 @@ use super::calendar::{Calendar, CalendarError};
 use super::checklist::owed_documents;
 use super::clients::{Client, ClientError, ClientId, Clients};
 use super::drafting::{DraftBrief, Drafter, Tone};
+use super::drafts::Drafts;
 use super::firms::FirmId;
 use super::periods::{ClientCalendar, CollectionPeriod};
 use super::schedule::{MANILA, MAX_DRAFTS_PER_PERIOD, PlannedDraft, Slot, appears_at, planned_drafts};
 use super::upload_links::UploadLinks;
+use super::uploads::uploaded_documents;
 use crate::engine::clock::Clock;
 use crate::engine::llm::AnthropicClient;
 use crate::engine::mail::Email;
@@ -55,6 +60,7 @@ pub struct Scheduler {
     outbox: Outbox,
     drafter: Drafter<AnthropicClient>,
     links: UploadLinks,
+    drafts: Drafts,
 }
 
 impl Scheduler {
@@ -73,6 +79,7 @@ impl Scheduler {
     ) -> Result<Self, CalendarError> {
         Ok(Self {
             links,
+            drafts: Drafts::new(pool.clone(), clock.clone()),
             drafter: Drafter::new(pool.clone(), clock.clone(), model),
             calendar: Calendar::built_in()?,
             clients: Clients::new(pool.clone(), clock.clone()),
@@ -169,11 +176,20 @@ impl Scheduler {
             return Ok(false);
         }
         let edits = self.clients.checklist_edits(firm, client.id).await?;
+        let uploaded = uploaded_documents(&self.pool, firm, client.id, &key).await?;
+        let owed: Vec<String> = owed_documents(&client.details.forms, period.month, &edits)
+            .into_iter()
+            .filter(|document| !uploaded.contains(document))
+            .collect();
+        if owed.is_empty() {
+            self.drafts.cancel_waiting(firm, client.id, &key).await?;
+            return Ok(false);
+        }
         let upload_link = self.links.for_period(firm, client.id, &key, period.cut_off).await?;
         let brief = DraftBrief {
             business_name: client.details.business_name.clone(),
             contact_first_name: client.details.contact_first_name.clone(),
-            owed: owed_documents(&client.details.forms, period.month, &edits),
+            owed,
             period: period.label.to_string(),
             cut_off: period.cut_off,
             language: client.details.language,

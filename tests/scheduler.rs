@@ -426,3 +426,60 @@ async fn f2_every_reminder_for_a_period_carries_the_clients_one_upload_link(pool
         .unwrap();
     assert_eq!((open.firm, open.period.as_str()), (santos, "2026-10"));
 }
+
+#[sqlx::test]
+async fn g2_reminders_ask_only_for_what_is_missing_and_stop_once_all_is_uploaded(pool: PgPool) {
+    use kompleto::kompleto::checklist::owed_documents;
+    use kompleto::kompleto::uploads::{Label, Uploads};
+
+    let clock = clock(); // 21 Oct 2026, 17:00 Manila
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    Clients::new(pool.clone(), clock.clone())
+        .create(santos, &employer())
+        .await
+        .unwrap();
+    let owed = owed_documents(&[BirForm::F1601C], time::Month::October, &Default::default());
+    assert!(owed.len() >= 2, "{owed:?}");
+    let scheduler = Scheduler::new(pool.clone(), clock.clone(), common::upload_links(&pool, clock.clone())).unwrap();
+    let drafts = || async {
+        sqlx::query_as::<_, (String, String)>(
+            "select m.body_text, m.status from scheduled_drafts s join outbox_messages m on m.id = s.message_id
+             order by m.created_at",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+    };
+    clock.advance(Duration::days(11)); // 1 Nov: October's first request
+    scheduler.run_once().await.unwrap();
+    let first = drafts().await;
+    let token = first[0]
+        .0
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("http://kompleto.test/u/"))
+        .unwrap()
+        .to_owned();
+    let link = common::upload_links(&pool, clock.clone()).open(&token).await.unwrap();
+    let uploads = Uploads::new(pool.clone(), clock.clone(), common::files(&pool, clock.clone()));
+    let upload = |document: &String| Label::Owed {
+        document: document.clone(),
+        payor: Some("Jollibee Foods Corp".to_owned()),
+    };
+    uploads.add(&link, &owed, upload(&owed[0]), b"%PDF-1.7").await.unwrap();
+
+    clock.advance(Duration::days(1)); // 2 Nov: 3 days before the Cut-off
+    scheduler.run_once().await.unwrap();
+    let second = &drafts().await[1].0;
+    assert!(!second.contains(&owed[0]), "already uploaded: {second}");
+    assert!(second.contains(&owed[1]), "{second}");
+
+    for document in &owed[1..] {
+        uploads.add(&link, &owed, upload(document), b"%PDF-1.7").await.unwrap();
+    }
+    clock.advance(Duration::days(2)); // 4 Nov: the day before the Cut-off
+    scheduler.run_once().await.unwrap();
+
+    let after = drafts().await;
+    assert_eq!(after.len(), 2, "no reminder once everything has arrived");
+    assert!(after.iter().all(|(_, status)| status == "cancelled"), "{after:?}");
+}

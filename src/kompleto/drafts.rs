@@ -9,12 +9,14 @@ use sqlx::PgPool;
 use time::{Date, Duration};
 use uuid::Uuid;
 
+use super::clients::ClientId;
 use super::drafting::DraftSource;
 use super::firms::FirmId;
+use crate::engine::audit::SYSTEM;
 use crate::engine::clock::Clock;
 use crate::engine::ids::MessageId;
 use crate::engine::mail::Email;
-use crate::engine::outbox::{ContentHash, MessageStatus};
+use crate::engine::outbox::{ContentHash, MessageStatus, Outbox, OutboxError};
 
 /// One reminder Draft, or a reminder already approved.
 #[derive(Debug, Clone)]
@@ -88,6 +90,32 @@ impl ReminderRow {
 }
 
 impl Drafts {
+    /// Cancels the Client's reminders for `period` that haven't gone out,
+    /// because everything owed has arrived (G2); returns how many.
+    pub async fn cancel_waiting(&self, firm: FirmId, client: ClientId, period: &str) -> Result<usize, OutboxError> {
+        let waiting = sqlx::query_scalar!(
+            "select s.message_id from scheduled_drafts s
+             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
+             where s.firm_id = $1 and s.client_id = $2 and s.period = $3 and m.status in ('draft', 'approved')",
+            firm.as_uuid(),
+            client.as_uuid(),
+            period,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let outbox = Outbox::new(self.pool.clone(), self.clock.clone());
+        let mut cancelled = 0;
+        for id in waiting {
+            match outbox.cancel(firm, id.into(), SYSTEM).await {
+                Ok(()) => cancelled += 1,
+                // Already being sent: too late to stop.
+                Err(OutboxError::WrongStatus(_)) => {}
+                Err(err) => return Err(err),
+            }
+        }
+        Ok(cancelled)
+    }
+
     /// Reminders of `pool`'s Firms.
     pub fn new(pool: PgPool, clock: Arc<dyn Clock>) -> Self {
         Self { pool, clock }

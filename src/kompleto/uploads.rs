@@ -8,6 +8,7 @@
 //! - Each file is encrypted (`engine::files`) and deleted 90 days after
 //!   upload, or 30 days after the Firm marks it received if that's sooner.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use sqlx::PgPool;
@@ -434,6 +435,25 @@ impl Uploads {
         tx.commit().await?;
         Ok(())
     }
+}
+
+/// The Owed documents with at least one Upload for the Client's `period`.
+pub async fn uploaded_documents(
+    pool: &PgPool,
+    firm: FirmId,
+    client: ClientId,
+    period: &str,
+) -> Result<BTreeSet<String>, sqlx::Error> {
+    let documents = sqlx::query_scalar!(
+        r#"select distinct owed_document as "document!" from uploads
+           where firm_id = $1 and client_id = $2 and period = $3 and owed_document is not null"#,
+        firm.as_uuid(),
+        client.as_uuid(),
+        period,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(documents.into_iter().collect())
 }
 
 /// `label`, trimmed, if it names one of `owed` (with a Payor for a 2307),
