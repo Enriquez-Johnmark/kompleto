@@ -428,7 +428,7 @@ impl Uploads {
             Err(err) => return Err(err.into()),
         }
         let mut tx = self.pool.begin().await?;
-        sqlx::query!(
+        let updated = sqlx::query!(
             "update uploads set received_at = $4, received_by = $5
              where firm_id = $1 and client_id = $2 and id = $3 and received_at is null",
             firm.as_uuid(),
@@ -439,6 +439,10 @@ impl Uploads {
         )
         .execute(&mut *tx)
         .await?;
+        // Another request marked it first; it's recorded once.
+        if updated.rows_affected() == 0 {
+            return Ok(());
+        }
         audit::record(
             &mut *tx,
             &AuditEvent {

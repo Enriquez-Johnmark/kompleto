@@ -170,3 +170,22 @@ async fn f1_a_link_takes_at_most_60_files(pool: PgPool) {
         Err(UploadError::LinkFull)
     ));
 }
+
+#[sqlx::test]
+async fn f3_marking_an_upload_received_twice_at_once_records_it_once(pool: PgPool) {
+    let (uploads, link) = setup(&pool).await;
+    let id = uploads.add(&link, &owed(), invoices(), JPEG).await.unwrap();
+
+    let (one, two) = tokio::join!(
+        uploads.mark_received(link.firm, link.client, id, "ana@santos.test"),
+        uploads.mark_received(link.firm, link.client, id, "ana@santos.test"),
+    );
+
+    one.unwrap();
+    two.unwrap();
+    let recorded: i64 = sqlx::query_scalar("select count(*) from audit_events where action = 'upload.received'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(recorded, 1);
+}
