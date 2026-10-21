@@ -12,6 +12,7 @@ mod drafts;
 mod import;
 mod login;
 mod settings;
+mod upload;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -26,7 +27,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{MethodRouter, get};
 use sqlx::PgPool;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, Semaphore};
 use tower_http::trace::TraceLayer;
 
 use super::auth::Auth;
@@ -38,8 +39,9 @@ use super::firms::{FirmError, FirmId, Firms};
 use super::import::xlsx::XlsxReader;
 use super::presend::KompletoChecks;
 use super::upload_links::UploadLinks;
+use super::uploads::Uploads;
 use crate::engine::clock::Clock;
-use crate::engine::files::MasterKey;
+use crate::engine::files::{Files, MasterKey};
 use crate::engine::outbox::{Outbox, OutboxError};
 
 /// The session cookie's name.
@@ -57,6 +59,10 @@ pub struct AppState {
     drafts: Drafts,
     outbox: Outbox,
     checks: KompletoChecks,
+    links: UploadLinks,
+    uploads: Uploads,
+    /// Uploads processed at once.
+    upload_slots: Arc<Semaphore>,
     xlsx: XlsxReader,
     /// Wakes the outbox sender so a login email goes out at once.
     wake_sender: Arc<Notify>,
@@ -67,14 +73,15 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// The app's state; links in emails point at `base_url`, and Upload
-    /// links are signed with a key from `master`.
+    /// The app's state; links in emails point at `base_url`, Upload links
+    /// are signed with a key from `master`, and Uploads kept in `files`.
     pub fn new(
         pool: PgPool,
         clock: Arc<dyn Clock>,
         base_url: &str,
         xlsx: XlsxReader,
         master: &MasterKey,
+        files: Files,
     ) -> Result<Self, CalendarError> {
         let base_url = base_url.trim_end_matches('/');
         let origin = match base_url.split_once("://") {
@@ -82,7 +89,7 @@ impl AppState {
             None => base_url.to_owned(),
         };
         let links = UploadLinks::new(pool.clone(), clock.clone(), master, base_url);
-        let checks = KompletoChecks::new(pool.clone(), clock.clone(), base_url, links);
+        let checks = KompletoChecks::new(pool.clone(), clock.clone(), base_url, links.clone());
         Ok(Self {
             calendar: Arc::new(Calendar::built_in()?),
             auth: Auth::new(pool.clone(), clock.clone(), base_url, checks.clone()),
@@ -91,6 +98,9 @@ impl AppState {
             drafts: Drafts::new(pool.clone(), clock.clone()),
             outbox: Outbox::new(pool.clone(), clock.clone()),
             checks,
+            links,
+            uploads: Uploads::new(pool.clone(), clock.clone(), files),
+            upload_slots: Arc::new(Semaphore::new(upload::UPLOAD_SLOTS)),
             pool,
             clock,
             xlsx,
@@ -115,6 +125,7 @@ pub fn router(state: AppState) -> Router {
         .merge(drafts::routes())
         .merge(import::routes())
         .merge(settings::routes())
+        .merge(upload::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

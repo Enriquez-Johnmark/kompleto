@@ -132,7 +132,20 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         tracing::warn!("bir-calendar.toml: national holidays aren't listed for the next 12 months");
     }
     let xlsx = XlsxReader::new(std::env::current_exe().context("finding this program for the Excel reader")?);
-    let state = AppState::new(pool.clone(), clock.clone(), &config.public_base_url, xlsx, &master)?;
+    let files = Files::new(
+        pool.clone(),
+        clock.clone(),
+        Arc::new(LocalDisk::new(&config.upload_dir)),
+        Arc::new(FileCipher::new(&master)),
+    );
+    let state = AppState::new(
+        pool.clone(),
+        clock.clone(),
+        &config.public_base_url,
+        xlsx,
+        &master,
+        files.clone(),
+    )?;
     let wake_up = state.sender_wake_up();
     let model = config.language_model()?;
     if model.is_none() {
@@ -140,12 +153,6 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
     }
     let links = UploadLinks::new(pool.clone(), clock.clone(), &master, &config.public_base_url);
     let scheduler = Scheduler::with_model(pool.clone(), clock.clone(), links.clone(), model)?;
-    let files = Files::new(
-        pool.clone(),
-        clock.clone(),
-        Arc::new(LocalDisk::new(&config.upload_dir)),
-        Arc::new(FileCipher::new(&master)),
-    );
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(SCHEDULE_EVERY);
         loop {

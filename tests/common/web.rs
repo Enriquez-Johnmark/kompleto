@@ -48,7 +48,8 @@ impl TestApp {
     pub fn new(pool: PgPool) -> Self {
         let clock = super::clock();
         let xlsx = kompleto::kompleto::import::xlsx::XlsxReader::new(env!("CARGO_BIN_EXE_kompleto").into());
-        let state = AppState::new(pool.clone(), clock.clone(), BASE_URL, xlsx, &super::master_key()).unwrap();
+        let files = super::files(&pool, clock.clone());
+        let state = AppState::new(pool.clone(), clock.clone(), BASE_URL, xlsx, &super::master_key(), files).unwrap();
         Self {
             router: router(state),
             pool,
@@ -84,6 +85,37 @@ impl TestApp {
             headers,
             body: String::from_utf8_lossy(&bytes).into_owned(),
         }
+    }
+
+    /// Posts a multipart form, as the upload page does; a field named
+    /// `file` is sent as a file.
+    pub async fn post_multipart(&self, uri: &str, fields: &[(&str, &[u8])]) -> Response {
+        let boundary = "kompleto-test-boundary";
+        let mut body = Vec::new();
+        for (name, value) in fields {
+            let filename = if *name == "file" {
+                r#"; filename="photo.jpg""#
+            } else {
+                ""
+            };
+            body.extend_from_slice(
+                format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"{filename}\r\n\r\n").as_bytes(),
+            );
+            body.extend_from_slice(value);
+            body.extend_from_slice(b"\r\n");
+        }
+        body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri(uri)
+            .header(header::ORIGIN, BASE_URL)
+            .header(
+                header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(Body::from(body))
+            .unwrap();
+        self.send(request).await
     }
 
     pub async fn get(&self, uri: &str, cookie: &str) -> Response {

@@ -1,0 +1,345 @@
+//! The upload page (F1, F2): what a Contact opens from a Reminder, on a
+//! phone, without logging in. The link itself is the credential.
+//!
+//! - Fixed text in the Client's reminder language; the model writes none of it.
+//! - It lists the Period's Owed documents and whether each has arrived. The
+//!   Contact can't see, download or delete what was uploaded, so a
+//!   forwarded link gives nothing away.
+//! - One file per request (the page's script sends several in turn), at
+//!   most [`UPLOAD_SLOTS`] processed at once, each request at most 10 MB.
+//! - Pages carry `noindex` and `no-referrer`, so the link doesn't leak.
+
+use askama::Template;
+use askama_web::WebTemplate;
+use axum::Router;
+use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, Request, State};
+use axum::http::{HeaderValue, StatusCode, header};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Redirect, Response};
+use axum::routing::get;
+use serde::Deserialize;
+
+use super::{AppState, NotFoundPage, WebError, show_date};
+use crate::kompleto::calendar::TaxPeriod;
+use crate::kompleto::checklist::owed_documents;
+use crate::kompleto::clients::{Client, Language};
+use crate::kompleto::upload_links::{LinkError, OpenLink};
+use crate::kompleto::uploads::{Label, LabelProblem, MAX_FILE_BYTES, UploadError, is_2307};
+
+/// How many uploads are processed at once.
+pub const UPLOAD_SLOTS: usize = 4;
+
+pub(super) fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/u/{token}", get(page).post(upload))
+        .layer(DefaultBodyLimit::max(MAX_FILE_BYTES + 64 * 1024))
+        .layer(middleware::from_fn(private))
+}
+
+/// Keeps upload pages out of search engines, caches and other sites' logs.
+async fn private(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert("x-robots-tag", HeaderValue::from_static("noindex, nofollow"));
+    headers.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+/// The page's fixed wording, in one language.
+struct Words {
+    lang: &'static str,
+    title: &'static str,
+    uploaded: &'static str,
+    not_yet: &'static str,
+    what: &'static str,
+    something_else: &'static str,
+    note: &'static str,
+    payor: &'static str,
+    file: &'static str,
+    button: &'static str,
+    sending: &'static str,
+    sent: &'static str,
+}
+
+const TAGLISH: Words = Words {
+    lang: "fil",
+    title: "Mag-upload ng documents",
+    uploaded: "Na-upload na",
+    not_yet: "Wala pa",
+    what: "Ano po ang file na ito?",
+    something_else: "Iba pa",
+    note: "Kung iba pa, ano po ito?",
+    payor: "Kung 2307, kanino pong business galing?",
+    file: "Piliin ang photo o PDF (hanggang 10 MB bawat isa)",
+    button: "I-upload",
+    sending: "Ina-upload…",
+    sent: "Salamat po! Natanggap na namin ang file ninyo.",
+};
+
+const ENGLISH: Words = Words {
+    lang: "en",
+    title: "Upload your documents",
+    uploaded: "Uploaded",
+    not_yet: "Not yet",
+    what: "What is this file?",
+    something_else: "Something else",
+    note: "If something else, what is it?",
+    payor: "If a 2307, which business is it from?",
+    file: "Choose photos or PDFs (up to 10 MB each)",
+    button: "Upload",
+    sending: "Uploading…",
+    sent: "Thank you! We've received your file.",
+};
+
+fn words(language: Language) -> &'static Words {
+    match language {
+        Language::Taglish => &TAGLISH,
+        Language::English => &ENGLISH,
+    }
+}
+
+/// One Owed document on the page.
+struct Item {
+    index: usize,
+    label: String,
+    uploaded: bool,
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "upload.html")]
+struct UploadPage {
+    w: &'static Words,
+    intro: String,
+    items: Vec<Item>,
+    asks_payor: bool,
+    error: Option<String>,
+    sent: bool,
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "upload_expired.html")]
+struct ExpiredPage {
+    w: &'static Words,
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct Sent {
+    sent: Option<u8>,
+}
+
+/// What a link opens: whose it is, and what they owe.
+struct Opened {
+    link: OpenLink,
+    firm_name: String,
+    client: Client,
+    owed: Vec<String>,
+}
+
+/// Why a link didn't open.
+enum Closed {
+    NotFound,
+    Expired(ExpiredPage),
+    Failed(WebError),
+}
+
+impl IntoResponse for Closed {
+    fn into_response(self) -> Response {
+        match self {
+            Self::NotFound => (StatusCode::NOT_FOUND, NotFoundPage).into_response(),
+            Self::Expired(page) => (StatusCode::GONE, page).into_response(),
+            Self::Failed(err) => err.into_response(),
+        }
+    }
+}
+
+async fn open(state: &AppState, token: &str) -> Result<Opened, Closed> {
+    let link = match state.links.open(token).await {
+        Ok(link) => link,
+        Err(LinkError::NotFound) => return Err(Closed::NotFound),
+        Err(LinkError::Expired(link)) => {
+            let opened = details(state, link).await.map_err(Closed::Failed)?;
+            let message = match opened.client.details.language {
+                Language::Taglish => format!(
+                    "Expired na po ang link na ito. Pakihingi po ng bago sa {}.",
+                    opened.firm_name
+                ),
+                Language::English => format!("This link has expired. Please ask {} for a new one.", opened.firm_name),
+            };
+            return Err(Closed::Expired(ExpiredPage {
+                w: words(opened.client.details.language),
+                message,
+            }));
+        }
+        Err(LinkError::Database(err)) => return Err(Closed::Failed(WebError::internal(err))),
+    };
+    details(state, link).await.map_err(Closed::Failed)
+}
+
+async fn details(state: &AppState, link: OpenLink) -> Result<Opened, WebError> {
+    let firm_name = state.firms.get(link.firm).await?.name;
+    let client = state.clients.get(link.firm, link.client).await?;
+    let edits = state.clients.checklist_edits(link.firm, link.client).await?;
+    let (_, month) = TaxPeriod::parse_key(&link.period)
+        .ok_or_else(|| WebError::internal(format!("bad period key {:?}", link.period)))?
+        .last_month();
+    let owed = owed_documents(&client.details.forms, month, &edits);
+    Ok(Opened {
+        link,
+        firm_name,
+        client,
+        owed,
+    })
+}
+
+async fn render(state: &AppState, opened: &Opened, error: Option<String>, sent: bool) -> Result<UploadPage, WebError> {
+    let uploads = state
+        .uploads
+        .for_period(opened.link.firm, opened.link.client, &opened.link.period)
+        .await
+        .map_err(WebError::internal)?;
+    let uploaded = |document: &str| {
+        uploads
+            .iter()
+            .any(|upload| matches!(&upload.label, Label::Owed { document: d, .. } if d == document))
+    };
+    let cut_off = show_date(opened.link.cut_off);
+    let intro = match opened.client.details.language {
+        Language::Taglish => format!("Kailangan po ng {} ang mga ito bago {cut_off}:", opened.firm_name),
+        Language::English => format!("{} needs these by {cut_off}:", opened.firm_name),
+    };
+    Ok(UploadPage {
+        w: words(opened.client.details.language),
+        intro,
+        items: opened
+            .owed
+            .iter()
+            .enumerate()
+            .map(|(index, label)| Item {
+                index,
+                label: label.clone(),
+                uploaded: uploaded(label),
+            })
+            .collect(),
+        asks_payor: opened.owed.iter().any(|document| is_2307(document)),
+        error,
+        sent,
+    })
+}
+
+async fn page(State(state): State<AppState>, Path(token): Path<String>, Query(query): Query<Sent>) -> Response {
+    let opened = match open(&state, &token).await {
+        Ok(opened) => opened,
+        Err(closed) => return closed.into_response(),
+    };
+    render(&state, &opened, None, query.sent.is_some())
+        .await
+        .into_response()
+}
+
+async fn upload(State(state): State<AppState>, Path(token): Path<String>, multipart: Multipart) -> Response {
+    let Ok(_slot) = state.upload_slots.acquire().await else {
+        return WebError::Internal.into_response();
+    };
+    let opened = match open(&state, &token).await {
+        Ok(opened) => opened,
+        Err(closed) => return closed.into_response(),
+    };
+    let form = match read_form(multipart).await {
+        Ok(form) => form,
+        Err(err) => return refusal(&state, &opened, &err).await,
+    };
+    let label = match form.document.as_str() {
+        "other" => Label::SomethingElse { note: form.note },
+        index => match index.parse::<usize>().ok().and_then(|i| opened.owed.get(i)) {
+            Some(document) => Label::Owed {
+                document: document.clone(),
+                payor: is_2307(document).then_some(form.payor),
+            },
+            None => Label::Owed {
+                document: String::new(),
+                payor: None,
+            },
+        },
+    };
+    match state.uploads.add(&opened.link, &opened.owed, label, &form.file).await {
+        Ok(_) => Redirect::to(&format!("/u/{token}?sent=1")).into_response(),
+        Err(UploadError::File(err)) => WebError::internal(err).into_response(),
+        Err(UploadError::Database(err)) => WebError::internal(err).into_response(),
+        Err(err) => refusal(&state, &opened, &err).await,
+    }
+}
+
+/// The page again, with what went wrong.
+async fn refusal(state: &AppState, opened: &Opened, err: &UploadError) -> Response {
+    let text = message(opened.client.details.language, err, &opened.firm_name);
+    match render(state, opened, Some(text), false).await {
+        Ok(page) => (err.status(), page).into_response(),
+        Err(err) => err.into_response(),
+    }
+}
+
+/// The upload form's fields.
+#[derive(Default)]
+struct UploadForm {
+    document: String,
+    payor: String,
+    note: String,
+    file: Vec<u8>,
+}
+
+async fn read_form(mut multipart: Multipart) -> Result<UploadForm, UploadError> {
+    let mut form = UploadForm::default();
+    while let Some(field) = multipart.next_field().await.map_err(|_| UploadError::TooBig)? {
+        let name = field.name().unwrap_or_default().to_owned();
+        let bytes = field.bytes().await.map_err(|_| UploadError::TooBig)?;
+        let text = || String::from_utf8_lossy(&bytes).into_owned();
+        match name.as_str() {
+            "document" => form.document = text(),
+            "payor" => form.payor = text(),
+            "note" => form.note = text(),
+            "file" => form.file = bytes.to_vec(),
+            _ => {}
+        }
+    }
+    Ok(form)
+}
+
+impl UploadError {
+    fn status(&self) -> StatusCode {
+        match self {
+            Self::NotAllowedType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::TooBig => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::LinkFull => StatusCode::TOO_MANY_REQUESTS,
+            Self::Invalid(_) | Self::File(_) | Self::Database(_) => StatusCode::UNPROCESSABLE_ENTITY,
+        }
+    }
+}
+
+/// What went wrong, in the Contact's language.
+fn message(language: Language, err: &UploadError, firm_name: &str) -> String {
+    let taglish = language == Language::Taglish;
+    let text = match err {
+        UploadError::NotAllowedType if taglish => "Photo o PDF lang po ang puwedeng i-upload.",
+        UploadError::NotAllowedType => "Only photos and PDF files can be uploaded.",
+        UploadError::TooBig if taglish => "Hanggang 10 MB lang po bawat file.",
+        UploadError::TooBig => "Each file must be 10 MB or less.",
+        UploadError::LinkFull if taglish => {
+            return format!("Puno na po ang link na ito. Pakisabihan po ang {firm_name}.");
+        }
+        UploadError::LinkFull => return format!("This link can't take any more files. Please tell {firm_name}."),
+        UploadError::Invalid(problem) => match (problem, taglish) {
+            (LabelProblem::NotOwed, true) => "Pakipili po kung ano ang file na ito.",
+            (LabelProblem::NotOwed, false) => "Please choose what this file is.",
+            (LabelProblem::NoPayor, true) => "Pakisulat po kung aling business ang nagbigay ng 2307.",
+            (LabelProblem::NoPayor, false) => "Please say which business the 2307 is from.",
+            (LabelProblem::NoNote, true) => "Pakisulat po kung ano ang file na ito.",
+            (LabelProblem::NoNote, false) => "Please say what this file is.",
+            (LabelProblem::TooLong, true) => "Paikliin po sa isang linya.",
+            (LabelProblem::TooLong, false) => "Please keep it to one short line.",
+        },
+        UploadError::File(_) | UploadError::Database(_) => "Something went wrong. Please try again.",
+    };
+    text.to_owned()
+}

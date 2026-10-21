@@ -138,13 +138,30 @@ pub enum UploadError {
     LinkFull,
     /// The label is missing or wrong.
     #[error("{0}")]
-    Invalid(&'static str),
+    Invalid(LabelProblem),
     /// Storing the file failed.
     #[error(transparent)]
     File(#[from] FileError),
     /// The database failed.
     #[error(transparent)]
     Database(#[from] sqlx::Error),
+}
+
+/// What's wrong with a label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum LabelProblem {
+    /// It doesn't name one of the Period's Owed documents.
+    #[error("choose what this file is")]
+    NotOwed,
+    /// A 2307 without its Payor.
+    #[error("say which business the 2307 is from")]
+    NoPayor,
+    /// "Something else" without a note.
+    #[error("say what this file is")]
+    NoNote,
+    /// A Payor or note longer than one short line.
+    #[error("keep it to one short line")]
+    TooLong,
 }
 
 /// One Upload, as the Firm sees it.
@@ -296,12 +313,12 @@ impl Uploads {
 /// `label`, trimmed, if it names one of `owed` (with a Payor for a 2307),
 /// or is "something else" with a note.
 fn checked(label: Label, owed: &[String]) -> Result<Label, UploadError> {
-    let short = |text: &str, missing: &'static str| {
+    let short = |text: &str, missing: LabelProblem| {
         let text = text.trim();
         if text.is_empty() {
             Err(UploadError::Invalid(missing))
         } else if text.chars().count() > MAX_LABEL_CHARS || text.contains(['\n', '\r']) {
-            Err(UploadError::Invalid("keep it to one short line"))
+            Err(UploadError::Invalid(LabelProblem::TooLong))
         } else {
             Ok(text.to_owned())
         }
@@ -309,20 +326,17 @@ fn checked(label: Label, owed: &[String]) -> Result<Label, UploadError> {
     match label {
         Label::Owed { document, payor } => {
             if !owed.contains(&document) {
-                return Err(UploadError::Invalid("choose what this file is"));
+                return Err(UploadError::Invalid(LabelProblem::NotOwed));
             }
             let payor = if is_2307(&document) {
-                Some(short(
-                    payor.as_deref().unwrap_or(""),
-                    "say which business the 2307 is from",
-                )?)
+                Some(short(payor.as_deref().unwrap_or(""), LabelProblem::NoPayor)?)
             } else {
                 None
             };
             Ok(Label::Owed { document, payor })
         }
         Label::SomethingElse { note } => Ok(Label::SomethingElse {
-            note: short(&note, "say what this file is")?,
+            note: short(&note, LabelProblem::NoNote)?,
         }),
     }
 }
