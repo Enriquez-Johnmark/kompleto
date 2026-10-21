@@ -18,6 +18,30 @@ Forms: {% for form in client.details.forms %}{{ form }}{% if !loop.last %}, {% e
   <p><button>Save schedule</button></p>
 </form>
 
+<h2>Documents to ask for</h2>
+<table>
+  {% for item in default_items %}
+  <tr><td>{% if item.removed %}<s>{{ item.label }}</s>{% else %}{{ item.label }}{% endif %} <span class="muted">{{ item.when }}</span></td>
+    <td><form method="post" action="/clients/{{ client.id }}/checklist/{% if item.removed %}restore{% else %}remove{% endif %}" class="inline">
+      <input type="hidden" name="key" value="{{ item.key }}"><button>{% if item.removed %}Ask again{% else %}Don't ask{% endif %}</button>
+    </form></td></tr>
+  {% endfor %}
+  {% for item in extra_items %}
+  <tr><td>{{ item.label }} <span class="muted">{{ item.when }}</span></td>
+    <td><form method="post" action="/clients/{{ client.id }}/checklist/extra/{{ item.id }}/delete" class="inline"><button>Remove</button></form></td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/clients/{{ client.id }}/checklist/add">
+  <label for="label">Add a document</label>
+  <input type="text" id="label" name="label" maxlength="120" required>
+  <select name="recurs" aria-label="When">
+    <option value="every-period">every period</option>
+    <option value="quarter-end">at quarter end</option>
+    <option value="year-end">in December</option>
+  </select>
+  <button>Add</button>
+</form>
+
 <h2>Next 12 months</h2>
 {% if periods.is_empty() %}<p class="muted">Nothing due in the next 12 months.</p>{% endif %}
 {% for period in periods %}

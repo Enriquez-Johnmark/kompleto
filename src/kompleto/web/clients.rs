@@ -16,8 +16,8 @@ use uuid::Uuid;
 
 use super::{AppState, ClientRoute, CurrentFirm, WebError, show_date};
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
-use crate::kompleto::checklist::owed_documents;
-use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, NewClient, ScheduleSettings};
+use crate::kompleto::checklist::{DEFAULT_ITEMS, ExtraItem, Recurs, owed_documents};
+use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, ExtraItemId, NewClient, ScheduleSettings};
 use crate::kompleto::firms::FirmId;
 use crate::kompleto::periods::ClientCalendar;
 use crate::kompleto::schedule::{ReminderDays, planned_drafts};
@@ -68,6 +68,26 @@ pub(super) fn client_pages() -> Vec<(ClientRoute, MethodRouter<AppState>)> {
                 "form=2551Q&period=2026-Q4&due=2027-01-29",
             ),
             post(set_override),
+        ),
+        (
+            page(Method::POST, "/clients/{id}/checklist/remove", "key=bank-statements"),
+            post(remove_item),
+        ),
+        (
+            page(Method::POST, "/clients/{id}/checklist/restore", "key=bank-statements"),
+            post(restore_item),
+        ),
+        (
+            page(
+                Method::POST,
+                "/clients/{id}/checklist/add",
+                "label=Lazada+payouts&recurs=every-period",
+            ),
+            post(add_item),
+        ),
+        (
+            page(Method::POST, "/clients/{id}/checklist/extra/{item}/delete", ""),
+            post(delete_item),
         ),
     ]
 }
@@ -250,7 +270,28 @@ struct ClientPage {
     firm_offset: u8,
     offset_value: String,
     reminder_days: String,
+    default_items: Vec<ChecklistItemView>,
+    extra_items: Vec<ChecklistItemView>,
     error: Option<String>,
+}
+
+/// One line of a Client's checklist, ready to show.
+struct ChecklistItemView {
+    /// A default item's key (empty for an added item).
+    key: String,
+    /// An added item's ID (empty for a default item).
+    id: String,
+    label: String,
+    when: &'static str,
+    removed: bool,
+}
+
+fn recurs_text(recurs: Recurs) -> &'static str {
+    match recurs {
+        Recurs::EveryPeriod => "every period",
+        Recurs::QuarterEnd => "at quarter end",
+        Recurs::YearEnd => "in December",
+    }
 }
 
 async fn show(
@@ -304,6 +345,30 @@ async fn client_page(
                 .collect(),
         })
         .collect();
+    let default_items = DEFAULT_ITEMS
+        .iter()
+        .filter(|item| item.when_filing.is_empty() || item.when_filing.iter().any(|f| client.details.forms.contains(f)))
+        .map(|item| ChecklistItemView {
+            key: item.key.to_owned(),
+            id: String::new(),
+            label: item.label.to_owned(),
+            when: recurs_text(item.recurs),
+            removed: edits.removed.contains(item.key),
+        })
+        .collect();
+    let extra_items = state
+        .clients
+        .extra_items(firm, id)
+        .await?
+        .into_iter()
+        .map(|(item_id, item)| ChecklistItemView {
+            key: String::new(),
+            id: item_id.to_string(),
+            label: item.label,
+            when: recurs_text(item.recurs),
+            removed: false,
+        })
+        .collect();
     let language = match client.details.language {
         crate::kompleto::clients::Language::Taglish => "Taglish",
         crate::kompleto::clients::Language::English => "English",
@@ -321,8 +386,88 @@ async fn client_page(
         language,
         periods,
         firm_offset,
+        default_items,
+        extra_items,
         error,
     })
+}
+
+#[derive(Deserialize)]
+struct ItemKeyForm {
+    key: String,
+}
+
+async fn remove_item(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+    Form(form): Form<ItemKeyForm>,
+) -> Result<Response, WebError> {
+    let id = ClientId::from(id);
+    match state.clients.remove_default_item(firm, id, &form.key).await {
+        Ok(()) => Ok(back_to(id)),
+        Err(ClientError::Invalid(reason)) => refuse(&state, firm, id, reason).await,
+        Err(err) => Err(err.into()),
+    }
+}
+
+async fn restore_item(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+    Form(form): Form<ItemKeyForm>,
+) -> Result<Response, WebError> {
+    let id = ClientId::from(id);
+    state.clients.restore_default_item(firm, id, &form.key).await?;
+    Ok(back_to(id))
+}
+
+#[derive(Deserialize)]
+struct AddItemForm {
+    label: String,
+    recurs: String,
+}
+
+async fn add_item(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path(id): Path<Uuid>,
+    Form(form): Form<AddItemForm>,
+) -> Result<Response, WebError> {
+    let id = ClientId::from(id);
+    state.clients.get(firm, id).await?;
+    let Some(recurs) = Recurs::parse(&form.recurs) else {
+        return refuse(&state, firm, id, "Choose when the document is owed.".to_owned()).await;
+    };
+    match state
+        .clients
+        .add_extra_item(
+            firm,
+            id,
+            &ExtraItem {
+                label: form.label,
+                recurs,
+            },
+        )
+        .await
+    {
+        Ok(_) => Ok(back_to(id)),
+        Err(ClientError::Invalid(reason)) => refuse(&state, firm, id, reason).await,
+        Err(err) => Err(err.into()),
+    }
+}
+
+async fn delete_item(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Path((id, item)): Path<(Uuid, Uuid)>,
+) -> Result<Response, WebError> {
+    let id = ClientId::from(id);
+    state
+        .clients
+        .delete_extra_item(firm, id, ExtraItemId::from(item))
+        .await?;
+    Ok(back_to(id))
 }
 
 /// Shows the client page again with `error`, as the answer to a refused form.

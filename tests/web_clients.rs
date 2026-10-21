@@ -183,3 +183,36 @@ async fn b3_a_due_date_set_on_the_client_page_moves_only_that_clients_dates(pool
         .await;
     assert!(app.get(&page, &cookie).await.body.contains("Cut-off: Wed 20 Jan 2027"));
 }
+
+#[sqlx::test]
+async fn b4_the_checklist_can_be_edited_from_the_client_page(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let (firm, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let page = app.post("/clients", &cookie, NENA_FORM).await.location().to_owned();
+    let bank = "<li>Bank and e-wallet (GCash, Maya) statements</li>";
+    let lazada = "<li>Lazada payout reports</li>";
+    assert!(app.get(&page, &cookie).await.body.contains(bank));
+
+    app.post(&format!("{page}/checklist/remove"), &cookie, "key=bank-statements")
+        .await;
+    app.post(
+        &format!("{page}/checklist/add"),
+        &cookie,
+        "label=Lazada+payout+reports&recurs=every-period",
+    )
+    .await;
+
+    let body = app.get(&page, &cookie).await.body;
+    assert!(!body.contains(bank) && body.contains(lazada), "{body}");
+
+    let clients = Clients::new(pool, app.clock.clone());
+    let id = clients.list(firm).await.unwrap()[0].id;
+    let (item, _) = clients.extra_items(firm, id).await.unwrap().remove(0);
+    app.post(&format!("{page}/checklist/extra/{item}/delete"), &cookie, "")
+        .await;
+    app.post(&format!("{page}/checklist/restore"), &cookie, "key=bank-statements")
+        .await;
+
+    let body = app.get(&page, &cookie).await.body;
+    assert!(body.contains(bank) && !body.contains(lazada), "{body}");
+}
