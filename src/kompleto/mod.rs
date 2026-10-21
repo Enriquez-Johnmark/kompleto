@@ -6,6 +6,7 @@ pub mod calendar;
 pub mod checklist;
 pub mod clients;
 pub mod dates;
+pub mod drafting;
 pub mod firms;
 pub mod import;
 pub mod periods;
