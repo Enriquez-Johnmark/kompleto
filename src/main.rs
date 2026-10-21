@@ -153,6 +153,10 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         &master,
         files.clone(),
     )?;
+    let state = match &config.resend_webhook_secret {
+        Some(secret) => state.with_delivery_events(secret.clone()),
+        None => state,
+    };
     let state = match &config.inbound_secret {
         Some(secret) => state.with_inbound(secret.clone(), config.reply_domain()),
         None => {

@@ -69,6 +69,9 @@ pub struct Config {
     /// Proves inbound email comes from our provider (`INBOUND_SECRET`);
     /// without it, no Replies are taken in.
     pub inbound_secret: Option<SecretString>,
+    /// Verifies Resend's delivery events (`RESEND_WEBHOOK_SECRET`,
+    /// `whsec_…`); without it, Bounces aren't taken in.
+    pub resend_webhook_secret: Option<SecretString>,
 }
 
 /// Where and which model drafts.
@@ -122,6 +125,7 @@ impl Config {
             file_master_key: optional("FILE_MASTER_KEY").map(SecretString::from),
             upload_dir: optional("UPLOAD_DIR").map_or_else(|| PathBuf::from("uploads"), PathBuf::from),
             inbound_secret: optional("INBOUND_SECRET").map(SecretString::from),
+            resend_webhook_secret: optional("RESEND_WEBHOOK_SECRET").map(SecretString::from),
         })
     }
 

@@ -35,6 +35,7 @@ use tokio::sync::{Notify, Semaphore};
 use tower_http::trace::TraceLayer;
 
 use super::auth::Auth;
+use super::bounces::Bounces;
 use super::calendar::{Calendar, CalendarError};
 use super::clients::{ClientError, Clients};
 use super::dates::show_date;
@@ -78,6 +79,14 @@ pub struct AppState {
     secure_cookies: bool,
     /// Inbound email, when `INBOUND_SECRET` is set.
     inbound: Option<Arc<Inbound>>,
+    /// The provider's delivery events, when `RESEND_WEBHOOK_SECRET` is set.
+    delivery_events: Option<Arc<DeliveryEvents>>,
+}
+
+/// Taking in Bounces and complaints.
+struct DeliveryEvents {
+    secret: SecretString,
+    bounces: Bounces,
 }
 
 /// Taking in Replies.
@@ -124,7 +133,19 @@ impl AppState {
             secure_cookies: base_url.starts_with("https://"),
             origin,
             inbound: None,
+            delivery_events: None,
         })
+    }
+
+    /// Takes in the provider's delivery events signed with `secret`
+    /// (`whsec_…`).
+    #[must_use]
+    pub fn with_delivery_events(mut self, secret: SecretString) -> Self {
+        self.delivery_events = Some(Arc::new(DeliveryEvents {
+            secret,
+            bounces: Bounces::new(self.pool.clone(), self.clock.clone()),
+        }));
+        self
     }
 
     /// Takes in Replies signed with `secret`, at reply addresses on
