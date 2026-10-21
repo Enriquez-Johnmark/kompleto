@@ -2,10 +2,12 @@
 //! or invalid value stops the program at start-up, not mid-request.
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use secrecy::SecretString;
 
+use crate::engine::files::MasterKey;
 use crate::engine::llm::AnthropicClient;
 use crate::engine::mail::{ConfiguredMailer, MailpitMailer, ResendMailer};
 
@@ -59,6 +61,11 @@ pub struct Config {
     /// The model for drafting; `None` without `ANTHROPIC_API_KEY`, and every
     /// Draft is then a template.
     pub model: Option<ModelConfig>,
+    /// The key that protects every stored file (`FILE_MASTER_KEY`). Only
+    /// the server needs it; it refuses to start without it.
+    pub file_master_key: Option<SecretString>,
+    /// Where encrypted Uploads are kept (`UPLOAD_DIR`, default `uploads`).
+    pub upload_dir: PathBuf,
 }
 
 /// Where and which model drafts.
@@ -109,6 +116,8 @@ impl Config {
                 api_key: SecretString::from(key),
                 model: optional("LLM_MODEL").unwrap_or_else(|| "claude-haiku-5-5".to_owned()),
             }),
+            file_master_key: optional("FILE_MASTER_KEY").map(SecretString::from),
+            upload_dir: optional("UPLOAD_DIR").map_or_else(|| PathBuf::from("uploads"), PathBuf::from),
         })
     }
 
@@ -130,6 +139,19 @@ impl Config {
                 })
             })
             .transpose()
+    }
+
+    /// The file master key; an error if it's missing or malformed.
+    pub fn master_key(&self) -> Result<MasterKey, ConfigError> {
+        use secrecy::ExposeSecret;
+        let key = self
+            .file_master_key
+            .as_ref()
+            .ok_or(ConfigError::Missing("FILE_MASTER_KEY"))?;
+        MasterKey::from_hex(key.expose_secret()).map_err(|err| ConfigError::Invalid {
+            name: "FILE_MASTER_KEY",
+            reason: err.to_string(),
+        })
     }
 
     /// Builds the configured mailer.

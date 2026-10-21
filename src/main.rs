@@ -8,6 +8,7 @@
 //!                         create a Firm (there is no sign-up page)
 //! kompleto llm-costs --month YYYY-MM
 //!                         every Firm's AI cost for a month (J1)
+//! kompleto gen-key        print a new FILE_MASTER_KEY
 //! kompleto demo           (development) put one approved email through the outbox
 //! kompleto parse-xlsx     (internal) the Excel import's sandboxed parser
 //! ```
@@ -23,6 +24,7 @@ use kompleto::config::Config;
 use kompleto::config::MailConfig;
 use kompleto::engine::clock::{Clock, SystemClock};
 use kompleto::engine::cost_log;
+use kompleto::engine::files::{FileCipher, Files, LocalDisk, MasterKey};
 use kompleto::engine::ids::TenantId;
 use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{NoExtraChecks, Outbox, Sender};
@@ -72,6 +74,10 @@ async fn run() -> anyhow::Result<()> {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 
+    if std::env::args().nth(1).as_deref() == Some("gen-key") {
+        println!("{}", MasterKey::generate_hex()?);
+        return Ok(());
+    }
     let config = Config::from_env().context("reading configuration")?;
     let pool = PgPoolOptions::new()
         .max_connections(10)
@@ -98,7 +104,9 @@ async fn run() -> anyhow::Result<()> {
         Some("firm") => add_firm(pool, clock).await,
         Some("llm-costs") => llm_costs(pool, clock).await,
         Some("demo") => demo(&config, pool, clock).await,
-        other => bail!("unknown command {other:?}; use serve, migrate, outbox-drain, firm add, llm-costs or demo"),
+        other => {
+            bail!("unknown command {other:?}; use serve, migrate, outbox-drain, firm add, llm-costs, gen-key or demo")
+        }
     }
 }
 
@@ -109,6 +117,7 @@ async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
 }
 
 async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
+    let master = config.master_key()?;
     migrate(&pool).await?;
     let today = clock.now().date();
     if !Calendar::built_in()?.holidays_cover(today, today + time::Duration::days(365)) {
@@ -122,6 +131,12 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         tracing::warn!("ANTHROPIC_API_KEY isn't set; every reminder draft will be a template");
     }
     let scheduler = Scheduler::with_model(pool.clone(), clock.clone(), model)?;
+    let files = Files::new(
+        pool.clone(),
+        clock.clone(),
+        Arc::new(LocalDisk::new(&config.upload_dir)),
+        Arc::new(FileCipher::new(&master)),
+    );
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(SCHEDULE_EVERY);
         loop {
@@ -129,6 +144,10 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
             match scheduler.run_once().await {
                 Ok(created) => tracing::info!(created, "reminder drafts created"),
                 Err(err) => tracing::error!(%err, "creating reminder drafts failed"),
+            }
+            match files.sweep().await {
+                Ok(deleted) => tracing::info!(deleted, "files past their deadline deleted"),
+                Err(err) => tracing::error!(%err, "deleting files failed"),
             }
         }
     });

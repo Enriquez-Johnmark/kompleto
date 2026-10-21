@@ -88,3 +88,35 @@ async fn j1_llm_costs_lists_every_firms_cost_for_a_month(pool: PgPool) {
     );
     assert!(out.contains("Total") && out.contains("US$0.3000"), "{out}");
 }
+
+#[test]
+fn gen_key_prints_a_new_random_master_key() {
+    let run = || {
+        Command::new(env!("CARGO_BIN_EXE_kompleto"))
+            .arg("gen-key")
+            .output()
+            .unwrap()
+    };
+    let (one, two) = (run(), run());
+
+    assert!(one.status.success(), "{}", String::from_utf8_lossy(&one.stderr));
+    let key = String::from_utf8(one.stdout).unwrap();
+    kompleto::engine::files::MasterKey::from_hex(&key).unwrap();
+    assert_ne!(key, String::from_utf8(two.stdout).unwrap());
+}
+
+#[sqlx::test]
+async fn f3_the_server_refuses_to_start_without_a_file_master_key(pool: PgPool) {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kompleto"));
+    cmd.arg("serve")
+        .env("DATABASE_URL", common::database_url(&pool).await)
+        .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
+        .env("FILE_MASTER_KEY", "")
+        .env("BIND_ADDR", "127.0.0.1:0");
+    let out = tokio::task::spawn_blocking(move || cmd.output().unwrap())
+        .await
+        .unwrap();
+
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("FILE_MASTER_KEY"));
+}
