@@ -285,6 +285,11 @@ impl Calendar {
         date
     }
 
+    /// The form's name, e.g. "Quarterly VAT return".
+    pub fn form_name(&self, form: BirForm) -> &str {
+        self.rules.get(&form).map_or("", |rule| rule.name.as_str())
+    }
+
     /// When `form` is due for `period`, or `None` if the form isn't filed
     /// for that kind of Period.
     pub fn due_date(&self, form: BirForm, period: TaxPeriod) -> Option<DueDate> {
@@ -354,7 +359,6 @@ fn parse_date(text: &str) -> Result<Date, CalendarError> {
 #[serde(deny_unknown_fields)]
 struct FormRule {
     code: String,
-    #[expect(dead_code, reason = "documents the form in the data file; shown on pages later")]
     name: String,
     covers: Covers,
     due: DueRule,

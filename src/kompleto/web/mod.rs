@@ -38,12 +38,9 @@ const SESSION_COOKIE: &str = "kompleto_session";
 /// What every handler can reach.
 #[derive(Clone)]
 pub struct AppState {
-    #[expect(dead_code, reason = "used by the pages added next")]
     clock: Arc<dyn Clock>,
-    #[expect(dead_code, reason = "used by the pages added next")]
     calendar: Arc<Calendar>,
     auth: Auth,
-    #[expect(dead_code, reason = "used by the pages added next")]
     firms: Firms,
     clients: Clients,
     #[expect(dead_code, reason = "used by the pages added next")]
@@ -139,6 +136,12 @@ fn session_cookie(parts: &Parts) -> Option<String> {
         .filter_map(|pair| pair.trim().split_once('='))
         .find(|(name, _)| *name == SESSION_COOKIE)
         .map(|(_, value)| value.to_owned())
+}
+
+/// A date as pages show it: "Mon 26 Oct 2026".
+fn show_date(date: time::Date) -> String {
+    let format = time::macros::format_description!("[weekday repr:short] [day padding:none] [month repr:short] [year]");
+    date.format(&format).unwrap_or_else(|_| date.to_string())
 }
 
 /// A handler failure, shown without internal details.

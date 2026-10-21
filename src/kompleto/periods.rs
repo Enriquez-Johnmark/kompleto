@@ -23,6 +23,8 @@ pub struct Filing {
     pub due: Date,
     /// True if the bookkeeper overrode the calendar's date.
     pub overridden: bool,
+    /// The BIR issuance behind an extension of the calendar's date.
+    pub extension: Option<String>,
 }
 
 /// Everything a Client is asked for at once: the forms whose Periods end in
@@ -94,13 +96,14 @@ impl ClientCalendar<'_> {
             .iter()
             .flat_map(|&period| self.forms.iter().map(move |&form| (form, period)))
             .filter_map(|(form, period)| {
-                let calendar_date = self.calendar.due_date(form, period)?.date;
+                let calendar = self.calendar.due_date(form, period)?;
                 let overridden = self.overrides.get(&(form, period)).copied();
                 Some(Filing {
                     form,
                     period,
-                    due: overridden.unwrap_or(calendar_date),
+                    due: overridden.unwrap_or(calendar.date),
                     overridden: overridden.is_some(),
+                    extension: calendar.extension.filter(|_| overridden.is_none()),
                 })
             })
             .collect();
