@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,\n                    m.body_text, m.status, s.source, m.expires_at, m.last_error\n             from scheduled_drafts s\n             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n             join clients c on c.id = s.client_id and c.firm_id = s.firm_id\n             where s.firm_id = $1 and m.status = 'draft' and (m.expires_at is null or m.expires_at > $2)\n             order by m.expires_at, c.business_name, m.created_at",
+  "query": "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,\n                    m.body_text, m.status, s.source, s.cut_off, m.last_error\n             from scheduled_drafts s\n             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n             join clients c on c.id = s.client_id and c.firm_id = s.firm_id\n             where s.firm_id = $1 and m.approved_at > $2\n               and m.status in ('approved', 'sending', 'sent', 'failed', 'blocked', 'unconfirmed')\n             order by m.approved_at desc",
   "describe": {
     "columns": [
       {
@@ -104,12 +104,12 @@
       },
       {
         "ordinal": 9,
-        "name": "expires_at",
-        "type_info": "Timestamptz",
+        "name": "cut_off",
+        "type_info": "Date",
         "origin": {
           "Table": {
-            "table": "outbox_messages",
-            "name": "expires_at"
+            "table": "scheduled_drafts",
+            "name": "cut_off"
           }
         }
       },
@@ -145,5 +145,5 @@
       true
     ]
   },
-  "hash": "e898e54ec89d4c7ca098c1988dd3a0927f6bf069bb22f914bac177cf2d3a8576"
+  "hash": "cee2ca45514dd6352b5f53cd68cdf420f088d97d16e3fb39e78ddcc32e8426f6"
 }

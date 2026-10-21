@@ -6,12 +6,11 @@
 use std::sync::Arc;
 
 use sqlx::PgPool;
-use time::{Date, Duration, OffsetDateTime};
+use time::{Date, Duration};
 use uuid::Uuid;
 
 use super::drafting::DraftSource;
 use super::firms::FirmId;
-use super::schedule::MANILA;
 use crate::engine::clock::Clock;
 use crate::engine::ids::MessageId;
 use crate::engine::mail::Email;
@@ -60,7 +59,7 @@ struct ReminderRow {
     body_text: String,
     status: String,
     source: String,
-    expires_at: Option<OffsetDateTime>,
+    cut_off: Option<Date>,
     last_error: Option<String>,
 }
 
@@ -82,10 +81,7 @@ impl ReminderRow {
             } else {
                 DraftSource::Template
             },
-            // A Draft expires as its Cut-off day ends (D4).
-            cut_off: self
-                .expires_at
-                .map(|at| at.to_offset(MANILA).date() - Duration::days(1)),
+            cut_off: self.cut_off,
             last_error: self.last_error,
         })
     }
@@ -102,12 +98,12 @@ impl Drafts {
         let rows = sqlx::query_as!(
             ReminderRow,
             "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,
-                    m.body_text, m.status, s.source, m.expires_at, m.last_error
+                    m.body_text, m.status, s.source, s.cut_off, m.last_error
              from scheduled_drafts s
              join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
              join clients c on c.id = s.client_id and c.firm_id = s.firm_id
              where s.firm_id = $1 and m.status = 'draft' and (m.expires_at is null or m.expires_at > $2)
-             order by m.expires_at, c.business_name, m.created_at",
+             order by s.cut_off, c.business_name, m.created_at",
             firm.as_uuid(),
             self.clock.now(),
         )
@@ -122,7 +118,7 @@ impl Drafts {
         let rows = sqlx::query_as!(
             ReminderRow,
             "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,
-                    m.body_text, m.status, s.source, m.expires_at, m.last_error
+                    m.body_text, m.status, s.source, s.cut_off, m.last_error
              from scheduled_drafts s
              join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
              join clients c on c.id = s.client_id and c.firm_id = s.firm_id
@@ -143,7 +139,7 @@ impl Drafts {
         let row = sqlx::query_as!(
             ReminderRow,
             "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,
-                    m.body_text, m.status, s.source, m.expires_at, m.last_error
+                    m.body_text, m.status, s.source, s.cut_off, m.last_error
              from scheduled_drafts s
              join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
              join clients c on c.id = s.client_id and c.firm_id = s.firm_id

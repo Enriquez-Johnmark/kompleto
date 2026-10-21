@@ -197,8 +197,9 @@ impl Scheduler {
         // A concurrent run that recorded this slot first, or a full Period,
         // makes this insert a no-op, and the Draft rolls back with it.
         let recorded = sqlx::query_scalar!(
-            r#"insert into scheduled_drafts (firm_id, client_id, period, slot, ordinal, message_id, created_at, source)
-               select $1, $2, $3, $4, count(*)::smallint, $5, $6, $8
+            r#"insert into scheduled_drafts
+                   (firm_id, client_id, period, slot, ordinal, message_id, created_at, source, cut_off)
+               select $1, $2, $3, $4, count(*)::smallint, $5, $6, $8, $9
                from scheduled_drafts where client_id = $2 and period = $3
                having count(*) < $7
                on conflict do nothing
@@ -211,6 +212,7 @@ impl Scheduler {
             self.clock.now(),
             i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4),
             text.source.as_str(),
+            period.cut_off,
         )
         .fetch_optional(&mut *tx)
         .await?;
