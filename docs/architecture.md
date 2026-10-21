@@ -56,6 +56,25 @@ draft ──approve──► approved ──► sending ──► sent
 5. **A2 sweep** extended to Replies, Payors and the tracker.
 6. **The Reply notification** through the outbox, with its own pre-send rule.
 
+### M5 implementation notes (2026-10-21)
+
+- **Machine endpoints** live under `/hooks/` and skip the browser Origin check; each proves its sender instead.
+  - `POST /hooks/inbound-email` takes the raw message. Header `X-Kompleto-Signature` is the hex HMAC-SHA256 of the body under `INBOUND_SECRET`. The provider adapter is chosen at M6.
+  - `POST /hooks/resend` takes Resend's Svix-signed events (`svix-id`, `svix-timestamp`, `svix-signature: v1,<base64>`, secret `whsec_<base64>`), within 5 minutes. Events that aren't about an email (domains, contacts) get 204 and are ignored.
+- **Redelivery.** An inbound email is keyed by its Message-ID, or a SHA-256 of the whole message. A second delivery keeps nothing twice and sends no second notice; it only finishes stopping reminders if the first attempt failed part way.
+- **System-wide lookups.** These run before any Firm is known, and each is documented where it lives:
+  - the reply address and upload token, which are signed and are the credential;
+  - the fallback match on the sender's address (only when exactly one Client has it);
+  - the sent message by the provider's ID, for a delivery event;
+  - the 90-day sweep of Reply text, which names each row's Firm.
+- **Bounces.** Resend's Transient and Undetermined bounces only show; Permanent ones (or no type) and complaints stop reminders. Only reminders to the address that bounced are cancelled, and a late bounce for an address since replaced stops nothing else.
+- **A Reply** ends the Period's reminders: waiting Drafts are cancelled, and the scheduler drafts none for a Period with a human Reply.
+- **Attachments.** Images that the HTML embeds by Content-ID and that are under 50 KB are treated as signature logos and dropped. NUL characters are removed from inbound text, since Postgres can't store them.
+- **Payors.**
+  - A Client's Payors travel in its `ChecklistEdits`, so every place that lists Owed documents gets "BIR Form 2307 from <Payor>" in place of the general item.
+  - The upload form names the picked document, not its position, so a list edited mid-visit can't relabel a file.
+  - A 2307 uploaded as "from another business" counts for that Payor once the Firm lists it.
+
 ### Test seams for M4 (2026-10-21)
 
 1. **File encryption** (`engine::files`): a round trip, and a changed byte, a swapped key or a file moved to another Firm all fail to decrypt.
