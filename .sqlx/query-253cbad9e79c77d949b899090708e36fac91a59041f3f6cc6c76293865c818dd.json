@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select count(*) as \"files!\", coalesce(sum(size_bytes), 0)::bigint as \"bytes!\"\n               from uploads where link_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "files!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "bytes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "253cbad9e79c77d949b899090708e36fac91a59041f3f6cc6c76293865c818dd"
+}

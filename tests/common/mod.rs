@@ -108,6 +108,18 @@ pub fn kompleto_checks(pool: &sqlx::PgPool, clock: Arc<FixedClock>) -> kompleto:
     )
 }
 
+/// Encrypted files kept in a fresh folder under the test target directory.
+pub fn files(pool: &sqlx::PgPool, clock: Arc<FixedClock>) -> kompleto::engine::files::Files {
+    use kompleto::engine::files::{FileCipher, Files, LocalDisk};
+    let root = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(uuid::Uuid::now_v7().to_string());
+    Files::new(
+        pool.clone(),
+        clock,
+        Arc::new(LocalDisk::new(root)),
+        Arc::new(FileCipher::new(&master_key())),
+    )
+}
+
 /// A sample Client: a non-VAT sole proprietor reminded in Taglish.
 pub fn nena() -> kompleto::kompleto::clients::NewClient {
     use kompleto::kompleto::calendar::BirForm;

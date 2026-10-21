@@ -1,0 +1,137 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select u.id, u.period, u.owed_document, u.payor, u.note, u.media_type, u.size_bytes,\n                      u.uploaded_at, u.received_at, f.deleted_at\n               from uploads u join stored_files f on f.id = u.id and f.tenant_id = u.firm_id\n               where u.firm_id = $1 and u.client_id = $2\n               order by u.uploaded_at, u.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "period",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "period"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "owed_document",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "owed_document"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "payor",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "payor"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "note",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "note"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "media_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "media_type"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "size_bytes",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "size_bytes"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "uploaded_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "uploaded_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "received_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "received_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "deleted_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "stored_files",
+            "name": "deleted_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "162d20b60e13f2b0d5929c4e75f1fe40c3e531ba0ba10503b30ab21ebb659e56"
+}

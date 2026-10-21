@@ -15,4 +15,5 @@ pub mod presend;
 pub mod reminders;
 pub mod schedule;
 pub mod upload_links;
+pub mod uploads;
 pub mod web;
