@@ -16,6 +16,8 @@ use time::Month;
 use time::macros::date;
 
 const JPEG: &[u8] = b"\xFF\xD8\xFF\xE0 a photo of a receipt";
+/// Nena's first Owed document, as the upload form names it.
+const FIRST: &str = "Sales invoices issued, including cancelled ones";
 
 /// Nena's Upload link for September 2026 (Cut-off 26 Oct), as a path.
 async fn nena_link(app: &TestApp) -> String {
@@ -38,7 +40,9 @@ async fn nena_link_of(app: &TestApp, firm: FirmId) -> (ClientId, String) {
 
 /// Nena uploads a photo of her first Owed document; returns its ID.
 async fn upload_photo(app: &TestApp, link: &str) -> uuid::Uuid {
-    let sent = app.post_multipart(link, &[("document", b"0"), ("file", JPEG)]).await;
+    let sent = app
+        .post_multipart(link, &[("document", FIRST.as_bytes()), ("file", JPEG)])
+        .await;
     assert_eq!(sent.status, StatusCode::SEE_OTHER, "{}", sent.body);
     sqlx::query_scalar("select id from uploads order by uploaded_at desc limit 1")
         .fetch_one(&app.pool)
@@ -50,12 +54,8 @@ fn owed() -> Vec<String> {
     owed_documents(&nena().forms, Month::September, &Default::default())
 }
 
-fn index_of_2307() -> String {
-    owed()
-        .iter()
-        .position(|item| item.contains("2307"))
-        .unwrap()
-        .to_string()
+fn the_2307() -> String {
+    owed().into_iter().find(|item| item.contains("2307")).unwrap()
 }
 
 #[sqlx::test]
@@ -89,7 +89,9 @@ async fn f1_a_photo_sent_from_the_page_is_kept_and_shown_as_uploaded(pool: PgPoo
     let app = TestApp::new(pool);
     let link = nena_link(&app).await;
 
-    let sent = app.post_multipart(&link, &[("document", b"0"), ("file", JPEG)]).await;
+    let sent = app
+        .post_multipart(&link, &[("document", FIRST.as_bytes()), ("file", JPEG)])
+        .await;
 
     assert_eq!(sent.status, StatusCode::SEE_OTHER, "{}", sent.body);
     let page = app.request(axum::http::Method::GET, sent.location(), None, None).await;
@@ -108,18 +110,18 @@ async fn f1_a_refused_file_gets_a_clear_message_in_the_clients_language(pool: Pg
     let link = nena_link(&app).await;
     let mut big = JPEG.to_vec();
     big.resize(MAX_FILE_BYTES + 1, 0);
-    let payorless = index_of_2307();
+    let payorless = the_2307();
 
     for (case, fields, status, message) in [
         (
             "a program",
-            vec![("document", b"0".as_slice()), ("file", b"MZ\x90\0".as_slice())],
+            vec![("document", FIRST.as_bytes()), ("file", b"MZ\x90\0".as_slice())],
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
             "Photo o PDF lang po",
         ),
         (
             "over 10 MB",
-            vec![("document", b"0".as_slice()), ("file", big.as_slice())],
+            vec![("document", FIRST.as_bytes()), ("file", big.as_slice())],
             StatusCode::PAYLOAD_TOO_LARGE,
             "Hanggang 10 MB lang po",
         ),
@@ -152,11 +154,13 @@ async fn f2_an_altered_link_is_not_found_and_an_expired_one_says_whom_to_ask(poo
 
     let wrong = app.request(axum::http::Method::GET, &altered, None, None).await;
     let wrong_post = app
-        .post_multipart(&altered, &[("document", b"0"), ("file", JPEG)])
+        .post_multipart(&altered, &[("document", FIRST.as_bytes()), ("file", JPEG)])
         .await;
     app.clock.advance(time::Duration::days(36)); // 26 Nov 2026: past 30 days after the Cut-off
     let expired = app.request(axum::http::Method::GET, &link, None, None).await;
-    let expired_post = app.post_multipart(&link, &[("document", b"0"), ("file", JPEG)]).await;
+    let expired_post = app
+        .post_multipart(&link, &[("document", FIRST.as_bytes()), ("file", JPEG)])
+        .await;
 
     assert_eq!(
         (wrong.status, wrong_post.status),
@@ -278,7 +282,7 @@ async fn g2_the_last_missing_document_cancels_the_periods_waiting_reminders(pool
         .to_owned();
     let owed = owed_documents(&employer.forms, Month::October, &Default::default());
 
-    for index in 0..owed.len() {
+    for (index, document) in owed.iter().enumerate() {
         let status = || async {
             sqlx::query_scalar::<_, String>("select status from outbox_messages")
                 .fetch_one(&app.pool)
@@ -286,12 +290,11 @@ async fn g2_the_last_missing_document_cancels_the_periods_waiting_reminders(pool
                 .unwrap()
         };
         assert_eq!(status().await, "draft", "still waiting before upload {index}");
-        let index = index.to_string();
         let sent = app
             .post_multipart(
                 &link,
                 &[
-                    ("document", index.as_bytes()),
+                    ("document", document.as_bytes()),
                     ("payor", b"Jollibee Foods Corp"),
                     ("file", JPEG),
                 ],
@@ -315,7 +318,7 @@ async fn f1_a_missing_or_broken_file_isnt_called_too_big(pool: PgPool) {
     let app = TestApp::new(pool);
     let link = nena_link(&app).await;
 
-    let no_file = app.post_multipart(&link, &[("document", b"0")]).await;
+    let no_file = app.post_multipart(&link, &[("document", FIRST.as_bytes())]).await;
     let broken = app
         .send(
             Request::builder()
@@ -339,7 +342,7 @@ async fn f1_a_missing_or_broken_file_isnt_called_too_big(pool: PgPool) {
 
 #[sqlx::test]
 async fn h2_the_client_picks_a_listed_payors_2307_or_names_another_business(pool: PgPool) {
-    use kompleto::kompleto::checklist::{ANOTHER_PAYOR_2307, ChecklistEdits};
+    use kompleto::kompleto::checklist::ANOTHER_PAYOR_2307;
     use kompleto::kompleto::payors::Payors;
 
     let app = TestApp::new(pool);
@@ -347,21 +350,15 @@ async fn h2_the_client_picks_a_listed_payors_2307_or_names_another_business(pool
     let (client, link) = nena_link_of(&app, santos).await;
     let payors = Payors::new(app.pool.clone(), app.clock.clone());
     payors.add(santos, client, "Jollibee Foods Corp").await.unwrap();
-    let edits = ChecklistEdits {
-        payors: vec!["Jollibee Foods Corp".to_owned()],
-        ..ChecklistEdits::default()
-    };
-    let owed = owed_documents(&nena().forms, Month::September, &edits);
-    let jollibee = owed
-        .iter()
-        .position(|item| item == "BIR Form 2307 from Jollibee Foods Corp")
-        .unwrap()
-        .to_string();
-    let another = owed.len().to_string();
+    let jollibee = "BIR Form 2307 from Jollibee Foods Corp";
+    let another = ANOTHER_PAYOR_2307;
 
     let page = app.request(axum::http::Method::GET, &link, None, None).await;
-    assert!(page.body.contains(ANOTHER_PAYOR_2307), "{}", page.body);
+    assert!(page.body.contains(another), "{}", page.body);
     assert!(!page.body.contains("2307s received from customers"));
+    // The Firm lists another Payor while the Contact has the page open:
+    // what they picked still means the same.
+    payors.add(santos, client, "Ayala Land").await.unwrap();
 
     let picked = app
         .post_multipart(&link, &[("document", jollibee.as_bytes()), ("file", JPEG)])

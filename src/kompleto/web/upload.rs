@@ -107,7 +107,6 @@ fn words(language: Language) -> &'static Words {
 
 /// One Owed document on the page.
 struct Item {
-    index: usize,
     label: String,
     uploaded: bool,
 }
@@ -119,7 +118,7 @@ struct UploadPage {
     intro: String,
     items: Vec<Item>,
     /// The choice for a 2307 from a business not on the Payor list.
-    another: Option<Item>,
+    another: Option<String>,
     asks_payor: bool,
     error: Option<String>,
     sent: bool,
@@ -241,18 +240,12 @@ async fn render(state: &AppState, opened: &Opened, error: Option<String>, sent: 
         items: opened
             .owed
             .iter()
-            .enumerate()
-            .map(|(index, label)| Item {
-                index,
+            .map(|label| Item {
                 label: label.clone(),
                 uploaded: uploaded(label),
             })
             .collect(),
-        another: opened.choices.get(opened.owed.len()).map(|label| Item {
-            index: opened.owed.len(),
-            label: label.clone(),
-            uploaded: false,
-        }),
+        another: opened.choices.get(opened.owed.len()).cloned(),
         asks_payor: opened
             .choices
             .iter()
@@ -289,7 +282,8 @@ async fn upload(State(state): State<AppState>, Path(token): Path<String>, multip
     };
     let label = match form.document.as_str() {
         "other" => Label::SomethingElse { note: form.note },
-        index => match index.parse::<usize>().ok().and_then(|i| opened.choices.get(i)) {
+        // By name, not position: the list can change while the page is open.
+        picked => match opened.choices.iter().find(|choice| *choice == picked) {
             Some(document) => Label::Owed {
                 document: document.clone(),
                 payor: match opened.listed_payor(document) {

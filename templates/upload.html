@@ -32,8 +32,8 @@
   {% if let Some(error) = error %}<p class="error" id="error">{{ error }}</p>{% else %}<p class="error" id="error" hidden></p>{% endif %}
   <label for="document">{{ w.what }}</label>
   <select id="document" name="document" required>
-    {% for item in items %}<option value="{{ item.index }}">{{ item.label }}</option>{% endfor %}
-    {% if let Some(item) = another %}<option value="{{ item.index }}">{{ item.label }}</option>{% endif %}
+    {% for item in items %}<option value="{{ item.label }}">{{ item.label }}</option>{% endfor %}
+    {% if let Some(label) = another %}<option value="{{ label }}">{{ label }}</option>{% endif %}
     <option value="other">{{ w.something_else }}</option>
   </select>
   {% if asks_payor %}
