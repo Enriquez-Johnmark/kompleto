@@ -65,6 +65,18 @@ impl Clients {
         self.insert(&self.pool, firm, client).await
     }
 
+    /// Adds every Client in `clients` in one transaction: all of them, or
+    /// none if any fails (B2).
+    pub async fn create_all(&self, firm: FirmId, clients: &[NewClient]) -> Result<Vec<ClientId>, ClientError> {
+        let mut tx = self.pool.begin().await?;
+        let mut ids = Vec::with_capacity(clients.len());
+        for client in clients {
+            ids.push(self.insert(&mut *tx, firm, client).await?);
+        }
+        tx.commit().await?;
+        Ok(ids)
+    }
+
     /// The Client `id`, if it's this Firm's.
     pub async fn get(&self, firm: FirmId, id: ClientId) -> Result<Client, ClientError> {
         let row = sqlx::query_as!(

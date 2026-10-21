@@ -63,3 +63,35 @@ async fn a_login_email_belongs_to_one_firm(pool: PgPool) {
     let found = firms.find_by_login_email(" Ana@Santos.test ").await.unwrap().unwrap();
     assert_eq!(found.name, "Santos Bookkeeping");
 }
+
+fn numbered(n: usize) -> kompleto::kompleto::clients::NewClient {
+    let mut client = nena();
+    client.business_name = format!("Client {n}");
+    client
+}
+
+#[sqlx::test]
+async fn b2_an_import_adds_every_valid_row(pool: PgPool) {
+    let clients = Clients::new(pool.clone(), clock());
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let rows: Vec<_> = (1..=60).map(numbered).collect();
+
+    let added = clients.create_all(santos, &rows).await.unwrap();
+
+    assert_eq!(added.len(), 60);
+    assert_eq!(clients.list(santos).await.unwrap().len(), 60);
+}
+
+#[sqlx::test]
+async fn b2_a_failed_import_changes_nothing(pool: PgPool) {
+    let clients = Clients::new(pool.clone(), clock());
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    // Added after the preview was checked, so row 30 now clashes.
+    clients.create(santos, &numbered(30)).await.unwrap();
+    let rows: Vec<_> = (1..=60).map(numbered).collect();
+
+    let result = clients.create_all(santos, &rows).await;
+
+    assert!(matches!(result, Err(ClientError::DuplicateName(_))), "{result:?}");
+    assert_eq!(clients.list(santos).await.unwrap().len(), 1);
+}
