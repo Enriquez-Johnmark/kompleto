@@ -4,6 +4,7 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **Build in the cloud.** From M2 on, coding happens in Claude Code on the web (4 vCPU / 16 GB VMs), with a start-up hook for Postgres, Mailpit and the pinned Rust. If that fails, the fallback is local builds with lighter settings.
 - **M1 test seams, Tenant, unconfirmed sends.** Five test seams for M1. "Tenant" is the Engine's word for the owner of data (a Firm in Kompleto). A send whose outcome is unknown, through a provider that can't block duplicates (or past Resend's 24-hour window), becomes "unconfirmed" and is never retried automatically. Recorded in `docs/architecture.md`.
 - **Phase 8.** Five decisions:
   - the milestone workflow: a branch each, test first, code review, and a pull request merged only on the owner's "merge";

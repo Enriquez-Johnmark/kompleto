@@ -62,7 +62,8 @@ Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a
 
 ## Development
 
-- `docker compose up -d` starts Postgres 17 and Mailpit (inbox at http://localhost:8025); `cp .env.example .env` once.
+- **Coding happens in Claude Code on the web** (claude.ai/code). `scripts/cloud-session-start.sh` runs at session start (via `.claude/settings.json`) and brings up Postgres and Mailpit and the pinned Rust. On a local machine it does nothing.
+- Locally: `docker compose up -d` starts Postgres 17 and Mailpit (inbox at http://localhost:8025); `cp .env.example .env` once.
 - Run tests with `cargo test --all-features`: the E1 crash test needs the `failpoints` feature and is skipped without it.
 - After changing any SQL, run `cargo sqlx prepare -- --all-targets --all-features` and commit `.sqlx/`; CI compiles offline from it.
 - `cargo run -- demo` puts one approved email through the outbox into Mailpit.

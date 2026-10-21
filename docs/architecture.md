@@ -138,4 +138,5 @@ Design rules:
 - A **private GitHub repository** under the owner's account.
 - GitHub Actions on every push: `cargo fmt --check`, clippy, all tests against a real Postgres service, and cargo-deny. The workflow is added at M1, when there is code to check.
 - Rust pinned via `rust-toolchain.toml` (1.99.1, edition 2024).
+- **Development runs in Claude Code on the web (2026-10-21)**, not on the owner's 8 GB Mac. A SessionStart hook starts Postgres and Mailpit with `docker compose` and installs the pinned toolchain. Fallback: build locally with lighter settings.
 
