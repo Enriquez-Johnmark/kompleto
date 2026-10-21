@@ -29,6 +29,7 @@ fn brief() -> DraftBrief {
         cut_off: date!(2026 - 10 - 21),
         language: Language::Taglish,
         tone: Tone::Firmer,
+        upload_link: "http://kompleto.test/u/0123abcd".to_owned(),
     }
 }
 
@@ -78,6 +79,7 @@ async fn d5_valid_model_wording_gets_the_exact_facts_inserted_by_kompleto(pool: 
         "Hi Nena! Paalala lang po",
         "- Sales invoices issued, including cancelled ones\n- 2307s received from customers",
         "Wed 21 Oct 2026",
+        "I-upload po dito: http://kompleto.test/u/0123abcd",
         "Salamat po sa tulong!",
         "Santos Bookkeeping",
     ] {
@@ -115,7 +117,9 @@ async fn d5_anything_but_valid_wording_gives_a_template_labelled_as_one(pool: Pg
 
         assert_eq!(draft.source, DraftSource::Template, "{case}");
         assert!(
-            draft.body.contains("- 2307s received from customers"),
+            draft
+                .body
+                .contains("- 2307s received from customers\n\nI-upload po dito: http://kompleto.test/u/0123abcd"),
             "{case}: {}",
             draft.body
         );
@@ -162,6 +166,7 @@ async fn d6_requests_carry_only_the_allowed_fields_and_nothing_sensitive(pool: P
         let text = body.to_string();
         assert!(!text.contains("Santos"), "the firm name stays out of the request");
         assert!(!text.contains('₱') && !text.contains("987654321"), "{text}");
+        assert!(!text.contains("/u/"), "the upload link stays out of the request");
         let user: Value = serde_json::from_str(body["messages"][0]["content"].as_str().unwrap()).unwrap();
         let mut fields: Vec<_> = user.as_object().unwrap().keys().cloned().collect();
         fields.sort();

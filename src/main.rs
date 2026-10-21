@@ -33,6 +33,7 @@ use kompleto::kompleto::firms::Firms;
 use kompleto::kompleto::import::xlsx::{self, XlsxReader};
 use kompleto::kompleto::presend::KompletoChecks;
 use kompleto::kompleto::reminders::Scheduler;
+use kompleto::kompleto::upload_links::UploadLinks;
 use kompleto::kompleto::web::{AppState, router};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -90,10 +91,17 @@ async fn run() -> anyhow::Result<()> {
         Some("serve") => serve(&config, pool, clock).await,
         Some("migrate") => migrate(&pool).await,
         Some("outbox-drain") => {
+            let links = UploadLinks::new(
+                pool.clone(),
+                clock.clone(),
+                &config.master_key()?,
+                &config.public_base_url,
+            );
             let checks = Arc::new(KompletoChecks::new(
                 pool.clone(),
                 clock.clone(),
                 &config.public_base_url,
+                links,
             ));
             let report = Sender::new(pool, config.mailer()?, clock, checks)
                 .drain_once(DRAIN_BATCH)
@@ -124,13 +132,14 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         tracing::warn!("bir-calendar.toml: national holidays aren't listed for the next 12 months");
     }
     let xlsx = XlsxReader::new(std::env::current_exe().context("finding this program for the Excel reader")?);
-    let state = AppState::new(pool.clone(), clock.clone(), &config.public_base_url, xlsx)?;
+    let state = AppState::new(pool.clone(), clock.clone(), &config.public_base_url, xlsx, &master)?;
     let wake_up = state.sender_wake_up();
     let model = config.language_model()?;
     if model.is_none() {
         tracing::warn!("ANTHROPIC_API_KEY isn't set; every reminder draft will be a template");
     }
-    let scheduler = Scheduler::with_model(pool.clone(), clock.clone(), model)?;
+    let links = UploadLinks::new(pool.clone(), clock.clone(), &master, &config.public_base_url);
+    let scheduler = Scheduler::with_model(pool.clone(), clock.clone(), links.clone(), model)?;
     let files = Files::new(
         pool.clone(),
         clock.clone(),
@@ -155,6 +164,7 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         pool.clone(),
         clock.clone(),
         &config.public_base_url,
+        links,
     ));
     let sender = Sender::new(pool, config.mailer()?, clock, checks);
     tokio::spawn(async move {

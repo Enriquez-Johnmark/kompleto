@@ -10,7 +10,6 @@ use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{Outbox, OutboxError};
 use kompleto::kompleto::clients::{Clients, NewClient};
 use kompleto::kompleto::firms::FirmId;
-use kompleto::kompleto::presend::KompletoChecks;
 use kompleto::kompleto::reminders::Scheduler;
 use sqlx::PgPool;
 use time::Duration;
@@ -30,7 +29,7 @@ async fn reminder(pool: &PgPool) -> (FirmId, MessageId, Outbox) {
         .create(santos, &client)
         .await
         .unwrap();
-    Scheduler::new(pool.clone(), clock.clone())
+    Scheduler::new(pool.clone(), clock.clone(), common::upload_links(pool, clock.clone()))
         .unwrap()
         .run_once()
         .await
@@ -50,7 +49,7 @@ async fn approve(pool: &PgPool, outbox: &Outbox, firm: FirmId, id: MessageId) ->
             id,
             "ana@santos.test",
             &seen,
-            &KompletoChecks::new(pool.clone(), clock(), BASE_URL),
+            &common::kompleto_checks(pool, clock()),
         )
         .await
 }
@@ -87,12 +86,29 @@ async fn d7_a_reminder_to_anyone_but_the_clients_stored_email_is_refused(pool: P
 async fn d7_a_reminder_with_a_link_that_isnt_the_clients_upload_link_is_refused(pool: PgPool) {
     let (firm, id, outbox) = reminder(&pool).await;
     let mut email = outbox.get(firm, id).await.unwrap().email;
-    email
-        .body_text
-        .push_str("\nI-upload po dito: https://drive.example/folder\n");
+    let own = upload_link(&email.body_text);
+    email.body_text = email.body_text.replace(&own, "https://drive.example/folder");
     outbox.edit(firm, id, &email, "ana@santos.test").await.unwrap();
 
     assert!(reason(approve(&pool, &outbox, firm, id).await).contains("isn't the client's own upload link"));
+}
+
+#[sqlx::test]
+async fn d7_a_reminder_without_the_clients_upload_link_is_refused(pool: PgPool) {
+    let (firm, id, outbox) = reminder(&pool).await;
+    let mut email = outbox.get(firm, id).await.unwrap().email;
+    let own = upload_link(&email.body_text);
+    email.body_text = email.body_text.replace(&own, "(link to follow)");
+    outbox.edit(firm, id, &email, "ana@santos.test").await.unwrap();
+
+    assert!(reason(approve(&pool, &outbox, firm, id).await).contains("doesn't have the client's upload link"));
+}
+
+fn upload_link(body: &str) -> String {
+    body.split_whitespace()
+        .find(|word| word.starts_with("http://kompleto.test/u/"))
+        .unwrap()
+        .to_owned()
 }
 
 #[sqlx::test]

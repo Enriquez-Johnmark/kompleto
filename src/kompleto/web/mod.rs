@@ -37,7 +37,9 @@ use super::drafts::Drafts;
 use super::firms::{FirmError, FirmId, Firms};
 use super::import::xlsx::XlsxReader;
 use super::presend::KompletoChecks;
+use super::upload_links::UploadLinks;
 use crate::engine::clock::Clock;
+use crate::engine::files::MasterKey;
 use crate::engine::outbox::{Outbox, OutboxError};
 
 /// The session cookie's name.
@@ -65,21 +67,30 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// The app's state; links in emails point at `base_url`.
-    pub fn new(pool: PgPool, clock: Arc<dyn Clock>, base_url: &str, xlsx: XlsxReader) -> Result<Self, CalendarError> {
+    /// The app's state; links in emails point at `base_url`, and Upload
+    /// links are signed with a key from `master`.
+    pub fn new(
+        pool: PgPool,
+        clock: Arc<dyn Clock>,
+        base_url: &str,
+        xlsx: XlsxReader,
+        master: &MasterKey,
+    ) -> Result<Self, CalendarError> {
         let base_url = base_url.trim_end_matches('/');
         let origin = match base_url.split_once("://") {
             Some((scheme, rest)) => format!("{scheme}://{}", rest.split('/').next().unwrap_or(rest)),
             None => base_url.to_owned(),
         };
+        let links = UploadLinks::new(pool.clone(), clock.clone(), master, base_url);
+        let checks = KompletoChecks::new(pool.clone(), clock.clone(), base_url, links);
         Ok(Self {
             calendar: Arc::new(Calendar::built_in()?),
-            auth: Auth::new(pool.clone(), clock.clone(), base_url),
+            auth: Auth::new(pool.clone(), clock.clone(), base_url, checks.clone()),
             firms: Firms::new(pool.clone(), clock.clone()),
             clients: Clients::new(pool.clone(), clock.clone()),
             drafts: Drafts::new(pool.clone(), clock.clone()),
             outbox: Outbox::new(pool.clone(), clock.clone()),
-            checks: KompletoChecks::new(pool.clone(), clock.clone(), base_url),
+            checks,
             pool,
             clock,
             xlsx,

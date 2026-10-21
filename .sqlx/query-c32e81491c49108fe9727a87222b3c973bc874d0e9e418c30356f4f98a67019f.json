@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select client_id from scheduled_drafts where firm_id = $1 and message_id = $2",
+  "query": "select client_id, period from scheduled_drafts where firm_id = $1 and message_id = $2",
   "describe": {
     "columns": [
       {
@@ -13,6 +13,17 @@
             "name": "client_id"
           }
         }
+      },
+      {
+        "ordinal": 1,
+        "name": "period",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "scheduled_drafts",
+            "name": "period"
+          }
+        }
       }
     ],
     "parameters": {
@@ -22,8 +33,9 @@
       ]
     },
     "nullable": [
+      false,
       false
     ]
   },
-  "hash": "088bce31d054c946a5ccee1c4e5833664a58240a6c9ac27c3cdff98d3ec305b3"
+  "hash": "c32e81491c49108fe9727a87222b3c973bc874d0e9e418c30356f4f98a67019f"
 }

@@ -48,7 +48,7 @@ impl TestApp {
     pub fn new(pool: PgPool) -> Self {
         let clock = super::clock();
         let xlsx = kompleto::kompleto::import::xlsx::XlsxReader::new(env!("CARGO_BIN_EXE_kompleto").into());
-        let state = AppState::new(pool.clone(), clock.clone(), BASE_URL, xlsx).unwrap();
+        let state = AppState::new(pool.clone(), clock.clone(), BASE_URL, xlsx, &super::master_key()).unwrap();
         Self {
             router: router(state),
             pool,

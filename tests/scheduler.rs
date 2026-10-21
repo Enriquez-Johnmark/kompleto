@@ -33,7 +33,7 @@ async fn run_daily(
     clock: &std::sync::Arc<kompleto::engine::clock::FixedClock>,
     until: Date,
 ) -> Vec<(String, Date)> {
-    let scheduler = Scheduler::new(pool.clone(), clock.clone()).unwrap();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone(), common::upload_links(pool, clock.clone())).unwrap();
     while clock.now().date() < until {
         scheduler.run_once().await.unwrap();
         scheduler.run_once().await.unwrap();
@@ -149,7 +149,7 @@ async fn d1_a_draft_lists_the_owed_documents_and_cut_off_in_the_clients_language
         .await
         .unwrap();
 
-    Scheduler::new(pool.clone(), clock.clone())
+    Scheduler::new(pool.clone(), clock.clone(), common::upload_links(&pool, clock.clone()))
         .unwrap()
         .run_once()
         .await
@@ -207,7 +207,7 @@ async fn d1_one_clients_failed_draft_neither_stops_the_others_nor_uses_up_its_sl
         .execute(&pool)
         .await
         .unwrap();
-    let scheduler = Scheduler::new(pool.clone(), clock.clone()).unwrap();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone(), common::upload_links(&pool, clock.clone())).unwrap();
 
     assert_eq!(scheduler.run_once().await.unwrap(), 1);
     let claims: i64 = sqlx::query_scalar("select count(*) from scheduled_drafts where client_id = $1")
@@ -256,11 +256,16 @@ async fn d5_the_scheduler_drafts_with_the_model_and_labels_each_draft(pool: PgPo
         .await
         .unwrap();
 
-    Scheduler::with_model(pool.clone(), clock.clone(), Some(model))
-        .unwrap()
-        .run_once()
-        .await
-        .unwrap();
+    Scheduler::with_model(
+        pool.clone(),
+        clock.clone(),
+        common::upload_links(&pool, clock.clone()),
+        Some(model),
+    )
+    .unwrap()
+    .run_once()
+    .await
+    .unwrap();
 
     let (source, body): (String, String) = sqlx::query_as(
         "select s.source, m.body_text from scheduled_drafts s join outbox_messages m on m.id = s.message_id",
@@ -278,7 +283,6 @@ async fn d5_the_scheduler_drafts_with_the_model_and_labels_each_draft(pool: PgPo
 #[sqlx::test]
 async fn d4_a_reminder_draft_expires_at_the_end_of_its_cut_off_day(pool: PgPool) {
     use kompleto::engine::outbox::{MessageStatus, Outbox, OutboxError};
-    use kompleto::kompleto::presend::KompletoChecks;
 
     let clock = clock();
     clock.advance(Duration::days(11)); // 1 Nov 2026, 17:00 Manila: October's first request
@@ -287,7 +291,7 @@ async fn d4_a_reminder_draft_expires_at_the_end_of_its_cut_off_day(pool: PgPool)
         .create(santos, &employer())
         .await
         .unwrap();
-    let scheduler = Scheduler::new(pool.clone(), clock.clone()).unwrap();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone(), common::upload_links(&pool, clock.clone())).unwrap();
     scheduler.run_once().await.unwrap();
     let id: uuid::Uuid = sqlx::query_scalar("select message_id from scheduled_drafts")
         .fetch_one(&pool)
@@ -295,7 +299,7 @@ async fn d4_a_reminder_draft_expires_at_the_end_of_its_cut_off_day(pool: PgPool)
         .unwrap();
     let outbox = Outbox::new(pool.clone(), clock.clone());
     let seen = outbox.get(santos, id.into()).await.unwrap().content_hash();
-    let checks = KompletoChecks::new(pool.clone(), clock.clone(), "http://kompleto.test");
+    let checks = common::kompleto_checks(&pool, clock.clone());
 
     // October's cut-off is Thu 5 Nov; 23:59 Manila is 15:59 UTC.
     clock.advance(Duration::days(4) + Duration::hours(6) + Duration::minutes(59)); // 5 Nov, 23:59 Manila
@@ -321,7 +325,7 @@ async fn d4_the_hourly_run_marks_overdue_drafts_expired(pool: PgPool) {
         .create(santos, &employer())
         .await
         .unwrap();
-    let scheduler = Scheduler::new(pool.clone(), clock.clone()).unwrap();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone(), common::upload_links(&pool, clock.clone())).unwrap();
     scheduler.run_once().await.unwrap();
 
     clock.advance(Duration::days(5)); // 6 Nov, past the cut-off day
@@ -373,14 +377,52 @@ async fn d1_a_period_with_its_four_drafts_costs_no_more_model_calls(pool: PgPool
         .unwrap();
     }
 
-    Scheduler::with_model(pool.clone(), clock.clone(), Some(model))
-        .unwrap()
-        .run_once()
-        .await
-        .unwrap();
+    Scheduler::with_model(
+        pool.clone(),
+        clock.clone(),
+        common::upload_links(&pool, clock.clone()),
+        Some(model),
+    )
+    .unwrap()
+    .run_once()
+    .await
+    .unwrap();
 
     assert!(
         server.received_requests().await.unwrap().is_empty(),
         "no model call for a full Period"
     );
+}
+
+#[sqlx::test]
+async fn f2_every_reminder_for_a_period_carries_the_clients_one_upload_link(pool: PgPool) {
+    let clock = clock();
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    Clients::new(pool.clone(), clock.clone())
+        .create(santos, &employer())
+        .await
+        .unwrap();
+
+    run_daily(&pool, &clock, date!(2026 - 11 - 06)).await;
+
+    let bodies: Vec<String> = sqlx::query_scalar(
+        "select m.body_text from scheduled_drafts s join outbox_messages m on m.id = s.message_id
+         where s.period = '2026-10' order by m.created_at",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let link = |body: &str| {
+        body.split_whitespace()
+            .find(|word| word.starts_with("http://kompleto.test/u/"))
+            .map(str::to_owned)
+    };
+    assert!(bodies.len() > 1, "{bodies:?}");
+    let first = link(&bodies[0]).unwrap();
+    assert!(bodies.iter().all(|body| link(body).as_deref() == Some(first.as_str())));
+    let open = common::upload_links(&pool, clock.clone())
+        .open(first.rsplit('/').next().unwrap())
+        .await
+        .unwrap();
+    assert_eq!((open.firm, open.period.as_str()), (santos, "2026-10"));
 }

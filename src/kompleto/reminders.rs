@@ -26,6 +26,7 @@ use super::drafting::{DraftBrief, Drafter, Tone};
 use super::firms::FirmId;
 use super::periods::{ClientCalendar, CollectionPeriod};
 use super::schedule::{MANILA, MAX_DRAFTS_PER_PERIOD, PlannedDraft, Slot, appears_at, planned_drafts};
+use super::upload_links::UploadLinks;
 use crate::engine::clock::Clock;
 use crate::engine::llm::AnthropicClient;
 use crate::engine::mail::Email;
@@ -53,21 +54,25 @@ pub struct Scheduler {
     clients: Clients,
     outbox: Outbox,
     drafter: Drafter<AnthropicClient>,
+    links: UploadLinks,
 }
 
 impl Scheduler {
-    /// A scheduler that writes every Draft from the template.
-    pub fn new(pool: PgPool, clock: Arc<dyn Clock>) -> Result<Self, CalendarError> {
-        Self::with_model(pool, clock, None)
+    /// A scheduler that writes every Draft from the template, with links
+    /// from `links`.
+    pub fn new(pool: PgPool, clock: Arc<dyn Clock>, links: UploadLinks) -> Result<Self, CalendarError> {
+        Self::with_model(pool, clock, links, None)
     }
 
     /// A scheduler that asks `model` for each Draft's wording, when there is one.
     pub fn with_model(
         pool: PgPool,
         clock: Arc<dyn Clock>,
+        links: UploadLinks,
         model: Option<AnthropicClient>,
     ) -> Result<Self, CalendarError> {
         Ok(Self {
+            links,
             drafter: Drafter::new(pool.clone(), clock.clone(), model),
             calendar: Calendar::built_in()?,
             clients: Clients::new(pool.clone(), clock.clone()),
@@ -164,6 +169,7 @@ impl Scheduler {
             return Ok(false);
         }
         let edits = self.clients.checklist_edits(firm, client.id).await?;
+        let upload_link = self.links.for_period(firm, client.id, &key, period.cut_off).await?;
         let brief = DraftBrief {
             business_name: client.details.business_name.clone(),
             contact_first_name: client.details.contact_first_name.clone(),
@@ -175,6 +181,7 @@ impl Scheduler {
                 Slot::FirstRequest => None,
                 Slot::Reminder { days_before } => Some(days_before),
             }),
+            upload_link,
         };
         // Drafted before the transaction, so a slow model holds no locks.
         let text = self.drafter.draft(firm, firm_name, &brief).await;

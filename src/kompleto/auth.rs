@@ -69,11 +69,11 @@ pub struct Auth {
 
 impl Auth {
     /// Logins whose links point at `base_url`, e.g. `https://app.getkompleto.com`.
-    pub fn new(pool: PgPool, clock: Arc<dyn Clock>, base_url: &str) -> Self {
+    pub fn new(pool: PgPool, clock: Arc<dyn Clock>, base_url: &str, checks: KompletoChecks) -> Self {
         Self {
             firms: Firms::new(pool.clone(), clock.clone()),
             outbox: Outbox::new(pool.clone(), clock.clone()),
-            checks: KompletoChecks::new(pool.clone(), clock.clone(), base_url),
+            checks,
             pool,
             clock,
             base_url: base_url.trim_end_matches('/').to_owned(),

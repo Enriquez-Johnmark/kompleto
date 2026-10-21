@@ -40,11 +40,15 @@ async fn a2_every_client_and_draft_page_is_not_found_for_another_firm(pool: PgPo
     };
     clients.create(santos, &employer).await.unwrap();
     app.clock.advance(Duration::days(11));
-    Scheduler::new(pool.clone(), app.clock.clone())
-        .unwrap()
-        .run_once()
-        .await
-        .unwrap();
+    Scheduler::new(
+        pool.clone(),
+        app.clock.clone(),
+        common::upload_links(&pool, app.clock.clone()),
+    )
+    .unwrap()
+    .run_once()
+    .await
+    .unwrap();
     let draft: Uuid = sqlx::query_scalar("select message_id from scheduled_drafts")
         .fetch_one(&pool)
         .await
@@ -74,10 +78,12 @@ async fn a2_every_client_and_draft_page_is_not_found_for_another_firm(pool: PgPo
         let own = app
             .request(route.method.clone(), &uri, Some(&santos_cookie), form)
             .await;
-        // A conflict means the page ran but an earlier page (say, discard)
-        // already changed the Draft.
+        // A conflict or a refusal means the page ran but an earlier page
+        // already changed the Draft (discarded it, or edited out its link).
         assert!(
-            own.status.is_success() || own.status.is_redirection() || own.status == StatusCode::CONFLICT,
+            own.status.is_success()
+                || own.status.is_redirection()
+                || [StatusCode::CONFLICT, StatusCode::UNPROCESSABLE_ENTITY].contains(&own.status),
             "{} {uri}: {}",
             route.method,
             own.status

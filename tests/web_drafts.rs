@@ -21,11 +21,15 @@ async fn firm_with_draft(app: &TestApp, name: &str) -> (FirmId, String, Uuid) {
     let (firm, cookie) = app.logged_in_firm(name).await;
     app.post("/clients", &cookie, EMPLOYER).await;
     app.clock.advance(Duration::days(11));
-    Scheduler::new(app.pool.clone(), app.clock.clone())
-        .unwrap()
-        .run_once()
-        .await
-        .unwrap();
+    Scheduler::new(
+        app.pool.clone(),
+        app.clock.clone(),
+        common::upload_links(&app.pool, app.clock.clone()),
+    )
+    .unwrap()
+    .run_once()
+    .await
+    .unwrap();
     let draft = sqlx::query_scalar("select message_id from scheduled_drafts where firm_id = $1")
         .bind(firm.as_uuid())
         .fetch_one(&app.pool)
@@ -200,11 +204,15 @@ async fn firm_with_two_drafts(app: &TestApp) -> (FirmId, String, Vec<Uuid>) {
     )
     .await;
     app.clock.advance(Duration::days(11));
-    Scheduler::new(app.pool.clone(), app.clock.clone())
-        .unwrap()
-        .run_once()
-        .await
-        .unwrap();
+    Scheduler::new(
+        app.pool.clone(),
+        app.clock.clone(),
+        common::upload_links(&app.pool, app.clock.clone()),
+    )
+    .unwrap()
+    .run_once()
+    .await
+    .unwrap();
     let drafts = sqlx::query_scalar("select message_id from scheduled_drafts where firm_id = $1 order by message_id")
         .bind(firm.as_uuid())
         .fetch_all(&app.pool)
@@ -316,8 +324,6 @@ async fn a2_batch_pages_refuse_another_firms_drafts(pool: PgPool) {
 async fn d7_a_reminder_blocked_at_sending_stays_on_the_drafts_page_with_its_reason(pool: PgPool) {
     use std::sync::Arc;
 
-    use kompleto::kompleto::presend::KompletoChecks;
-
     let app = TestApp::new(pool);
     let (firm, cookie, draft) = firm_with_draft(&app, "Santos Bookkeeping").await;
     let hash = hash_hex(&app, firm, draft).await;
@@ -336,11 +342,7 @@ async fn d7_a_reminder_blocked_at_sending_stays_on_the_drafts_page_with_its_reas
         )
         .await;
     assert_eq!(moved.status, StatusCode::SEE_OTHER);
-    let checks = Arc::new(KompletoChecks::new(
-        app.pool.clone(),
-        app.clock.clone(),
-        common::web::BASE_URL,
-    ));
+    let checks = Arc::new(common::kompleto_checks(&app.pool, app.clock.clone()));
     kompleto::engine::outbox::Sender::new(
         app.pool.clone(),
         common::RecordingMailer::idempotent(),

@@ -1,7 +1,7 @@
 //! Writing a Draft's text (D5, D6). The model writes only the wording: a
 //! subject, an opening and a closing. Kompleto inserts the facts itself
-//! (the exact Owed documents, the Cut-off and the firm's name), so the model
-//! can't garble or invent them. Without a model, or when its answer isn't
+//! (the exact Owed documents, the Cut-off, the Upload link and the firm's
+//! name), so the model can't garble or invent them. Without a model, or when its answer isn't
 //! valid, the Draft is a fixed template and labelled as one.
 //!
 //! The request carries only what ADR 0003 allows, in [`DraftBrief`], and is
@@ -66,6 +66,9 @@ pub struct DraftBrief {
     pub language: Language,
     /// How firm to be.
     pub tone: Tone,
+    /// The Client's Upload link for the Period. Inserted by Kompleto; never
+    /// sent to the model.
+    pub upload_link: String,
 }
 
 /// Who wrote a Draft's wording.
@@ -256,6 +259,13 @@ fn owed_list(brief: &DraftBrief) -> String {
     brief.owed.iter().map(|item| format!("- {item}\n")).collect()
 }
 
+fn upload_line(brief: &DraftBrief) -> String {
+    match brief.language {
+        Language::Taglish => format!("I-upload po dito: {}", brief.upload_link),
+        Language::English => format!("Upload them here: {}", brief.upload_link),
+    }
+}
+
 /// The model's wording around the facts Kompleto inserts.
 fn assemble(firm_name: &str, brief: &DraftBrief, wording: &Wording) -> DraftText {
     let cut_off = show_date(brief.cut_off);
@@ -266,9 +276,10 @@ fn assemble(firm_name: &str, brief: &DraftBrief, wording: &Wording) -> DraftText
     DraftText {
         subject: wording.subject.trim().to_owned(),
         body: format!(
-            "{}\n\n{}\n{deadline}\n\n{}\n{firm_name}\n",
+            "{}\n\n{}\n{}\n{deadline}\n\n{}\n{firm_name}\n",
             wording.opening.trim(),
             owed_list(brief),
+            upload_line(brief),
             wording.closing.trim()
         ),
         source: DraftSource::Ai,
@@ -277,11 +288,12 @@ fn assemble(firm_name: &str, brief: &DraftBrief, wording: &Wording) -> DraftText
 
 /// The fixed template (D5 fallback).
 pub fn template(firm_name: &str, brief: &DraftBrief) -> DraftText {
-    let (name, label, cut_off, list) = (
+    let (name, label, cut_off, list, upload) = (
         &brief.contact_first_name,
         &brief.period,
         show_date(brief.cut_off),
         owed_list(brief),
+        upload_line(brief),
     );
     let reminder = brief.tone != Tone::Friendly;
     let (subject, body) = match brief.language {
@@ -289,7 +301,7 @@ pub fn template(firm_name: &str, brief: &DraftBrief) -> DraftText {
             format!("Mga dokumento para sa {label}, bago {cut_off}"),
             format!(
                 "Hi {name},\n\n{}Para sa {label} BIR filings ninyo, paki-send po ang mga ito bago {cut_off}:\n\n\
-                 {list}\nSalamat po!\n{firm_name}\n",
+                 {list}\n{upload}\n\nSalamat po!\n{firm_name}\n",
                 if reminder { "Paalala lang po. " } else { "" }
             ),
         ),
@@ -297,7 +309,7 @@ pub fn template(firm_name: &str, brief: &DraftBrief) -> DraftText {
             format!("Documents for {label}, by {cut_off}"),
             format!(
                 "Hi {name},\n\n{}For your {label} BIR filings, please send us these by {cut_off}:\n\n\
-                 {list}\nThank you!\n{firm_name}\n",
+                 {list}\n{upload}\n\nThank you!\n{firm_name}\n",
                 if reminder { "A quick reminder. " } else { "" }
             ),
         ),

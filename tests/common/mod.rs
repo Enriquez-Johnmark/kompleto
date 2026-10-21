@@ -93,6 +93,21 @@ pub fn master_key() -> kompleto::engine::files::MasterKey {
     kompleto::engine::files::MasterKey::from_hex(&"ab".repeat(32)).unwrap()
 }
 
+/// Upload links signed with the test master key, for the test base URL.
+pub fn upload_links(pool: &sqlx::PgPool, clock: Arc<FixedClock>) -> kompleto::kompleto::upload_links::UploadLinks {
+    kompleto::kompleto::upload_links::UploadLinks::new(pool.clone(), clock, &master_key(), "http://kompleto.test")
+}
+
+/// Kompleto's pre-send rules, for the test base URL.
+pub fn kompleto_checks(pool: &sqlx::PgPool, clock: Arc<FixedClock>) -> kompleto::kompleto::presend::KompletoChecks {
+    kompleto::kompleto::presend::KompletoChecks::new(
+        pool.clone(),
+        clock.clone(),
+        "http://kompleto.test",
+        upload_links(pool, clock),
+    )
+}
+
 /// A sample Client: a non-VAT sole proprietor reminded in Taglish.
 pub fn nena() -> kompleto::kompleto::clients::NewClient {
     use kompleto::kompleto::calendar::BirForm;

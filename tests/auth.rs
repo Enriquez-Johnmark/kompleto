@@ -21,7 +21,8 @@ async fn setup(pool: &PgPool) -> (Auth, Arc<FixedClock>, FirmId) {
         .create("Santos Bookkeeping", "ana@santos.test")
         .await
         .unwrap();
-    (Auth::new(pool.clone(), clock.clone(), BASE_URL), clock, firm)
+    let checks = common::kompleto_checks(pool, clock.clone());
+    (Auth::new(pool.clone(), clock.clone(), BASE_URL, checks), clock, firm)
 }
 
 /// Every login email in the outbox: (recipient, status, body).
