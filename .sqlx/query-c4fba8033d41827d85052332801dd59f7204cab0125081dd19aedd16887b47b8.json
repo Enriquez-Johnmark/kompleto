@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select item_key from client_removed_items where firm_id = $1 and client_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "client_removed_items",
+            "name": "item_key"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c4fba8033d41827d85052332801dd59f7204cab0125081dd19aedd16887b47b8"
+}

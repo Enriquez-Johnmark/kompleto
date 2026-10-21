@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into client_removed_items (firm_id, client_id, item_key) values ($1, $2, $3)\n             on conflict do nothing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e678ec55e7aec30acfe60f162f19170323e225a65f2677d85111c379763a2713"
+}

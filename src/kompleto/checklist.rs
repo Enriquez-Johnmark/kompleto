@@ -21,6 +21,23 @@ pub enum Recurs {
 }
 
 impl Recurs {
+    /// Every choice, in display order.
+    pub const ALL: [Self; 3] = [Self::EveryPeriod, Self::QuarterEnd, Self::YearEnd];
+
+    /// The stored name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::EveryPeriod => "every-period",
+            Self::QuarterEnd => "quarter-end",
+            Self::YearEnd => "year-end",
+        }
+    }
+
+    /// Reads a stored name.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|recurs| recurs.as_str() == text)
+    }
+
     fn includes(self, month: Month) -> bool {
         match self {
             Self::EveryPeriod => true,

@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into client_extra_items (id, firm_id, client_id, label, recurs, created_at)\n             values ($1, $2, $3, $4, $5, $6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ac93826bd8ae6f3591ae1dd3c2e0fa46fd0f217c7fe0ca0ee8580ab32b31b0cb"
+}

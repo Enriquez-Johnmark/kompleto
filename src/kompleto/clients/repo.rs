@@ -11,6 +11,7 @@ use super::{Language, NewClient};
 use crate::engine::clock::Clock;
 use crate::engine::ids::id_type;
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
+use crate::kompleto::checklist::{ChecklistEdits, DEFAULT_ITEMS, ExtraItem, Recurs};
 use crate::kompleto::firms::FirmId;
 use crate::kompleto::periods::DueOverrides;
 use crate::kompleto::schedule::ReminderDays;
@@ -18,6 +19,10 @@ use crate::kompleto::schedule::ReminderDays;
 id_type!(
     /// One of a Firm's Clients.
     ClientId
+);
+id_type!(
+    /// A checklist item added for one Client.
+    ExtraItemId
 );
 
 /// A Client as stored.
@@ -52,6 +57,9 @@ pub enum ClientError {
     /// No such Client for this Firm, including another Firm's (A2).
     #[error("client not found")]
     NotFound,
+    /// A value that can't be stored, with the reason.
+    #[error("{0}")]
+    Invalid(String),
     /// The Firm already has a Client with this business name.
     #[error("you already have a client named {0:?}")]
     DuplicateName(String),
@@ -230,6 +238,128 @@ impl Clients {
                 ))
             })
             .collect())
+    }
+
+    /// Stops asking this Client for a default checklist item.
+    pub async fn remove_default_item(&self, firm: FirmId, id: ClientId, key: &str) -> Result<(), ClientError> {
+        if !DEFAULT_ITEMS.iter().any(|item| item.key == key) {
+            return Err(ClientError::Invalid(format!("no checklist item {key:?}")));
+        }
+        self.ensure_exists(firm, id).await?;
+        sqlx::query!(
+            "insert into client_removed_items (firm_id, client_id, item_key) values ($1, $2, $3)
+             on conflict do nothing",
+            firm.as_uuid(),
+            id.as_uuid(),
+            key,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Asks this Client for a removed default item again.
+    pub async fn restore_default_item(&self, firm: FirmId, id: ClientId, key: &str) -> Result<(), ClientError> {
+        self.ensure_exists(firm, id).await?;
+        sqlx::query!(
+            "delete from client_removed_items where firm_id = $1 and client_id = $2 and item_key = $3",
+            firm.as_uuid(),
+            id.as_uuid(),
+            key,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Adds an item to this Client's checklist.
+    pub async fn add_extra_item(
+        &self,
+        firm: FirmId,
+        id: ClientId,
+        item: &ExtraItem,
+    ) -> Result<ExtraItemId, ClientError> {
+        let label = item.label.trim();
+        if label.is_empty() || label.chars().count() > 120 || label.chars().any(char::is_control) {
+            return Err(ClientError::Invalid("an item is 1 to 120 characters".to_owned()));
+        }
+        self.ensure_exists(firm, id).await?;
+        let item_id = ExtraItemId::new();
+        sqlx::query!(
+            "insert into client_extra_items (id, firm_id, client_id, label, recurs, created_at)
+             values ($1, $2, $3, $4, $5, $6)",
+            item_id.as_uuid(),
+            firm.as_uuid(),
+            id.as_uuid(),
+            label,
+            item.recurs.as_str(),
+            self.clock.now(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(item_id)
+    }
+
+    /// Removes an item added for this Client.
+    pub async fn delete_extra_item(&self, firm: FirmId, id: ClientId, item: ExtraItemId) -> Result<(), ClientError> {
+        let deleted = sqlx::query!(
+            "delete from client_extra_items where firm_id = $1 and client_id = $2 and id = $3",
+            firm.as_uuid(),
+            id.as_uuid(),
+            item.as_uuid(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if deleted.rows_affected() == 0 {
+            return Err(ClientError::NotFound);
+        }
+        Ok(())
+    }
+
+    /// The items added for this Client, oldest first.
+    pub async fn extra_items(&self, firm: FirmId, id: ClientId) -> Result<Vec<(ExtraItemId, ExtraItem)>, ClientError> {
+        self.ensure_exists(firm, id).await?;
+        let rows = sqlx::query!(
+            "select id, label, recurs from client_extra_items
+             where firm_id = $1 and client_id = $2 order by created_at, id",
+            firm.as_uuid(),
+            id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let recurs = Recurs::parse(&row.recurs)?;
+                Some((
+                    row.id.into(),
+                    ExtraItem {
+                        label: row.label,
+                        recurs,
+                    },
+                ))
+            })
+            .collect())
+    }
+
+    /// How this Client's checklist differs from the default.
+    pub async fn checklist_edits(&self, firm: FirmId, id: ClientId) -> Result<ChecklistEdits, ClientError> {
+        let extra = self
+            .extra_items(firm, id)
+            .await?
+            .into_iter()
+            .map(|(_, item)| item)
+            .collect();
+        let removed = sqlx::query_scalar!(
+            "select item_key from client_removed_items where firm_id = $1 and client_id = $2",
+            firm.as_uuid(),
+            id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .collect();
+        Ok(ChecklistEdits { removed, extra })
     }
 
     /// `NotFound` unless the Client exists and is this Firm's.

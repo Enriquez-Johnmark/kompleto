@@ -5,7 +5,7 @@ mod repo;
 
 use std::fmt;
 
-pub use repo::{Client, ClientError, ClientId, Clients, ScheduleSettings};
+pub use repo::{Client, ClientError, ClientId, Clients, ExtraItemId, ScheduleSettings};
 
 use super::calendar::BirForm;
 

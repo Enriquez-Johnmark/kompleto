@@ -156,3 +156,50 @@ async fn d1_a_clients_schedule_can_be_changed_and_paused(pool: PgPool) {
         Err(ClientError::NotFound)
     ));
 }
+
+#[sqlx::test]
+async fn b4_a_clients_checklist_edits_are_kept_for_that_client(pool: PgPool) {
+    use kompleto::kompleto::checklist::{ExtraItem, Recurs};
+
+    let clients = Clients::new(pool.clone(), clock());
+    let (santos, reyes) = (firm(&pool, "Santos Bookkeeping").await, firm(&pool, "Reyes CPA").await);
+    let id = clients.create(santos, &nena()).await.unwrap();
+    let other = clients.create(santos, &numbered(1)).await.unwrap();
+    let lazada = ExtraItem {
+        label: "Lazada payout reports".to_owned(),
+        recurs: Recurs::EveryPeriod,
+    };
+
+    clients
+        .remove_default_item(santos, id, "bank-statements")
+        .await
+        .unwrap();
+    let extra = clients.add_extra_item(santos, id, &lazada).await.unwrap();
+
+    let edits = clients.checklist_edits(santos, id).await.unwrap();
+    assert!(edits.removed.contains("bank-statements"));
+    assert_eq!(edits.extra, std::slice::from_ref(&lazada));
+    assert_eq!(
+        clients.checklist_edits(santos, other).await.unwrap(),
+        Default::default()
+    );
+    assert!(matches!(
+        clients.add_extra_item(reyes, id, &lazada).await,
+        Err(ClientError::NotFound)
+    ));
+    assert!(matches!(
+        clients.delete_extra_item(reyes, id, extra).await,
+        Err(ClientError::NotFound)
+    ));
+    assert!(matches!(
+        clients.remove_default_item(santos, id, "no-such-item").await,
+        Err(ClientError::Invalid(_))
+    ));
+
+    clients
+        .restore_default_item(santos, id, "bank-statements")
+        .await
+        .unwrap();
+    clients.delete_extra_item(santos, id, extra).await.unwrap();
+    assert_eq!(clients.checklist_edits(santos, id).await.unwrap(), Default::default());
+}
