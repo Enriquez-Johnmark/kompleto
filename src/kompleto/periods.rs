@@ -1,6 +1,7 @@
 //! Collection Periods (B4): a Client is asked once a month for everything
 //! its forms need for the month that just ended. Its Cut-off is the earliest
-//! Due date among those forms, minus the Firm's cut-off offset.
+//! Due date among those forms, minus the Firm's cut-off offset, but never
+//! before the day the Period opens.
 
 use std::collections::HashMap;
 
@@ -118,7 +119,9 @@ impl ClientCalendar<'_> {
             month,
             label,
             filings,
-            cut_off: earliest - Duration::days(i64::from(self.cut_off_offset_days)),
+            // Never before the documents exist, or no Draft could be sent.
+            cut_off: (earliest - Duration::days(i64::from(self.cut_off_offset_days)))
+                .max(TaxPeriod::Month { year, month }.last_day() + Duration::days(1)),
         })
     }
 
@@ -215,6 +218,25 @@ mod tests {
         assert_eq!(other_client.filings[0].due, date!(2026 - 12 - 10));
         let other_month = period(&forms, &overrides, 2026, Month::October).unwrap();
         assert_eq!(other_month.filings[0].due, date!(2026 - 11 - 10));
+    }
+
+    #[test]
+    fn b4_the_cut_off_is_never_before_the_period_opens() {
+        let calendar = Calendar::built_in().unwrap();
+        let forms = [F1601C];
+        let client = ClientCalendar {
+            calendar: &calendar,
+            forms: &forms,
+            overrides: &DueOverrides::new(),
+            cut_off_offset_days: 10,
+        };
+
+        // 1601-C for November is due 10 Dec; 10 days earlier is 30 Nov,
+        // before November's documents can exist.
+        let november = client.period(2026, Month::November).unwrap();
+
+        assert_eq!(november.cut_off, date!(2026 - 12 - 01));
+        assert_eq!(november.cut_off, november.opens_on());
     }
 
     #[test]
