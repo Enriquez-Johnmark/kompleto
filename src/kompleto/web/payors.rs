@@ -2,7 +2,7 @@
 
 use axum::extract::{Path, State};
 use axum::http::Method;
-use axum::response::Response;
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{MethodRouter, post};
 use axum::{Form, Router};
 use serde::Deserialize;
@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::clients::{back_to, refuse};
 use super::{AppState, CurrentFirm, ScopedRoute, WebError};
+use crate::kompleto::calendar::TaxPeriod;
 use crate::kompleto::clients::{ClientError, ClientId};
 use crate::kompleto::payors::PayorId;
 
@@ -42,6 +43,8 @@ pub(super) fn payor_pages() -> Vec<(ScopedRoute, MethodRouter<AppState>)> {
 #[derive(Deserialize)]
 struct PayorForm {
     name: String,
+    /// Set when added from the tracker, which the Firm goes back to.
+    quarter: Option<String>,
 }
 
 async fn add(
@@ -52,7 +55,12 @@ async fn add(
 ) -> Result<Response, WebError> {
     let id = ClientId::from(id);
     match state.payors.add(firm, id, &form.name).await {
-        Ok(_) => Ok(back_to(id)),
+        Ok(_) => match form.quarter.as_deref().and_then(TaxPeriod::parse_key) {
+            Some(quarter @ TaxPeriod::Quarter { .. }) => {
+                Ok(Redirect::to(&format!("/tracker?quarter={}", quarter.key())).into_response())
+            }
+            _ => Ok(back_to(id)),
+        },
         Err(err @ (ClientError::Invalid(_) | ClientError::DuplicateName(_))) => {
             refuse(&state, firm, id, format!("{err}.")).await
         }

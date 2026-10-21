@@ -16,6 +16,7 @@ mod login;
 mod payors;
 mod replies;
 mod settings;
+mod tracker;
 mod upload;
 mod uploads;
 
@@ -193,6 +194,7 @@ pub fn router(state: AppState) -> Router {
         .merge(hooks::routes())
         .merge(replies::routes())
         .merge(payors::routes())
+        .merge(tracker::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
