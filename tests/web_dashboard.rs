@@ -74,6 +74,22 @@ async fn h1_the_dashboard_lists_clients_nearest_cut_off_first_with_whats_missing
     .await
     .unwrap();
 
+    // Charlie's address bounced permanently.
+    let charlie: uuid::Uuid = sqlx::query_scalar("select id from clients where business_name = 'Charlie Foods'")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "insert into bounces (id, firm_id, client_id, message_id, address, kind, at)
+         values ($1, $2, $3, $1, 'nena@example.test', 'bounce', now())",
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(santos.as_uuid())
+    .bind(charlie)
+    .execute(&app.pool)
+    .await
+    .unwrap();
+
     let page = app.get("/", &cookie).await;
 
     assert_eq!(page.status, StatusCode::OK);
@@ -90,4 +106,7 @@ async fn h1_the_dashboard_lists_clients_nearest_cut_off_first_with_whats_missing
     assert!(!alpha_row.contains("GCash, Maya"), "already uploaded: {alpha_row}");
     let bravo_row = &page.body[at("Bravo Hardware")..at("Alpha Trading")];
     assert!(bravo_row.contains("replied"), "{bravo_row}");
+    let charlie_row = &page.body[at("Charlie Foods")..];
+    assert!(charlie_row.contains("email bounced"), "g3: {charlie_row}");
+    assert!(!alpha_row.contains("email bounced"));
 }
