@@ -8,6 +8,7 @@
 //!   this stops cross-site form posts.
 
 mod clients;
+mod import;
 mod login;
 
 use std::sync::Arc;
@@ -43,7 +44,6 @@ pub struct AppState {
     auth: Auth,
     firms: Firms,
     clients: Clients,
-    #[expect(dead_code, reason = "used by the pages added next")]
     xlsx: XlsxReader,
     /// Wakes the outbox sender so a login email goes out at once.
     wake_sender: Arc<Notify>,
@@ -86,6 +86,7 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(|| async { Redirect::to("/clients") }))
         .merge(login::routes())
         .merge(clients::routes())
+        .merge(import::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Import clients · Kompleto{% endblock %}
+{% block body %}
+{% include "nav.html" %}
+<h1>Import clients</h1>
+{% if let Some(error) = error %}<p class="error">Nothing was added: {{ error }}</p>{% endif %}
+<p>Upload a .csv or .xlsx file with these columns in the first row: <strong>Business name, Contact first name, Email, Language, Forms</strong>.
+Language is Taglish or English. Forms are separated by commas, e.g. <code>2550Q, 0619-E, 1601-EQ</code>. Up to 500 rows and 2 MB.</p>
+<p><a href="/import/template.csv">Download a template</a></p>
+<form method="post" action="/import" enctype="multipart/form-data">
+  <label for="file">File</label>
+  <input type="file" id="file" name="file" accept=".csv,.xlsx" required>
+  <p><button>Check the file</button></p>
+</form>
+<p class="muted">You'll see every row before anything is added.</p>
+{% endblock %}
