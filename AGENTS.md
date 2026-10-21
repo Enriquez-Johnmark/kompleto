@@ -74,7 +74,7 @@ The owner is the only developer: work directly on `main`. No branches, no pull r
 
 1. Follow the build order in `docs/architecture.md`, one milestone at a time.
 2. Test first, using the `tdd` skill: write one criterion's test, see it fail, then make it pass.
-3. **Small commits.** Each commit is one behaviour (one test plus the code that makes it pass) or one small refactor or doc change, aiming for under ~150 changed lines excluding `.sqlx/` and `Cargo.lock`. Messages are imperative and describe the behaviour, e.g. "Add CSV client import with per-row errors".
+3. **Small commits.** Each commit is one behaviour (one test plus the code that makes it pass) or one small refactor or doc change, aiming for under ~150 changed lines excluding `.sqlx/` and `Cargo.lock`. Messages are imperative and describe the behaviour, e.g. "Add CSV client import with per-row errors". Commit messages carry no AI attribution trailers such as "Co-Authored-By" (owner's choice).
 4. Before every commit: `cargo fmt --check`, `cargo clippy --all-targets --all-features --locked -- -D warnings` and `cargo test --all-features --locked` all pass. If SQL changed, run `cargo sqlx prepare -- --all-targets --all-features` and commit `.sqlx/` with it.
 5. Push to `origin main` after each commit. If CI goes red, fixing it is the next commit.
 6. At the end of a milestone, run the `code-review` skill, fix findings in small commits, and tell the owner how to try it.
