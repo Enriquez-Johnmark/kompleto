@@ -14,8 +14,8 @@ Each gate needs the owner's explicit "yes"; an approval for one phase never carr
 | 6. P1 spec & acceptance criteria | done (`docs/product/p1-spec.md`), except confirming the AI model via the Taglish test |
 | 7. Rust architecture (engine vs product split) | done (`docs/architecture.md`) |
 | 8. Project rules, glossary & ADRs | done (`GLOSSARY.md`, `docs/adr/`, rules below) |
-| 9. Implementation readiness gate | **awaiting the owner's go** |
-| 10+. Build engine + P1 (Rust backend; server-rendered pages first, React later) | blocked on 9 |
+| 9. Implementation readiness gate | done (2026-10-21) |
+| 10+. Build engine + P1 (Rust backend; server-rendered pages first, React later) | **in progress**: M1 done; M2 next |
 
 **No application code exists or gets written until the Phase 9 gate passes.** Research, docs and throwaway prototypes that answer a specific question are in scope; prototypes live in `prototypes/<question>/` and are deleted once their answer is recorded.
 
