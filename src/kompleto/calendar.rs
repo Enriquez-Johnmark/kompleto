@@ -2,11 +2,12 @@
 //! and when each is due. The rules live in one data file,
 //! `data/bir-calendar.toml`, so a change to them is one edit.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 
 use serde::Deserialize;
-use time::{Date, Duration, Month};
+use time::macros::format_description;
+use time::{Date, Duration, Month, Weekday};
 
 /// The calendar's rules, as written in `data/bir-calendar.toml`.
 const BUILT_IN: &str = include_str!("../../data/bir-calendar.toml");
@@ -149,6 +150,9 @@ impl fmt::Display for TaxPeriod {
 pub struct DueDate {
     /// The date the law sets.
     pub statutory: Date,
+    /// The date filing is actually due: the statutory date, moved past
+    /// weekends and holidays.
+    pub date: Date,
 }
 
 /// The built-in calendar is broken; a test keeps this from shipping.
@@ -162,10 +166,13 @@ pub enum CalendarError {
     Invalid(String),
 }
 
-/// The BIR calendar: every form's rule.
+/// The BIR calendar: every form's rule and the national holidays.
 #[derive(Debug)]
 pub struct Calendar {
     rules: HashMap<BirForm, FormRule>,
+    holidays: BTreeSet<Date>,
+    holidays_known_from: Date,
+    holidays_known_until: Date,
 }
 
 impl Calendar {
@@ -189,7 +196,32 @@ impl Calendar {
         if let Some(missing) = BirForm::ALL.into_iter().find(|form| !rules.contains_key(form)) {
             return Err(CalendarError::Invalid(format!("{missing} has no rule")));
         }
-        Ok(Self { rules })
+        let holidays = file
+            .holidays
+            .dates
+            .iter()
+            .map(|holiday| parse_date(&holiday.date))
+            .collect::<Result<_, _>>()?;
+        Ok(Self {
+            rules,
+            holidays,
+            holidays_known_from: parse_date(&file.holidays.known_from)?,
+            holidays_known_until: parse_date(&file.holidays.known_until)?,
+        })
+    }
+
+    /// True if the national holidays are known for every day from `from`
+    /// to `until`, so due dates in that range move correctly.
+    pub fn holidays_cover(&self, from: Date, until: Date) -> bool {
+        self.holidays_known_from <= from && until <= self.holidays_known_until
+    }
+
+    /// `date`, or the next working day if it's a weekend or national holiday.
+    pub fn next_working_day(&self, mut date: Date) -> Date {
+        while matches!(date.weekday(), Weekday::Saturday | Weekday::Sunday) || self.holidays.contains(&date) {
+            date = date.next_day().unwrap_or(date);
+        }
+        date
     }
 
     /// When `form` is due for `period`, or `None` if the form isn't filed
@@ -203,8 +235,10 @@ impl Calendar {
             (Month::December, Some(december)) => december,
             _ => rule.due,
         };
+        let statutory = due.after(period.last_day());
         Some(DueDate {
-            statutory: due.after(period.last_day()),
+            statutory,
+            date: self.next_working_day(statutory),
         })
     }
 }
@@ -213,6 +247,29 @@ impl Calendar {
 #[serde(deny_unknown_fields)]
 struct CalendarFile {
     form: Vec<FormRule>,
+    holidays: Holidays,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Holidays {
+    known_from: String,
+    known_until: String,
+    dates: Vec<Holiday>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Holiday {
+    date: String,
+    #[expect(dead_code, reason = "documents the holiday in the data file")]
+    name: String,
+}
+
+/// Reads a `YYYY-MM-DD` date from the data file.
+fn parse_date(text: &str) -> Result<Date, CalendarError> {
+    Date::parse(text, format_description!("[year]-[month]-[day]"))
+        .map_err(|err| CalendarError::Invalid(format!("bad date {text:?}: {err}")))
 }
 
 #[derive(Debug, Deserialize)]
@@ -324,6 +381,24 @@ mod tests {
         ];
         for (form, period, expected) in cases {
             assert_eq!(statutory(form, period), Some(expected), "{form} {period}");
+        }
+    }
+
+    #[test]
+    fn b3_due_dates_on_weekends_and_holidays_move_to_the_next_working_day() {
+        let cases = [
+            (BirForm::F1601C, m(2026, Month::November), date!(2026 - 12 - 10)),
+            (BirForm::F2550Q, q(2026, 3), date!(2026 - 10 - 26)),
+            (BirForm::F1601EQ, q(2026, 3), date!(2026 - 11 - 03)),
+            (BirForm::F1702Q, q(2026, 3), date!(2026 - 12 - 01)),
+            (BirForm::F1601EQ, q(2026, 4), date!(2027 - 02 - 01)),
+            (BirForm::F1604C, TaxPeriod::Year(2026), date!(2027 - 02 - 01)),
+            (BirForm::F1701Q, q(2027, 1), date!(2027 - 05 - 17)),
+            (BirForm::F1702Q, q(2027, 2), date!(2027 - 08 - 31)),
+        ];
+        for (form, period, expected) in cases {
+            let due = calendar().due_date(form, period).map(|due| due.date);
+            assert_eq!(due, Some(expected), "{form} {period}");
         }
     }
 

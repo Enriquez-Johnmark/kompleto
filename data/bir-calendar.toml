@@ -91,3 +91,41 @@ name = "Annual information return of creditable taxes withheld (expanded)"
 covers = "annual"
 due = { months_after = 3, day = 1 }
 source = "RR 11-2018"
+
+# National holidays. A due date on a Saturday, Sunday or one of these moves
+# to the next working day (EO 292 Book I s.28; RMC 65-2016). Local holidays
+# are ignored; the bookkeeper overrides a client's date for those.
+# 2026: Proclamation No. 1006. 2027: Proclamation No. 1427 (news reports;
+# Official Gazette text not found). Eid'l Fitr and Eid'l Adha 2027 are added
+# when proclaimed.
+[holidays]
+known_from = "2026-10-01"
+known_until = "2027-12-31"
+dates = [
+    { date = "2026-11-01", name = "All Saints' Day" },
+    { date = "2026-11-02", name = "All Souls' Day" },
+    { date = "2026-11-30", name = "Bonifacio Day" },
+    { date = "2026-12-08", name = "Feast of the Immaculate Conception" },
+    { date = "2026-12-24", name = "Christmas Eve" },
+    { date = "2026-12-25", name = "Christmas Day" },
+    { date = "2026-12-30", name = "Rizal Day" },
+    { date = "2026-12-31", name = "Last day of the year" },
+    { date = "2027-01-01", name = "New Year's Day" },
+    { date = "2027-02-06", name = "Chinese New Year" },
+    { date = "2027-03-25", name = "Maundy Thursday" },
+    { date = "2027-03-26", name = "Good Friday" },
+    { date = "2027-03-27", name = "Black Saturday" },
+    { date = "2027-04-09", name = "Araw ng Kagitingan" },
+    { date = "2027-05-01", name = "Labor Day" },
+    { date = "2027-06-12", name = "Independence Day" },
+    { date = "2027-08-21", name = "Ninoy Aquino Day" },
+    { date = "2027-08-30", name = "National Heroes Day" },
+    { date = "2027-11-01", name = "All Saints' Day" },
+    { date = "2027-11-02", name = "All Souls' Day" },
+    { date = "2027-11-30", name = "Bonifacio Day" },
+    { date = "2027-12-08", name = "Feast of the Immaculate Conception" },
+    { date = "2027-12-24", name = "Christmas Eve" },
+    { date = "2027-12-25", name = "Christmas Day" },
+    { date = "2027-12-30", name = "Rizal Day" },
+    { date = "2027-12-31", name = "Last day of the year" },
+]
