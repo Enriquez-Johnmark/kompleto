@@ -47,6 +47,21 @@ draft ──approve──► approved ──► sending ──► sent
 4. **Job queue** (enqueue → claim → finish, concurrent claimers).
 5. **Engine boundary**: a test fails if `src/engine` uses `kompleto` (ADR 0001).
 
+### Test seams for M2 (2026-10-21)
+
+1. **Calendar and schedule logic**, pure functions with no database or clock: due dates, roll-forward, extensions, overrides, Cut-off, reminder dates and the cap. Table-driven: B3, B4, D1's dates.
+2. **Repositories** against real Postgres (`#[sqlx::test]`), every function taking a `FirmId`: B1, B2's all-or-nothing import, A2 at the data layer.
+3. **Import parser**: bytes in, valid rows and per-row errors out; `.xlsx` parsed in a child process with time and memory limits, tested with a hostile file: B2.
+4. **The web app in-process** (`Router` + `oneshot`, no port) with the test clock and a recording mailer, following cookies through login: A1, B1, B4's pages.
+5. **A2 route sweep**: the router is built from one list of Firm-owned routes; a test requests each with another firm's IDs and must get "not found".
+6. **Scheduler with the test clock**: step day by day through a quarter, run the scheduler each day, check Drafts appear on the expected days, never more than 4 per client per Period, and a rerun creates nothing: D1.
+
+Implementation notes (M2):
+- Login emails go through the outbox, auto-approved as `system:login`; only that kind of message may be auto-approved.
+- The BIR calendar is one data file, `data/bir-calendar.toml`, built into the binary: each form's rule with its source, the holidays and nationwide extensions. The program warns at startup if the holidays don't cover the next 12 months.
+- An hourly scheduler sweeps all firms and creates the Drafts that are due; a unique (client, Period, slot) constraint enforces the cap.
+- Manila time is a fixed UTC+8 offset (no daylight saving since 1978), so no time-zone database is needed.
+
 The Engine scopes data by **Tenant** (`GLOSSARY.md`); Kompleto's `FirmId` maps to it.
 
 ### Firm isolation (2026-10-21)
@@ -114,6 +129,7 @@ Pinned versions from `docs/research/rust-crates.md`:
 | Logs | tracing 0.1 + tracing-subscriber 0.3 |
 | Tests | `#[sqlx::test]`, insta, wiremock |
 | Dependency checks | cargo-deny on every build |
+| Added at M2 (2026-10-21) | toml (calendar file), encoding_rs (Windows-1252 CSV), tower (tests), rustix (limits on the Excel child process) |
 
 Lookalike crates to avoid: `resend`, `resend-rust`, `mailparser`.
 

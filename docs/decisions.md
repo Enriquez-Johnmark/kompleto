@@ -4,6 +4,17 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **M2 round.** The owner accepted all 22 recommendations ("go ahead"):
+  - a session-start hook that starts Docker, falls back to `mirror.gcr.io`, migrates and installs sqlx-cli; and removing the stale duplicate sections from `AGENTS.md`;
+  - six M2 test seams (`docs/architecture.md`);
+  - firms created by a command; login emails through the outbox, auto-approved as `system:login` (Reminders never); 15-minute single-use hashed tokens; 30-day sessions; at most 5 login emails per firm per hour;
+  - client fields, CSV/XLSX import rules and a two-step preview-then-confirm import;
+  - the built-in calendar's forms, eBIRForms dates, weekend and holiday roll-forward, one calendar data file with nationwide extensions, and one-off per-client due-date overrides;
+  - one collection Period per month (per quarter for quarterly-only clients), the Cut-off rule, the default Owed documents and where chasing starts;
+  - the reminder timing, template drafts until M3, and per-client schedule control;
+  - the M2 pages and crates.
+
+  Recorded in full in `docs/product/p1-spec.md` and `docs/architecture.md`. Sources for the calendar: `docs/research/bir-calendar.md`.
 - **Commit straight to main.** The owner is the only developer: no branches or pull requests from M2 on. Small commits (one behaviour each), every commit green on fmt, clippy and tests, pushed to `main`, with CI fixed immediately if it goes red. This supersedes the Phase 8 "branch per milestone, PR, merge on the owner's word" workflow.
 - **Build in the cloud.** From M2 on, coding happens in Claude Code on the web (4 vCPU / 16 GB VMs), with a start-up hook for Postgres, Mailpit and the pinned Rust. If that fails, the fallback is local builds with lighter settings.
 - **M1 test seams, Tenant, unconfirmed sends.** Five test seams for M1. "Tenant" is the Engine's word for the owner of data (a Firm in Kompleto). A send whose outcome is unknown, through a provider that can't block duplicates (or past Resend's 24-hour window), becomes "unconfirmed" and is never retried automatically. Recorded in `docs/architecture.md`.

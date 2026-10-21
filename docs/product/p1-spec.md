@@ -34,15 +34,43 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 - **No public sign-up during pilots.** We invite each bookkeeper and create their account.
 - **Login by one-time email link**, so there are no passwords to store.
 - **One login per firm.**
+- **Details (M2 round, 2026-10-21):**
+  - We create firms with a command (`kompleto firm add`); there is no sign-up page.
+  - Login links work once, for 15 minutes; only a hash of the token is stored.
+  - A session lasts 30 days.
+  - At most 5 login emails per firm per hour. Extra requests see the same screen and get no email.
 
 ### Adding clients (2026-10-21)
 
 - One at a time through a form, or by uploading a **CSV/Excel file** with business name, contact name, email and forms filed.
+- **Details (M2 round, 2026-10-21):**
+  - **Fields:** business name (unique within a firm, ignoring case), contact first name, email (may repeat across clients), reminder language (Taglish or English) and forms filed. One Contact per Client. No TIN, phone, address or amounts are stored.
+  - **Files:** `.csv` (UTF-8, or Windows-1252 as a fallback) or `.xlsx` (first sheet). Columns are found by header, ignoring case: Business name, Contact first name, Email, Language, Forms. At most 500 rows and 2 MB. A template file can be downloaded.
+  - **Two steps:** uploading shows a preview of valid rows and each invalid row with its reason; "Add N clients" adds every valid row in one transaction. Nothing is written before then, and an error during it undoes the whole import.
 
 ### BIR deadline calendar (2026-10-21)
 
 - One **built-in calendar** of BIR forms and due dates, maintained by us; we apply BIR extensions when they're announced.
 - The bookkeeper ticks which forms each client files and can override a date for one client.
+- **Details (M2 round, 2026-10-21; sources in `docs/research/bir-calendar.md`):**
+  - **Forms:** 0619-E, 1601-C, 1601-EQ, 2550Q, 2551Q, 1701Q, 1702Q, 1701/1701A, 1702 (RT/EX/MX), 1604-C and 1604-E. Fiscal-year corporations are not built in.
+  - **Dates:** the manual/eBIRForms due dates. eFPS filers' staggered dates aren't built in; the bookkeeper overrides them per client.
+  - **Weekends and holidays:** a due date on a Saturday, Sunday or national holiday moves to the next working day (EO 292 s.28; RMC 65-2016). Holidays come from each year's proclamation. Local holidays are ignored.
+  - **One data file:** the forms' rules, the holidays and nationwide extensions live in one data file in the repo; applying an extension is one entry plus a deploy. Regional extensions are applied as per-client overrides.
+  - **Per-client override:** the Due date of one form for one Period for one Client. Overrides that repeat every month come later.
+
+### Collection periods and documents (M2 round, 2026-10-21)
+
+- **One collection per month.** A Client is asked once a month for the month that just ended. That Period covers all of the client's forms whose period ends that month: monthly forms every month, quarterly forms in March, June, September and December, annual forms in December. A client that files only quarterly forms is asked once per quarter.
+- **Cut-off** = the earliest Due date among the Period's forms, minus the cut-off offset (5 days by default, set per firm and changeable per client).
+- **Default Owed documents** (the bookkeeper edits them per Client; edits apply to future Periods). This list is a synthesis, not an official BIR list:
+  - every month: sales invoices issued (including cancelled ones); purchase and expense invoices and receipts; bank and e-wallet (GCash, Maya) statements;
+  - with 1601-C: payroll register and SSS, PhilHealth and Pag-IBIG reports;
+  - with 0619-E or 1601-EQ: copies of 2307s issued to suppliers, with payment vouchers;
+  - at quarter end: 2307s received from customers (one item until M5 lists Payors);
+  - in December, with an annual form: year-end inventory count, fixed-asset purchases and loan statements.
+- Items say "invoices", not "official receipts" (RR 7-2024).
+- **Starting point:** a newly added client is first chased for the first Period whose Cut-off is still ahead.
 
 ### Reminder schedule (2026-10-21)
 
@@ -51,6 +79,11 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 - **Limit:** at most **4 messages per client per period**.
 - **Stops:** when everything is uploaded, or when the client replies.
 - **Control:** the bookkeeper can change the schedule per client.
+- **Details (M2 round, 2026-10-21):**
+  - The first-request Draft appears the day after the Period ends; reminder Drafts 7, 3 and 1 days before the Cut-off. All appear at 07:00 Manila time. Weekends don't move them.
+  - A reminder that would fall on or before the first request is skipped.
+  - Per client, the bookkeeper can change the cut-off offset, choose up to 3 reminder days (each 1–14 days before the Cut-off), or pause the client. The limit of 4 can't be raised. Changes affect only Drafts not yet created.
+  - Until M3, Drafts are fixed templates in the client's language listing the Owed documents and the Cut-off.
 
 ### Approval (2026-10-21)
 
