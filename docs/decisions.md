@@ -4,6 +4,11 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **After the M5 code review.** The owner accepted four recommendations ("go ahead"):
+  - **only a signed reply stops Reminders:** mail matched by the sender's address alone (no reply code) is still kept, shown and announced to the Firm, but doesn't stop Reminders, because a sender address can be forged. Refines the M5 round's "a human Reply cancels the Period's waiting Reminders";
+  - **firm-isolation exceptions** gain the inbound-email and delivery-event handlers, which find the Firm from a signed code or the provider's message ID before any Firm is known;
+  - **M5 is done** once the first item is built;
+  - **M6 starts with a grilling round**, at ₱0 until the agreed domain purchase.
 - **M5 round.** The owner accepted all 14 recommendations ("go ahead"):
   - the app gets a secured endpoint for raw inbound email now; which provider delivers it (Cloudflare Email Routing or Resend inbound) is chosen at M6;
   - each Reminder's reply address carries a signed code naming its Client and Period; mail without a code matches only when exactly one Client has the sender's address; unmatched mail keeps no content;
