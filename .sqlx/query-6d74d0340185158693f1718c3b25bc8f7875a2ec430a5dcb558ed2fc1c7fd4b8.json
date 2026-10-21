@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select count(*) as \"drafts!\", coalesce(bool_or(slot = $4), false) as \"this_slot!\",\n                      exists (select 1 from replies r\n                              where r.firm_id = $1 and r.client_id = $2 and r.period = $3 and not r.automatic)\n                          as \"replied!\"\n               from scheduled_drafts where firm_id = $1 and client_id = $2 and period = $3",
+  "query": "select count(*) as \"drafts!\", coalesce(bool_or(slot = $4), false) as \"this_slot!\",\n                      exists (select 1 from replies r\n                              where r.firm_id = $1 and r.client_id = $2 and r.period = $3 and not r.automatic and r.signed)\n                          as \"replied!\"\n               from scheduled_drafts where firm_id = $1 and client_id = $2 and period = $3",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       null
     ]
   },
-  "hash": "892af0d100d24a3c4249e8cdfdff2e5e79f36f05be81c7f57743f528d857a58d"
+  "hash": "6d74d0340185158693f1718c3b25bc8f7875a2ec430a5dcb558ed2fc1c7fd4b8"
 }

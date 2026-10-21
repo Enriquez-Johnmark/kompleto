@@ -184,7 +184,7 @@ impl Scheduler {
         let taken = sqlx::query!(
             r#"select count(*) as "drafts!", coalesce(bool_or(slot = $4), false) as "this_slot!",
                       exists (select 1 from replies r
-                              where r.firm_id = $1 and r.client_id = $2 and r.period = $3 and not r.automatic)
+                              where r.firm_id = $1 and r.client_id = $2 and r.period = $3 and not r.automatic and r.signed)
                           as "replied!"
                from scheduled_drafts where firm_id = $1 and client_id = $2 and period = $3"#,
             firm.as_uuid(),

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments\n             from replies where firm_id = $1 and id = $2",
+  "query": "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments, signed\n             from replies where firm_id = $1 and id = $2",
   "describe": {
     "columns": [
       {
@@ -101,6 +101,17 @@
             "name": "attachments"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "signed",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "signed"
+          }
+        }
       }
     ],
     "parameters": {
@@ -118,8 +129,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "0e6c28b85aca7e2d23becc20902f13cb033c9ca60858188421108bac70b540e6"
+  "hash": "f208ac3a18dd0dce09f00b3e39a7a9523ac366b2862a53d2a05c1b4c6e0b05b2"
 }

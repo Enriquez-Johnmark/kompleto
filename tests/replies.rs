@@ -165,6 +165,42 @@ async fn g1_mail_without_a_code_matches_the_only_client_with_that_address(pool: 
 }
 
 #[sqlx::test]
+async fn g1_mail_matched_only_by_its_sender_is_shown_but_reminders_continue(pool: PgPool) {
+    let (santos, clock, _) = reminded(&pool).await;
+    sqlx::query("update outbox_messages set status = 'sent', approved_hash = '\\x00', sent_at = $1")
+        .bind(clock.now_plus(Duration::hours(1)))
+        .execute(&pool)
+        .await
+        .unwrap();
+    // Anyone can put the Contact's address in From, so it proves nothing.
+    let email = parse(&common::inbound("with_attachments", "reminders@getkompleto.test")).unwrap();
+
+    let Received::Human(id) = replies(&pool, clock.clone()).receive(&email).await.unwrap() else {
+        panic!("not kept");
+    };
+    clock.advance(Duration::days(3)); // 4 Nov: the next Reminder's day
+    Scheduler::new(pool.clone(), clock.clone(), common::upload_links(&pool, clock.clone()))
+        .unwrap()
+        .run_once()
+        .await
+        .unwrap();
+
+    let reply = replies(&pool, clock).get(santos, id).await.unwrap();
+    assert!(!reply.signed);
+    assert_eq!(reply.attachments, 0, "nothing kept on an unproven sender's word");
+    let drafts: i64 = sqlx::query_scalar("select count(*) from scheduled_drafts")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(drafts, 2, "Reminders continue");
+    let notice: String = sqlx::query_scalar("select body_text from outbox_messages where reply_to is null")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(notice.contains("reminders continue"), "{notice}");
+}
+
+#[sqlx::test]
 async fn g1_the_firm_is_told_of_a_reply_with_a_link_not_a_copy(pool: PgPool) {
     let (_, clock, reply_to) = reminded(&pool).await;
     let email = parse(&common::inbound("human_reply", &reply_to)).unwrap();

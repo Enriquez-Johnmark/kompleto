@@ -85,6 +85,9 @@ pub struct Reply {
     pub received_at: OffsetDateTime,
     /// How many attachments were kept as Uploads.
     pub attachments: i32,
+    /// It came through its signed reply address, not just from the
+    /// Contact's address, which anyone can put in From.
+    pub signed: bool,
 }
 
 /// Receives and lists Replies.
@@ -146,7 +149,7 @@ impl Replies {
 
     /// Takes in one inbound email.
     pub async fn receive(&self, email: &InboundEmail) -> Result<Received, ReplyError> {
-        let Some(link) = self.matching_link(email).await? else {
+        let Some((link, signed)) = self.matching_link(email).await? else {
             let domain = email.from.rsplit_once('@').map_or("", |(_, domain)| domain);
             tracing::info!(sender_domain = domain, "inbound email matched no client; nothing kept");
             return Ok(Received::Unmatched);
@@ -154,8 +157,8 @@ impl Replies {
         let new = ReplyId::new();
         let inserted = sqlx::query_scalar!(
             "insert into replies
-                 (id, firm_id, client_id, period, from_address, subject, body_text, automatic, received_at, message_key)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                 (id, firm_id, client_id, period, from_address, subject, body_text, automatic, received_at, message_key, signed)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              on conflict (firm_id, message_key) do nothing
              returning id",
             new.as_uuid(),
@@ -168,6 +171,7 @@ impl Replies {
             email.automatic,
             self.clock.now(),
             email.key,
+            signed,
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -195,7 +199,9 @@ impl Replies {
         }
         // Attachments are kept on the first attempt only; one a failure
         // dropped is lost rather than risk keeping one twice.
-        if inserted.is_some() {
+        // Only a signed Reply changes anything; one matched by its sender
+        // alone is shown and announced, nothing more.
+        if inserted.is_some() && signed {
             let kept = self.keep_attachments(&link, &email.attachments).await;
             if kept > 0 {
                 sqlx::query!(
@@ -208,9 +214,11 @@ impl Replies {
                 .await?;
             }
         }
-        self.drafts.cancel_waiting(link.firm, link.client, &link.period).await?;
+        if signed {
+            self.drafts.cancel_waiting(link.firm, link.client, &link.period).await?;
+        }
         // The Reply is kept either way; a notice that fails is logged.
-        if let Err(err) = self.notify(&link, id).await {
+        if let Err(err) = self.notify(&link, id, signed).await {
             tracing::error!(firm = %link.firm, reply = %id, %err, "notifying the firm of a reply failed");
         }
         sqlx::query!(
@@ -248,7 +256,7 @@ impl Replies {
     }
 
     /// Emails the Firm that Reply `id` arrived, with a link to read it.
-    async fn notify(&self, link: &OpenLink, id: ReplyId) -> Result<(), ReplyError> {
+    async fn notify(&self, link: &OpenLink, id: ReplyId, signed: bool) -> Result<(), ReplyError> {
         let firm = self
             .firms
             .get(link.firm)
@@ -268,9 +276,15 @@ impl Replies {
             reply_to: None,
             subject: format!("{contact} ({business}) replied about {period}"),
             body_text: format!(
-                "{contact} at {business} replied to your reminder about {period}. \
-                 Their reminders for {period} have stopped.\n\n\
+                "{contact} at {business} replied to your reminder about {period}. {}\n\n\
                  Read the reply in Kompleto:\n{}/replies/{id}\n",
+                if signed {
+                    format!("Their reminders for {period} have stopped.")
+                } else {
+                    "It came from their address but not through the reminder's reply address, \
+                     so their reminders continue; stop them yourself if the reply is genuine."
+                        .to_owned()
+                },
                 self.base_url
             ),
         };
@@ -282,11 +296,12 @@ impl Replies {
         Ok(())
     }
 
-    /// The link the email answers: through its reply address, or else the
-    /// latest Reminder sent to the one Client with the sender's address.
-    async fn matching_link(&self, email: &InboundEmail) -> Result<Option<OpenLink>, ReplyError> {
+    /// The link the email answers, and whether it came through the signed
+    /// reply address; else the latest Reminder sent to the one Client with
+    /// the sender's address.
+    async fn matching_link(&self, email: &InboundEmail) -> Result<Option<(OpenLink, bool)>, ReplyError> {
         if let Some(link) = self.links.by_reply_address(&email.recipients).await? {
-            return Ok(Some(link));
+            return Ok(Some((link, true)));
         }
         let clients = sqlx::query!(
             "select id, firm_id from clients where lower(email) = $1 limit 2",
@@ -313,13 +328,14 @@ impl Replies {
         Ok(self
             .links
             .find(client.firm_id.into(), client.id.into(), &period)
-            .await?)
+            .await?
+            .map(|link| (link, false)))
     }
 
     /// A Client's Replies, newest first.
     pub async fn for_client(&self, firm: FirmId, client: ClientId) -> Result<Vec<Reply>, ReplyError> {
         let rows = sqlx::query!(
-            "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments
+            "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments, signed
              from replies where firm_id = $1 and client_id = $2 order by received_at desc, id desc",
             firm.as_uuid(),
             client.as_uuid(),
@@ -338,6 +354,7 @@ impl Replies {
                 automatic: row.automatic,
                 received_at: row.received_at,
                 attachments: row.attachments,
+                signed: row.signed,
             })
             .collect())
     }
@@ -345,7 +362,7 @@ impl Replies {
     /// Reply `id` of `firm`.
     pub async fn get(&self, firm: FirmId, id: ReplyId) -> Result<Reply, ReplyError> {
         let row = sqlx::query!(
-            "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments
+            "select id, client_id, period, from_address, subject, body_text, automatic, received_at, attachments, signed
              from replies where firm_id = $1 and id = $2",
             firm.as_uuid(),
             id.as_uuid(),
@@ -363,6 +380,7 @@ impl Replies {
             automatic: row.automatic,
             received_at: row.received_at,
             attachments: row.attachments,
+            signed: row.signed,
         })
     }
 }

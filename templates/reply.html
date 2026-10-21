@@ -3,7 +3,7 @@
 {% block body %}
 {% include "nav.html" %}
 <h1>{% if automatic %}Automatic reply{% else %}Reply{% endif %} from <a href="/clients/{{ client_id }}">{{ business }}</a></h1>
-<p class="muted">{{ from }} · {{ received }} · about {{ period }}{% if automatic %} · an out-of-office or other automatic reply; reminders continue{% else %} · reminders for {{ period }} stopped{% endif %}</p>
+<p class="muted">{{ from }} · {{ received }} · about {{ period }}{% if automatic %} · an out-of-office or other automatic reply; reminders continue{% else if !signed %} · from their address but not through the reminder's reply address, which anyone could fake, so reminders continue{% else %} · reminders for {{ period }} stopped{% endif %}</p>
 {% if let Some(text) = text %}
 {% if let Some(subject) = subject %}<p><strong>{{ subject }}</strong></p>{% endif %}
 <pre class="message">{{ text }}</pre>

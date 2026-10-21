@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "insert into replies\n                 (id, firm_id, client_id, period, from_address, subject, body_text, automatic, received_at, message_key)\n             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n             on conflict (firm_id, message_key) do nothing\n             returning id",
+  "query": "insert into replies\n                 (id, firm_id, client_id, period, from_address, subject, body_text, automatic, received_at, message_key, signed)\n             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n             on conflict (firm_id, message_key) do nothing\n             returning id",
   "describe": {
     "columns": [
       {
@@ -26,12 +26,13 @@
         "Text",
         "Bool",
         "Timestamptz",
-        "Text"
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "a3f6c24885967b2fe63be74aff8a893e8c5a0efdeaab00ebf48e6890b43822a2"
+  "hash": "741180a5de752e0cd898e8c79c17775122170ab28bd1fe80c275e2d62a6e8341"
 }
