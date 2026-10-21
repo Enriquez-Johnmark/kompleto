@@ -150,9 +150,15 @@ pub enum UploadError {
     /// Not a photo or PDF.
     #[error("only photos and PDF files can be uploaded")]
     NotAllowedType,
-    /// Over 10 MB, or empty.
+    /// Over 10 MB.
     #[error("each file must be under 10 MB")]
     TooBig,
+    /// No file was chosen.
+    #[error("choose a file first")]
+    NoFile,
+    /// The request broke off or wasn't a proper upload.
+    #[error("the file didn't arrive whole; try again")]
+    Incomplete,
     /// The link has taken all the files it can.
     #[error("this link can't take any more files")]
     LinkFull,
@@ -245,7 +251,10 @@ impl Uploads {
         bytes: &[u8],
     ) -> Result<FileId, UploadError> {
         let label = checked(label, owed)?;
-        if bytes.is_empty() || bytes.len() > MAX_FILE_BYTES {
+        if bytes.is_empty() {
+            return Err(UploadError::NoFile);
+        }
+        if bytes.len() > MAX_FILE_BYTES {
             return Err(UploadError::TooBig);
         }
         let kind = FileKind::sniff(bytes).ok_or(UploadError::NotAllowedType)?;

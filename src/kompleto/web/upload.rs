@@ -15,6 +15,7 @@
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::Router;
+use axum::extract::multipart::MultipartError;
 use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
@@ -318,9 +319,17 @@ struct UploadForm {
 
 async fn read_form(mut multipart: Multipart) -> Result<UploadForm, UploadError> {
     let mut form = UploadForm::default();
-    while let Some(field) = multipart.next_field().await.map_err(|_| UploadError::TooBig)? {
+    // Only the size limit means "too big"; any other broken body is incomplete.
+    let broken = |err: MultipartError| {
+        if err.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            UploadError::TooBig
+        } else {
+            UploadError::Incomplete
+        }
+    };
+    while let Some(field) = multipart.next_field().await.map_err(broken)? {
         let name = field.name().unwrap_or_default().to_owned();
-        let bytes = field.bytes().await.map_err(|_| UploadError::TooBig)?;
+        let bytes = field.bytes().await.map_err(broken)?;
         let text = || String::from_utf8_lossy(&bytes).into_owned();
         match name.as_str() {
             "document" => form.document = text(),
@@ -338,9 +347,10 @@ impl UploadError {
         match self {
             Self::NotAllowedType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::TooBig => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::Incomplete => StatusCode::BAD_REQUEST,
             Self::LinkFull => StatusCode::TOO_MANY_REQUESTS,
             Self::NotFound => StatusCode::NOT_FOUND,
-            Self::Invalid(_) | Self::File(_) | Self::Database(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::NoFile | Self::Invalid(_) | Self::File(_) | Self::Database(_) => StatusCode::UNPROCESSABLE_ENTITY,
         }
     }
 }
@@ -353,6 +363,10 @@ fn message(language: Language, err: &UploadError, firm_name: &str) -> String {
         UploadError::NotAllowedType => "Only photos and PDF files can be uploaded.",
         UploadError::TooBig if taglish => "Hanggang 10 MB lang po bawat file.",
         UploadError::TooBig => "Each file must be 10 MB or less.",
+        UploadError::NoFile if taglish => "Pumili po muna ng file.",
+        UploadError::NoFile => "Please choose a file first.",
+        UploadError::Incomplete if taglish => "Hindi po buo ang dumating na file. Pakisubukan po ulit.",
+        UploadError::Incomplete => "The file didn't arrive complete. Please try again.",
         UploadError::LinkFull if taglish => {
             return format!("Puno na po ang link na ito. Pakisabihan po ang {firm_name}.");
         }

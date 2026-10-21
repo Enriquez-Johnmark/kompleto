@@ -77,7 +77,6 @@ async fn f1_anything_else_or_over_10_mb_is_refused(pool: PgPool) {
         ("a program", b"MZ\x90\0 an .exe renamed receipt.jpg".as_slice()),
         ("a web page", b"<html><script>alert(1)</script>".as_slice()),
         ("an SVG", b"<svg xmlns=\"http://www.w3.org/2000/svg\">".as_slice()),
-        ("empty", b"".as_slice()),
     ] {
         let refused = uploads.add(&link, &owed(), invoices(), bytes).await;
         assert!(
@@ -88,6 +87,10 @@ async fn f1_anything_else_or_over_10_mb_is_refused(pool: PgPool) {
     assert!(matches!(
         uploads.add(&link, &owed(), invoices(), &big).await,
         Err(UploadError::TooBig)
+    ));
+    assert!(matches!(
+        uploads.add(&link, &owed(), invoices(), b"").await,
+        Err(UploadError::NoFile)
     ));
     let mut largest = JPEG.to_vec();
     largest.resize(MAX_FILE_BYTES, 0);

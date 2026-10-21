@@ -306,3 +306,33 @@ async fn g2_the_last_missing_document_cancels_the_periods_waiting_reminders(pool
         .unwrap();
     assert_eq!(status, "cancelled");
 }
+
+#[sqlx::test]
+async fn f1_a_missing_or_broken_file_isnt_called_too_big(pool: PgPool) {
+    use axum::body::Body;
+    use axum::http::{Method, Request, header};
+
+    let app = TestApp::new(pool);
+    let link = nena_link(&app).await;
+
+    let no_file = app.post_multipart(&link, &[("document", b"0")]).await;
+    let broken = app
+        .send(
+            Request::builder()
+                .method(Method::POST)
+                .uri(&link)
+                .header(header::ORIGIN, common::web::BASE_URL)
+                .header(header::CONTENT_TYPE, "multipart/form-data; boundary=cut")
+                .body(Body::from(
+                    b"--cut\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.jpg\"\r\n\r\n\xFF\xD8"
+                        .as_slice(),
+                ))
+                .unwrap(),
+        )
+        .await;
+
+    assert_eq!(no_file.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(no_file.body.contains("Pumili po muna ng file"), "{}", no_file.body);
+    assert_eq!(broken.status, StatusCode::BAD_REQUEST);
+    assert!(broken.body.contains("Hindi po buo"), "{}", broken.body);
+}
