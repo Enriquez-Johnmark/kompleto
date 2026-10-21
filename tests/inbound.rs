@@ -61,3 +61,14 @@ Content-Transfer-Encoding: quoted-printable\r\n\r\nHi=00 po\r\n";
     assert_eq!(email.subject, "Re: docs");
     assert_eq!(email.text.trim(), "Hi po");
 }
+
+#[test]
+fn g1_a_small_signature_image_is_not_an_attachment_but_an_inline_photo_is() {
+    let email = parse(&sample("signature_logo")).unwrap();
+
+    assert_eq!(email.attachments.len(), 1);
+    assert!(
+        email.attachments[0].starts_with(b"\xFF\xD8\xFF"),
+        "the photo, not the logo"
+    );
+}
