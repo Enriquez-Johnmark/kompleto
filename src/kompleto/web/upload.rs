@@ -7,7 +7,10 @@
 //!   forwarded link gives nothing away.
 //! - One file per request (the page's script sends several in turn), at
 //!   most [`UPLOAD_SLOTS`] processed at once, each request at most 10 MB.
-//! - Pages carry `noindex` and `no-referrer`, so the link doesn't leak.
+//! - Pages carry `noindex`, and a `same-origin` referrer policy so the link
+//!   never reaches another site. Not `no-referrer`: with it, browsers send
+//!   `Origin: null` on the page's own uploads, and the same-origin check
+//!   refuses them.
 
 use askama::Template;
 use askama_web::WebTemplate;
@@ -41,7 +44,7 @@ async fn private(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
     headers.insert("x-robots-tag", HeaderValue::from_static("noindex, nofollow"));
-    headers.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    headers.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
