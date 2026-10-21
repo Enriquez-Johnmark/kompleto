@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update firms set cut_off_offset_days = $2 where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f49bef3674e22ff12bacea9d48a51b0188ab263c8946f8bcc2eedbcad5e4fe0d"
+}

@@ -10,6 +10,7 @@
 mod clients;
 mod import;
 mod login;
+mod settings;
 
 use std::sync::Arc;
 
@@ -87,6 +88,7 @@ pub fn router(state: AppState) -> Router {
         .merge(login::routes())
         .merge(clients::routes())
         .merge(import::routes())
+        .merge(settings::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

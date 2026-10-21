@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Settings · Kompleto{% endblock %}
+{% block body %}
+{% include "nav.html" %}
+<h1>Settings</h1>
+<p>{{ firm.name }} · logs in as {{ firm.login_email }}</p>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="/settings">
+  <label for="cut_off_offset_days">Default cut-off: days before a period's earliest due date</label>
+  <input type="number" id="cut_off_offset_days" name="cut_off_offset_days" min="0" max="30" value="{{ firm.cut_off_offset_days }}" required>
+  <p class="muted">Clients with their own setting keep it.</p>
+  <p><button>Save</button></p>
+</form>
+{% endblock %}

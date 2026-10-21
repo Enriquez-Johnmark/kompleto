@@ -97,6 +97,24 @@ impl Firms {
         })
     }
 
+    /// Sets the Firm's default cut-off offset (0 to 30 days).
+    pub async fn set_cut_off_offset(&self, id: FirmId, days: u8) -> Result<(), FirmError> {
+        if days > 30 {
+            return Err(FirmError::Invalid("the cut-off offset is 0 to 30 days".to_owned()));
+        }
+        let updated = sqlx::query!(
+            "update firms set cut_off_offset_days = $2 where id = $1",
+            id.as_uuid(),
+            i16::from(days)
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() == 0 {
+            return Err(FirmError::NotFound);
+        }
+        Ok(())
+    }
+
     /// The Firm that logs in with `email`, ignoring case and spaces. Login
     /// has no Firm yet, so this is the one lookup not scoped by a `FirmId`.
     pub async fn find_by_login_email(&self, email: &str) -> Result<Option<Firm>, FirmError> {
