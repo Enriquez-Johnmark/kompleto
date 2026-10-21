@@ -2,3 +2,4 @@
 //! checklists and the reminder schedule. Built on `crate::engine`.
 
 pub mod calendar;
+pub mod periods;
