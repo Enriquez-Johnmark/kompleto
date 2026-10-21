@@ -336,3 +336,62 @@ async fn f1_a_missing_or_broken_file_isnt_called_too_big(pool: PgPool) {
     assert_eq!(broken.status, StatusCode::BAD_REQUEST);
     assert!(broken.body.contains("Hindi po buo"), "{}", broken.body);
 }
+
+#[sqlx::test]
+async fn h2_the_client_picks_a_listed_payors_2307_or_names_another_business(pool: PgPool) {
+    use kompleto::kompleto::checklist::{ANOTHER_PAYOR_2307, ChecklistEdits};
+    use kompleto::kompleto::payors::Payors;
+
+    let app = TestApp::new(pool);
+    let santos = common::firm(&app.pool, "Santos Bookkeeping").await;
+    let (client, link) = nena_link_of(&app, santos).await;
+    let payors = Payors::new(app.pool.clone(), app.clock.clone());
+    payors.add(santos, client, "Jollibee Foods Corp").await.unwrap();
+    let edits = ChecklistEdits {
+        payors: vec!["Jollibee Foods Corp".to_owned()],
+        ..ChecklistEdits::default()
+    };
+    let owed = owed_documents(&nena().forms, Month::September, &edits);
+    let jollibee = owed
+        .iter()
+        .position(|item| item == "BIR Form 2307 from Jollibee Foods Corp")
+        .unwrap()
+        .to_string();
+    let another = owed.len().to_string();
+
+    let page = app.request(axum::http::Method::GET, &link, None, None).await;
+    assert!(page.body.contains(ANOTHER_PAYOR_2307), "{}", page.body);
+    assert!(!page.body.contains("2307s received from customers"));
+
+    let picked = app
+        .post_multipart(&link, &[("document", jollibee.as_bytes()), ("file", JPEG)])
+        .await;
+    assert_eq!(picked.status, StatusCode::SEE_OTHER, "{}", picked.body);
+    let unnamed = app
+        .post_multipart(&link, &[("document", another.as_bytes()), ("file", JPEG)])
+        .await;
+    assert_eq!(unnamed.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", unnamed.body);
+    let named = app
+        .post_multipart(
+            &link,
+            &[("document", another.as_bytes()), ("payor", b"Puregold"), ("file", JPEG)],
+        )
+        .await;
+    assert_eq!(named.status, StatusCode::SEE_OTHER, "{}", named.body);
+
+    let kept: Vec<(String, String)> =
+        sqlx::query_as("select owed_document, payor from uploads order by uploaded_at, id")
+            .fetch_all(&app.pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        kept,
+        [
+            (
+                "BIR Form 2307 from Jollibee Foods Corp".to_owned(),
+                "Jollibee Foods Corp".to_owned()
+            ),
+            (ANOTHER_PAYOR_2307.to_owned(), "Puregold".to_owned()),
+        ]
+    );
+}

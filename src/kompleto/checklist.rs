@@ -138,6 +138,10 @@ pub struct ChecklistEdits {
 /// The default item that the Client's Payors replace.
 const RECEIVED_2307_KEY: &str = "2307-received";
 
+/// What the upload page offers for a 2307 from a business not on the
+/// Client's Payor list; the Contact types its name.
+pub const ANOTHER_PAYOR_2307: &str = "BIR Form 2307 from another business";
+
 /// The Owed document for one Payor's 2307.
 pub fn payor_2307(payor: &str) -> String {
     format!("BIR Form 2307 from {payor}")

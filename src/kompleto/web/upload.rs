@@ -25,7 +25,7 @@ use serde::Deserialize;
 
 use super::{AppState, NotFoundPage, WebError, show_date};
 use crate::kompleto::calendar::TaxPeriod;
-use crate::kompleto::checklist::owed_documents;
+use crate::kompleto::checklist::{ANOTHER_PAYOR_2307, owed_documents, payor_2307};
 use crate::kompleto::clients::{Client, Language};
 use crate::kompleto::upload_links::{LinkError, OpenLink};
 use crate::kompleto::uploads::{Label, LabelProblem, MAX_FILE_BYTES, UploadError, is_2307, uploaded_documents};
@@ -118,6 +118,8 @@ struct UploadPage {
     w: &'static Words,
     intro: String,
     items: Vec<Item>,
+    /// The choice for a 2307 from a business not on the Payor list.
+    another: Option<Item>,
     asks_payor: bool,
     error: Option<String>,
     sent: bool,
@@ -141,6 +143,18 @@ struct Opened {
     firm_name: String,
     client: Client,
     owed: Vec<String>,
+    /// The Client's Payors (H2).
+    payors: Vec<String>,
+    /// What an upload can be labelled: the Owed documents, then, when
+    /// Payors' 2307s are owed, one from another business.
+    choices: Vec<String>,
+}
+
+impl Opened {
+    /// The Payor of a listed Payor's 2307, which the Contact needn't type.
+    fn listed_payor(&self, document: &str) -> Option<&String> {
+        self.payors.iter().find(|payor| payor_2307(payor) == document)
+    }
 }
 
 /// Why a link didn't open.
@@ -191,11 +205,17 @@ async fn details(state: &AppState, link: OpenLink) -> Result<Opened, WebError> {
         .ok_or_else(|| WebError::internal(format!("bad period key {:?}", link.period)))?
         .last_month();
     let owed = owed_documents(&client.details.forms, month, &edits);
+    let mut choices = owed.clone();
+    if edits.payors.iter().any(|payor| owed.contains(&payor_2307(payor))) {
+        choices.push(ANOTHER_PAYOR_2307.to_owned());
+    }
     Ok(Opened {
         link,
         firm_name,
         client,
         owed,
+        payors: edits.payors,
+        choices,
     })
 }
 
@@ -228,7 +248,15 @@ async fn render(state: &AppState, opened: &Opened, error: Option<String>, sent: 
                 uploaded: uploaded(label),
             })
             .collect(),
-        asks_payor: opened.owed.iter().any(|document| is_2307(document)),
+        another: opened.choices.get(opened.owed.len()).map(|label| Item {
+            index: opened.owed.len(),
+            label: label.clone(),
+            uploaded: false,
+        }),
+        asks_payor: opened
+            .choices
+            .iter()
+            .any(|document| is_2307(document) && opened.listed_payor(document).is_none()),
         error,
         sent,
     })
@@ -261,10 +289,13 @@ async fn upload(State(state): State<AppState>, Path(token): Path<String>, multip
     };
     let label = match form.document.as_str() {
         "other" => Label::SomethingElse { note: form.note },
-        index => match index.parse::<usize>().ok().and_then(|i| opened.owed.get(i)) {
+        index => match index.parse::<usize>().ok().and_then(|i| opened.choices.get(i)) {
             Some(document) => Label::Owed {
                 document: document.clone(),
-                payor: is_2307(document).then_some(form.payor),
+                payor: match opened.listed_payor(document) {
+                    Some(payor) => Some(payor.clone()),
+                    None => is_2307(document).then_some(form.payor),
+                },
             },
             None => Label::Owed {
                 document: String::new(),
@@ -272,7 +303,11 @@ async fn upload(State(state): State<AppState>, Path(token): Path<String>, multip
             },
         },
     };
-    match state.uploads.add(&opened.link, &opened.owed, label, &form.file).await {
+    match state
+        .uploads
+        .add(&opened.link, &opened.choices, label, &form.file)
+        .await
+    {
         Ok(_) => {
             stop_if_complete(&state, &opened).await;
             Redirect::to(&format!("/u/{token}?sent=1")).into_response()
