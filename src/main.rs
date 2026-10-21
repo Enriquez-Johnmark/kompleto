@@ -5,8 +5,10 @@
 //! kompleto migrate        apply database migrations
 //! kompleto outbox-drain   send what's due once, then exit
 //! kompleto demo           (development) put one approved email through the outbox
+//! kompleto parse-xlsx     (internal) the Excel import's sandboxed parser
 //! ```
 
+use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,6 +21,7 @@ use kompleto::engine::clock::{Clock, SystemClock};
 use kompleto::engine::ids::TenantId;
 use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{Outbox, Sender};
+use kompleto::kompleto::import::xlsx;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
@@ -29,8 +32,27 @@ const DRAIN_BATCH: usize = 50;
 /// How often `serve` drains the outbox.
 const DRAIN_EVERY: Duration = Duration::from_secs(30);
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
+    // The Excel parser runs before anything else starts (threads, the
+    // database), so the limits it sets apply to nothing but the parsing.
+    if std::env::args().nth(1).as_deref() == Some(xlsx::CHILD_COMMAND) {
+        return xlsx::run_child();
+    }
+    let result = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("starting the async runtime")
+        .and_then(|runtime| runtime.block_on(run()));
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("Error: {err:?}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run() -> anyhow::Result<()> {
     if cfg!(debug_assertions) {
         // Development convenience only; production sets real variables.
         dotenvy::dotenv().ok();

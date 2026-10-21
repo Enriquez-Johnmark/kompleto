@@ -2,6 +2,8 @@
 //! into rows; checking sorts them into valid and invalid with reasons.
 //! Nothing is stored until the bookkeeper confirms.
 
+pub mod xlsx;
+
 use std::collections::HashMap;
 
 use super::clients::{ClientInput, NewClient};

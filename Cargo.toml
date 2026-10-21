@@ -13,10 +13,12 @@ failpoints = []
 [dependencies]
 anyhow = "1.0.104"
 axum = "0.8.9"
+calamine = "0.37.0"
 csv = "1.4.0"
 dotenvy = "0.15.7"
 encoding_rs = "0.8.42"
 reqwest = { version = "0.13.5", features = ["json"] }
+rustix = { version = "1.1.5", features = ["process"] }
 secrecy = "0.10.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -24,7 +26,7 @@ sha2 = "0.11.1"
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "postgres", "macros", "migrate", "uuid", "time", "json"] }
 thiserror = "2.0.21"
 time = { version = "0.3.55", features = ["serde", "macros", "parsing", "formatting"] }
-tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "signal", "time"] }
+tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "signal", "time", "process", "io-util"] }
 toml = { version = "1.1.8", default-features = false, features = ["parse", "serde"] }
 tower-http = { version = "0.7.1", features = ["trace"] }
 tracing = "0.1.44"
@@ -34,6 +36,7 @@ uuid = { version = "1.28.0", features = ["v7", "serde"] }
 [dev-dependencies]
 insta = "1.49.0"
 wiremock = "0.6.5"
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 
 [[test]]
 name = "e1_crash"
