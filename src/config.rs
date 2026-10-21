@@ -47,6 +47,9 @@ pub struct Config {
     pub database_url: String,
     /// Address the web server listens on.
     pub bind_addr: SocketAddr,
+    /// The URL people reach the app at, used in emailed links and to check
+    /// that form posts come from our own pages.
+    pub public_base_url: String,
     /// The email provider.
     pub mail: MailConfig,
     /// Address emails are sent from, on our own domain.
@@ -78,9 +81,11 @@ impl Config {
                 name: "BIND_ADDR",
                 reason: err.to_string(),
             })?;
+        let public_base_url = optional("PUBLIC_BASE_URL").unwrap_or_else(|| format!("http://{bind_addr}"));
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             bind_addr,
+            public_base_url,
             mail,
             mail_from_address: required("MAIL_FROM_ADDRESS")?,
         })

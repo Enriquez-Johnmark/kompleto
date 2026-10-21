@@ -4,6 +4,8 @@
 //! kompleto serve          web server + background sender
 //! kompleto migrate        apply database migrations
 //! kompleto outbox-drain   send what's due once, then exit
+//! kompleto firm add --name NAME --email EMAIL
+//!                         create a Firm (there is no sign-up page)
 //! kompleto demo           (development) put one approved email through the outbox
 //! kompleto parse-xlsx     (internal) the Excel import's sandboxed parser
 //! ```
@@ -21,10 +23,12 @@ use kompleto::engine::clock::{Clock, SystemClock};
 use kompleto::engine::ids::TenantId;
 use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{Outbox, Sender};
-use kompleto::kompleto::import::xlsx;
+use kompleto::kompleto::calendar::Calendar;
+use kompleto::kompleto::firms::Firms;
+use kompleto::kompleto::import::xlsx::{self, XlsxReader};
+use kompleto::kompleto::web::{AppState, router};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
 /// How many messages one drain sends at most.
@@ -79,8 +83,9 @@ async fn run() -> anyhow::Result<()> {
             tracing::info!(?report, "outbox drained");
             Ok(())
         }
+        Some("firm") => add_firm(pool, clock).await,
         Some("demo") => demo(&config, pool, clock).await,
-        other => bail!("unknown command {other:?}; use serve, migrate, outbox-drain or demo"),
+        other => bail!("unknown command {other:?}; use serve, migrate, outbox-drain, firm add or demo"),
     }
 }
 
@@ -92,11 +97,22 @@ async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
 
 async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
     migrate(&pool).await?;
+    let today = clock.now().date();
+    if !Calendar::built_in()?.holidays_cover(today, today + time::Duration::days(365)) {
+        tracing::warn!("bir-calendar.toml: national holidays aren't listed for the next 12 months");
+    }
+    let xlsx = XlsxReader::new(std::env::current_exe().context("finding this program for the Excel reader")?);
+    let state = AppState::new(pool.clone(), clock.clone(), &config.public_base_url, xlsx)?;
+    let wake_up = state.sender_wake_up();
     let sender = Sender::new(pool, config.mailer()?, clock);
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(DRAIN_EVERY);
         loop {
-            tick.tick().await;
+            // Drain on the timer, or at once when an email was just approved.
+            tokio::select! {
+                _ = tick.tick() => {}
+                () = wake_up.notified() => {}
+            }
             match sender.drain_once(DRAIN_BATCH).await {
                 Ok(report) => tracing::debug!(?report, "outbox drained"),
                 Err(err) => tracing::error!(%err, "outbox drain failed"),
@@ -105,7 +121,7 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
     });
     let app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
-        .layer(TraceLayer::new_for_http());
+        .merge(router(state));
     let listener = tokio::net::TcpListener::bind(config.bind_addr)
         .await
         .context("binding the web server")?;
@@ -122,6 +138,20 @@ async fn shutdown() {
     if tokio::signal::ctrl_c().await.is_err() {
         std::future::pending::<()>().await;
     }
+}
+
+/// `kompleto firm add --name NAME --email EMAIL`
+async fn add_firm(pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1));
+    let (Some("add"), Some(name), Some(email)) = (args.first().map(String::as_str), value("--name"), value("--email"))
+    else {
+        bail!("usage: kompleto firm add --name NAME --email EMAIL");
+    };
+    migrate(&pool).await?;
+    let id = Firms::new(pool, clock).create(name, email).await?;
+    tracing::info!(%id, "firm created; they can now log in at /login with {email}");
+    Ok(())
 }
 
 /// Puts one sample email through draft → approve → send, so a developer can

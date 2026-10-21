@@ -99,3 +99,15 @@ pub fn nena() -> kompleto::kompleto::clients::NewClient {
         forms: vec![BirForm::F2551Q, BirForm::F1701Q],
     }
 }
+
+/// `#[sqlx::test]` gives each test a fresh database on the server named by
+/// `DATABASE_URL`; this is that database's URL, for a child process.
+pub async fn database_url(pool: &sqlx::PgPool) -> String {
+    let name: String = sqlx::query_scalar("select current_database()")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let base = std::env::var("DATABASE_URL").unwrap();
+    let (server, _) = base.rsplit_once('/').unwrap();
+    format!("{server}/{name}")
+}
