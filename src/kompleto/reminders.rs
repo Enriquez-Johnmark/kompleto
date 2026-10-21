@@ -160,6 +160,19 @@ impl Scheduler {
         draft: PlannedDraft,
     ) -> Result<bool, SchedulerError> {
         let (key, slot) = (period.key(), slot_key(draft.slot));
+        let edits = self.clients.checklist_edits(firm, client.id).await?;
+        let uploaded = uploaded_documents(&self.pool, firm, client.id, &key).await?;
+        let owed: Vec<String> = owed_documents(&client.details.forms, period.month, &edits)
+            .into_iter()
+            .filter(|document| !uploaded.contains(document))
+            .collect();
+        // Checked on every run, even when this slot already has its Draft, so
+        // a Draft left waiting after the last upload (say, one drafted while
+        // it arrived) is cancelled by the next run.
+        if owed.is_empty() {
+            self.drafts.cancel_waiting(firm, client.id, &key).await?;
+            return Ok(false);
+        }
         // Checked before drafting, so a slot that can't be recorded never
         // costs a model call.
         let taken = sqlx::query!(
@@ -173,16 +186,6 @@ impl Scheduler {
         .fetch_one(&self.pool)
         .await?;
         if taken.this_slot || taken.drafts >= i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4) {
-            return Ok(false);
-        }
-        let edits = self.clients.checklist_edits(firm, client.id).await?;
-        let uploaded = uploaded_documents(&self.pool, firm, client.id, &key).await?;
-        let owed: Vec<String> = owed_documents(&client.details.forms, period.month, &edits)
-            .into_iter()
-            .filter(|document| !uploaded.contains(document))
-            .collect();
-        if owed.is_empty() {
-            self.drafts.cancel_waiting(firm, client.id, &key).await?;
             return Ok(false);
         }
         let upload_link = self.links.for_period(firm, client.id, &key, period.cut_off).await?;

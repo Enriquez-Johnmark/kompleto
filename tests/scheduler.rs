@@ -483,3 +483,46 @@ async fn g2_reminders_ask_only_for_what_is_missing_and_stop_once_all_is_uploaded
     assert_eq!(after.len(), 2, "no reminder once everything has arrived");
     assert!(after.iter().all(|(_, status)| status == "cancelled"), "{after:?}");
 }
+
+#[sqlx::test]
+async fn g2_a_draft_still_waiting_after_everything_arrived_is_cancelled_by_the_next_run(pool: PgPool) {
+    use kompleto::kompleto::checklist::owed_documents;
+    use kompleto::kompleto::uploads::{Label, Uploads};
+
+    let clock = clock();
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    Clients::new(pool.clone(), clock.clone())
+        .create(santos, &employer())
+        .await
+        .unwrap();
+    let scheduler = Scheduler::new(pool.clone(), clock.clone(), common::upload_links(&pool, clock.clone())).unwrap();
+    clock.advance(Duration::days(11)); // 1 Nov: October's first request
+    scheduler.run_once().await.unwrap();
+    let body: String = sqlx::query_scalar("select body_text from outbox_messages")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let token = body
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("http://kompleto.test/u/"))
+        .unwrap();
+    let link = common::upload_links(&pool, clock.clone()).open(token).await.unwrap();
+    let owed = owed_documents(&[BirForm::F1601C], time::Month::October, &Default::default());
+    // Everything arrives, but the cancellation that should follow never ran.
+    let uploads = Uploads::new(pool.clone(), clock.clone(), common::files(&pool, clock.clone()));
+    for document in &owed {
+        let label = Label::Owed {
+            document: document.clone(),
+            payor: None,
+        };
+        uploads.add(&link, &owed, label, b"%PDF-1.7").await.unwrap();
+    }
+
+    scheduler.run_once().await.unwrap(); // the same day: this slot already has its Draft
+
+    let status: String = sqlx::query_scalar("select status from outbox_messages")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "cancelled");
+}
