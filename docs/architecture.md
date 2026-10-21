@@ -56,6 +56,13 @@ draft ──approve──► approved ──► sending ──► sent
 5. **A2 sweep** extended to every Draft page.
 6. **Cost report** per Firm per month (J1).
 
+Implementation notes (M3):
+- A pre-send check either refuses a message (it is blocked, with the reason) or couldn't run (say, a database timeout); a message whose check couldn't run is retried, not blocked. A message that may already have gone out stays "unconfirmed" whatever its check says.
+- Approval runs the checks before its own transaction, so a check's queries never wait on a connection the approval holds; the content hash then confirms the approved text is the text checked.
+- Links are words with a scheme, starting with `www.`, or bare domains on a common top-level domain (`gcash-pay.ph/upload`), after stripping surrounding punctuation. Model output uses the same rule. Firm names that read as links are refused, since the name signs every email.
+- The scheduler checks a Period's four-Draft limit before drafting, so a slot that can't be recorded never costs a model call.
+- `kompleto llm-costs` reads every tenant's costs; like the system-wide workers it is an operator tool, never reachable from a Firm's pages.
+
 ### Test seams for M2 (2026-10-21)
 
 1. **Calendar and schedule logic**, pure functions with no database or clock: due dates, roll-forward, extensions, overrides, Cut-off, reminder dates and the cap. Table-driven: B3, B4, D1's dates.
