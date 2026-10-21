@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select 1 as \"found!\" from clients where firm_id = $1 and id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "found!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "971c03a90636db91a2e04b1dd06360303fbaa827440c6173f79bb8becbba4c30"
+}

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into due_date_overrides (firm_id, client_id, form, period, due_date)\n                 values ($1, $2, $3, $4, $5)\n                 on conflict (client_id, form, period) do update set due_date = excluded.due_date",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a49005259d85eba4ff0f1f4e02b2a74bc6834b5b06757c4eba26426210d78186"
+}

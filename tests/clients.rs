@@ -95,3 +95,64 @@ async fn b2_a_failed_import_changes_nothing(pool: PgPool) {
     assert!(matches!(result, Err(ClientError::DuplicateName(_))), "{result:?}");
     assert_eq!(clients.list(santos).await.unwrap().len(), 1);
 }
+
+#[sqlx::test]
+async fn b3_a_due_date_override_is_kept_for_one_client_only(pool: PgPool) {
+    use kompleto::kompleto::calendar::TaxPeriod;
+    use time::macros::date;
+
+    let clients = Clients::new(pool.clone(), clock());
+    let (santos, reyes) = (firm(&pool, "Santos Bookkeeping").await, firm(&pool, "Reyes CPA").await);
+    let nena_id = clients.create(santos, &nena()).await.unwrap();
+    let other = clients.create(santos, &numbered(1)).await.unwrap();
+    let q3 = TaxPeriod::Quarter { year: 2026, quarter: 3 };
+
+    clients
+        .set_due_override(santos, nena_id, BirForm::F2551Q, q3, Some(date!(2026 - 10 - 30)))
+        .await
+        .unwrap();
+
+    let overrides = clients.due_overrides(santos, nena_id).await.unwrap();
+    assert_eq!(overrides.get(&(BirForm::F2551Q, q3)), Some(&date!(2026 - 10 - 30)));
+    assert!(clients.due_overrides(santos, other).await.unwrap().is_empty());
+    let foreign = clients
+        .set_due_override(reyes, nena_id, BirForm::F2551Q, q3, None)
+        .await;
+    assert!(matches!(foreign, Err(ClientError::NotFound)), "{foreign:?}");
+    assert!(matches!(
+        clients.due_overrides(reyes, nena_id).await,
+        Err(ClientError::NotFound)
+    ));
+
+    clients
+        .set_due_override(santos, nena_id, BirForm::F2551Q, q3, None)
+        .await
+        .unwrap();
+    assert!(clients.due_overrides(santos, nena_id).await.unwrap().is_empty());
+}
+
+#[sqlx::test]
+async fn d1_a_clients_schedule_can_be_changed_and_paused(pool: PgPool) {
+    use kompleto::kompleto::clients::ScheduleSettings;
+    use kompleto::kompleto::schedule::ReminderDays;
+
+    let clients = Clients::new(pool.clone(), clock());
+    let (santos, reyes) = (firm(&pool, "Santos Bookkeeping").await, firm(&pool, "Reyes CPA").await);
+    let id = clients.create(santos, &nena()).await.unwrap();
+    let settings = ScheduleSettings {
+        cut_off_offset_days: Some(8),
+        reminder_days: ReminderDays::new(&[10, 2]).unwrap(),
+        paused: true,
+    };
+
+    clients.set_schedule(santos, id, &settings).await.unwrap();
+
+    let client = clients.get(santos, id).await.unwrap();
+    assert_eq!(client.cut_off_offset_days, Some(8));
+    assert_eq!(client.reminder_days.days(), [10, 2]);
+    assert!(client.paused);
+    assert!(matches!(
+        clients.set_schedule(reyes, id, &settings).await,
+        Err(ClientError::NotFound)
+    ));
+}

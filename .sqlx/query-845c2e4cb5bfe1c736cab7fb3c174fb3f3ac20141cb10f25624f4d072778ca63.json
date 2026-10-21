@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from due_date_overrides where firm_id = $1 and client_id = $2 and form = $3 and period = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "845c2e4cb5bfe1c736cab7fb3c174fb3f3ac20141cb10f25624f4d072778ca63"
+}

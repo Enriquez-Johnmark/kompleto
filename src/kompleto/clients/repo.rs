@@ -4,13 +4,15 @@
 use std::sync::Arc;
 
 use sqlx::{PgExecutor, PgPool};
+use time::Date;
 use uuid::Uuid;
 
 use super::{Language, NewClient};
 use crate::engine::clock::Clock;
 use crate::engine::ids::id_type;
-use crate::kompleto::calendar::BirForm;
+use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::firms::FirmId;
+use crate::kompleto::periods::DueOverrides;
 use crate::kompleto::schedule::ReminderDays;
 
 id_type!(
@@ -25,6 +27,17 @@ pub struct Client {
     pub id: ClientId,
     /// Name, Contact, language and forms.
     pub details: NewClient,
+    /// The Client's own cut-off offset; `None` uses the Firm's.
+    pub cut_off_offset_days: Option<u8>,
+    /// Days before the Cut-off the Client gets reminders.
+    pub reminder_days: ReminderDays,
+    /// No Drafts are created while paused.
+    pub paused: bool,
+}
+
+/// How a Client's reminders are scheduled (D1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduleSettings {
     /// The Client's own cut-off offset; `None` uses the Firm's.
     pub cut_off_offset_days: Option<u8>,
     /// Days before the Cut-off the Client gets reminders.
@@ -130,6 +143,106 @@ impl Clients {
             return Err(ClientError::NotFound);
         }
         Ok(())
+    }
+
+    /// Changes how a Client's reminders are scheduled. Drafts already
+    /// created stay as they are.
+    pub async fn set_schedule(
+        &self,
+        firm: FirmId,
+        id: ClientId,
+        settings: &ScheduleSettings,
+    ) -> Result<(), ClientError> {
+        let days: Vec<i16> = settings.reminder_days.days().iter().map(|&d| i16::from(d)).collect();
+        let updated = sqlx::query!(
+            "update clients set cut_off_offset_days = $3, reminder_days = $4, paused = $5, updated_at = $6
+             where firm_id = $1 and id = $2",
+            firm.as_uuid(),
+            id.as_uuid(),
+            settings.cut_off_offset_days.map(i16::from),
+            &days,
+            settings.paused,
+            self.clock.now(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() == 0 {
+            return Err(ClientError::NotFound);
+        }
+        Ok(())
+    }
+
+    /// Sets (or with `None`, removes) the Client's own Due date for one
+    /// form and Period.
+    pub async fn set_due_override(
+        &self,
+        firm: FirmId,
+        id: ClientId,
+        form: BirForm,
+        period: TaxPeriod,
+        due: Option<Date>,
+    ) -> Result<(), ClientError> {
+        self.ensure_exists(firm, id).await?;
+        match due {
+            Some(due) => {
+                sqlx::query!(
+                    "insert into due_date_overrides (firm_id, client_id, form, period, due_date)
+                 values ($1, $2, $3, $4, $5)
+                 on conflict (client_id, form, period) do update set due_date = excluded.due_date",
+                    firm.as_uuid(),
+                    id.as_uuid(),
+                    form.code(),
+                    period.key(),
+                    due,
+                )
+                .execute(&self.pool)
+                .await?
+            }
+            None => sqlx::query!(
+                "delete from due_date_overrides where firm_id = $1 and client_id = $2 and form = $3 and period = $4",
+                firm.as_uuid(),
+                id.as_uuid(),
+                form.code(),
+                period.key(),
+            )
+            .execute(&self.pool)
+            .await?,
+        };
+        Ok(())
+    }
+
+    /// The Client's own Due dates.
+    pub async fn due_overrides(&self, firm: FirmId, id: ClientId) -> Result<DueOverrides, ClientError> {
+        self.ensure_exists(firm, id).await?;
+        let rows = sqlx::query!(
+            "select form, period, due_date from due_date_overrides where firm_id = $1 and client_id = $2",
+            firm.as_uuid(),
+            id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                Some((
+                    (BirForm::parse(&row.form)?, TaxPeriod::parse_key(&row.period)?),
+                    row.due_date,
+                ))
+            })
+            .collect())
+    }
+
+    /// `NotFound` unless the Client exists and is this Firm's.
+    async fn ensure_exists(&self, firm: FirmId, id: ClientId) -> Result<(), ClientError> {
+        sqlx::query_scalar!(
+            "select 1 as \"found!\" from clients where firm_id = $1 and id = $2",
+            firm.as_uuid(),
+            id.as_uuid()
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .map(|_| ())
+        .ok_or(ClientError::NotFound)
     }
 
     async fn insert(&self, db: impl PgExecutor<'_>, firm: FirmId, client: &NewClient) -> Result<ClientId, ClientError> {
