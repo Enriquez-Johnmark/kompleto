@@ -107,7 +107,11 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
     let xlsx = XlsxReader::new(std::env::current_exe().context("finding this program for the Excel reader")?);
     let state = AppState::new(pool.clone(), clock.clone(), &config.public_base_url, xlsx)?;
     let wake_up = state.sender_wake_up();
-    let scheduler = Scheduler::new(pool.clone(), clock.clone())?;
+    let model = config.language_model()?;
+    if model.is_none() {
+        tracing::warn!("ANTHROPIC_API_KEY isn't set; every reminder draft will be a template");
+    }
+    let scheduler = Scheduler::with_model(pool.clone(), clock.clone(), model)?;
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(SCHEDULE_EVERY);
         loop {

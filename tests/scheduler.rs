@@ -220,3 +220,53 @@ async fn d1_one_clients_failed_draft_neither_stops_the_others_nor_uses_up_its_sl
         .unwrap();
     assert_eq!(scheduler.run_once().await.unwrap(), 1, "the next run creates it");
 }
+
+#[sqlx::test]
+async fn d5_the_scheduler_drafts_with_the_model_and_labels_each_draft(pool: PgPool) {
+    use serde_json::json;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    let wording =
+        json!({"subject": "Paalala po", "opening": "Hi Nena! Kailangan pa po namin ito:", "closing": "Salamat po!"});
+    Mock::given(wiremock::matchers::method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "type": "message", "model": "claude-haiku-5-5",
+            "content": [{"type": "text", "text": wording.to_string()}],
+            "stop_reason": "end_turn", "usage": {"input_tokens": 10, "output_tokens": 10}
+        })))
+        .mount(&server)
+        .await;
+    let model = kompleto::engine::llm::AnthropicClient::new(
+        &server.uri(),
+        secrecy::SecretString::from("k"),
+        "claude-haiku-5-5",
+        std::time::Duration::from_secs(2),
+    )
+    .unwrap();
+    let clock = clock();
+    clock.advance(Duration::days(11)); // 1 Nov 2026: October's first request is due
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    Clients::new(pool.clone(), clock.clone())
+        .create(santos, &employer())
+        .await
+        .unwrap();
+
+    Scheduler::with_model(pool.clone(), clock.clone(), Some(model))
+        .unwrap()
+        .run_once()
+        .await
+        .unwrap();
+
+    let (source, body): (String, String) = sqlx::query_as(
+        "select s.source, m.body_text from scheduled_drafts s join outbox_messages m on m.id = s.message_id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(source, "ai");
+    assert!(
+        body.starts_with("Hi Nena! Kailangan pa po namin ito:") && body.contains("Santos Bookkeeping"),
+        "{body}"
+    );
+}

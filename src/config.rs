@@ -2,9 +2,11 @@
 //! or invalid value stops the program at start-up, not mid-request.
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use secrecy::SecretString;
 
+use crate::engine::llm::AnthropicClient;
 use crate::engine::mail::{ConfiguredMailer, MailpitMailer, ResendMailer};
 
 /// Configuration errors.
@@ -54,6 +56,20 @@ pub struct Config {
     pub mail: MailConfig,
     /// Address emails are sent from, on our own domain.
     pub mail_from_address: String,
+    /// The model for drafting; `None` without `ANTHROPIC_API_KEY`, and every
+    /// Draft is then a template.
+    pub model: Option<ModelConfig>,
+}
+
+/// Where and which model drafts.
+#[derive(Debug)]
+pub struct ModelConfig {
+    /// Normally `https://api.anthropic.com`.
+    pub base_url: String,
+    /// API key.
+    pub api_key: SecretString,
+    /// Model ID, e.g. `claude-haiku-5-5`.
+    pub model: String,
 }
 
 impl Config {
@@ -88,7 +104,32 @@ impl Config {
             public_base_url,
             mail,
             mail_from_address: required("MAIL_FROM_ADDRESS")?,
+            model: optional("ANTHROPIC_API_KEY").map(|key| ModelConfig {
+                base_url: optional("ANTHROPIC_BASE_URL").unwrap_or_else(|| "https://api.anthropic.com".to_owned()),
+                api_key: SecretString::from(key),
+                model: optional("LLM_MODEL").unwrap_or_else(|| "claude-haiku-5-5".to_owned()),
+            }),
         })
+    }
+
+    /// Builds the drafting model's client, if one is configured. It gives up
+    /// after 15 seconds; the Draft is then a template.
+    pub fn language_model(&self) -> Result<Option<AnthropicClient>, ConfigError> {
+        self.model
+            .as_ref()
+            .map(|model| {
+                AnthropicClient::new(
+                    &model.base_url,
+                    model.api_key.clone(),
+                    &model.model,
+                    Duration::from_secs(15),
+                )
+                .map_err(|err| ConfigError::Invalid {
+                    name: "ANTHROPIC_BASE_URL",
+                    reason: err.to_string(),
+                })
+            })
+            .transpose()
     }
 
     /// Builds the configured mailer.

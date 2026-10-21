@@ -1,7 +1,6 @@
-//! The scheduler (D1): each run creates the Drafts that are due, as fixed
-//! templates in the Client's language. Every Draft waits for the
-//! bookkeeper's approval; nothing here approves or sends. M3 replaces the
-//! template text with AI drafts, keeping the template as the fallback.
+//! The scheduler (D1): each run creates the Drafts that are due, written by
+//! the model or, failing that, the template (`super::drafting`). Every
+//! Draft waits for the bookkeeper's approval; nothing here approves or sends.
 //!
 //! - Only the latest Draft due is created; a missed earlier one is skipped,
 //!   so a Client never gets a burst of catch-up messages.
@@ -20,12 +19,13 @@ use sqlx::PgPool;
 
 use super::calendar::{Calendar, CalendarError};
 use super::checklist::owed_documents;
-use super::clients::{Client, ClientError, ClientId, Clients, Language};
-use super::dates::show_date;
+use super::clients::{Client, ClientError, ClientId, Clients};
+use super::drafting::{DraftBrief, Drafter, Tone};
 use super::firms::FirmId;
 use super::periods::{ClientCalendar, CollectionPeriod};
 use super::schedule::{MANILA, MAX_DRAFTS_PER_PERIOD, PlannedDraft, Slot, appears_at, planned_drafts};
 use crate::engine::clock::Clock;
+use crate::engine::llm::AnthropicClient;
 use crate::engine::mail::Email;
 use crate::engine::outbox::{Outbox, OutboxError};
 
@@ -50,12 +50,23 @@ pub struct Scheduler {
     calendar: Calendar,
     clients: Clients,
     outbox: Outbox,
+    drafter: Drafter<AnthropicClient>,
 }
 
 impl Scheduler {
-    /// A scheduler using the built-in calendar.
+    /// A scheduler that writes every Draft from the template.
     pub fn new(pool: PgPool, clock: Arc<dyn Clock>) -> Result<Self, CalendarError> {
+        Self::with_model(pool, clock, None)
+    }
+
+    /// A scheduler that asks `model` for each Draft's wording, when there is one.
+    pub fn with_model(
+        pool: PgPool,
+        clock: Arc<dyn Clock>,
+        model: Option<AnthropicClient>,
+    ) -> Result<Self, CalendarError> {
         Ok(Self {
+            drafter: Drafter::new(pool.clone(), clock.clone(), model),
             calendar: Calendar::built_in()?,
             clients: Clients::new(pool.clone(), clock.clone()),
             outbox: Outbox::new(pool.clone(), clock.clone()),
@@ -145,17 +156,34 @@ impl Scheduler {
             return Ok(false);
         }
         let edits = self.clients.checklist_edits(firm, client.id).await?;
-        let owed = owed_documents(&client.details.forms, period.month, &edits);
+        let brief = DraftBrief {
+            business_name: client.details.business_name.clone(),
+            contact_first_name: client.details.contact_first_name.clone(),
+            owed: owed_documents(&client.details.forms, period.month, &edits),
+            period: period.label.to_string(),
+            cut_off: period.cut_off,
+            language: client.details.language,
+            tone: Tone::for_reminder(match draft.slot {
+                Slot::FirstRequest => None,
+                Slot::Reminder { days_before } => Some(days_before),
+            }),
+        };
+        // Drafted before the transaction, so a slow model holds no locks.
+        let text = self.drafter.draft(firm, firm_name, &brief).await;
+        let email = Email {
+            to_address: client.details.email.clone(),
+            from_name: firm_name.to_owned(),
+            reply_to: None,
+            subject: text.subject,
+            body_text: text.body,
+        };
         let mut tx = self.pool.begin().await?;
-        let message = self
-            .outbox
-            .create_draft_in(&mut tx, firm, &template(firm_name, client, period, draft.slot, &owed))
-            .await?;
+        let message = self.outbox.create_draft_in(&mut tx, firm, &email).await?;
         // A concurrent run that recorded this slot first, or a full Period,
         // makes this insert a no-op, and the Draft rolls back with it.
         let recorded = sqlx::query_scalar!(
-            r#"insert into scheduled_drafts (firm_id, client_id, period, slot, ordinal, message_id, created_at)
-               select $1, $2, $3, $4, count(*)::smallint, $5, $6
+            r#"insert into scheduled_drafts (firm_id, client_id, period, slot, ordinal, message_id, created_at, source)
+               select $1, $2, $3, $4, count(*)::smallint, $5, $6, $8
                from scheduled_drafts where client_id = $2 and period = $3
                having count(*) < $7
                on conflict do nothing
@@ -167,6 +195,7 @@ impl Scheduler {
             message.as_uuid(),
             self.clock.now(),
             i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4),
+            text.source.as_str(),
         )
         .fetch_optional(&mut *tx)
         .await?;
@@ -192,41 +221,5 @@ fn slot_key(slot: Slot) -> String {
     match slot {
         Slot::FirstRequest => "first".to_owned(),
         Slot::Reminder { days_before } => format!("before-{days_before}"),
-    }
-}
-
-/// The fixed-template Draft for one slot.
-fn template(firm_name: &str, client: &Client, period: &CollectionPeriod, slot: Slot, owed: &[String]) -> Email {
-    let (name, label, cut_off) = (
-        &client.details.contact_first_name,
-        period.label,
-        show_date(period.cut_off),
-    );
-    let list: String = owed.iter().map(|item| format!("- {item}\n")).collect();
-    let reminder = matches!(slot, Slot::Reminder { .. });
-    let (subject, body) = match client.details.language {
-        Language::Taglish => (
-            format!("Mga dokumento para sa {label}, bago {cut_off}"),
-            format!(
-                "Hi {name},\n\n{}Para sa {label} BIR filings ninyo, paki-send po ang mga ito bago {cut_off}:\n\n\
-                 {list}\nSalamat po!\n{firm_name}\n",
-                if reminder { "Paalala lang po. " } else { "" }
-            ),
-        ),
-        Language::English => (
-            format!("Documents for {label}, by {cut_off}"),
-            format!(
-                "Hi {name},\n\n{}For your {label} BIR filings, please send us these by {cut_off}:\n\n\
-                 {list}\nThank you!\n{firm_name}\n",
-                if reminder { "A quick reminder. " } else { "" }
-            ),
-        ),
-    };
-    Email {
-        to_address: client.details.email.clone(),
-        from_name: firm_name.to_owned(),
-        reply_to: None,
-        subject,
-        body_text: body,
     }
 }
