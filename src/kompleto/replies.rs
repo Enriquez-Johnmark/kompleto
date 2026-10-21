@@ -143,11 +143,14 @@ impl Replies {
             tracing::info!(sender_domain = domain, "inbound email matched no client; nothing kept");
             return Ok(Received::Unmatched);
         };
-        let id = ReplyId::new();
-        sqlx::query!(
-            "insert into replies (id, firm_id, client_id, period, from_address, subject, body_text, automatic, received_at)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-            id.as_uuid(),
+        let new = ReplyId::new();
+        let inserted = sqlx::query_scalar!(
+            "insert into replies
+                 (id, firm_id, client_id, period, from_address, subject, body_text, automatic, received_at, message_key)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             on conflict (firm_id, message_key) do nothing
+             returning id",
+            new.as_uuid(),
             link.firm.as_uuid(),
             link.client.as_uuid(),
             link.period,
@@ -156,28 +159,60 @@ impl Replies {
             email.text,
             email.automatic,
             self.clock.now(),
+            email.key,
         )
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
+        // A redelivery: the provider retries when an earlier attempt failed
+        // part way, so finish what's left, but never keep anything twice.
+        let (id, handled) = match inserted {
+            Some(_) => (new, false),
+            None => {
+                let row = sqlx::query!(
+                    "select id, handled_at is not null as \"handled!\" from replies
+                     where firm_id = $1 and message_key = $2",
+                    link.firm.as_uuid(),
+                    email.key,
+                )
+                .fetch_one(&self.pool)
+                .await?;
+                (ReplyId::from(row.id), row.handled)
+            }
+        };
         if email.automatic {
             return Ok(Received::Automatic(id));
         }
-        let kept = self.keep_attachments(&link, &email.attachments).await;
-        if kept > 0 {
-            sqlx::query!(
-                "update replies set attachments = $3 where id = $1 and firm_id = $2",
-                id.as_uuid(),
-                link.firm.as_uuid(),
-                kept,
-            )
-            .execute(&self.pool)
-            .await?;
+        if handled {
+            return Ok(Received::Human(id));
+        }
+        // Attachments are kept on the first attempt only; one a failure
+        // dropped is lost rather than risk keeping one twice.
+        if inserted.is_some() {
+            let kept = self.keep_attachments(&link, &email.attachments).await;
+            if kept > 0 {
+                sqlx::query!(
+                    "update replies set attachments = $3 where id = $1 and firm_id = $2",
+                    id.as_uuid(),
+                    link.firm.as_uuid(),
+                    kept,
+                )
+                .execute(&self.pool)
+                .await?;
+            }
         }
         self.drafts.cancel_waiting(link.firm, link.client, &link.period).await?;
         // The Reply is kept either way; a notice that fails is logged.
         if let Err(err) = self.notify(&link, id).await {
             tracing::error!(firm = %link.firm, reply = %id, %err, "notifying the firm of a reply failed");
         }
+        sqlx::query!(
+            "update replies set handled_at = $3 where id = $1 and firm_id = $2",
+            id.as_uuid(),
+            link.firm.as_uuid(),
+            self.clock.now(),
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(Received::Human(id))
     }
 

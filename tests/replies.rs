@@ -218,6 +218,30 @@ async fn g1_photo_and_pdf_attachments_are_kept_as_uploads_and_the_rest_dropped(p
 }
 
 #[sqlx::test]
+async fn g1_the_same_email_delivered_twice_is_kept_and_announced_once(pool: PgPool) {
+    let (_, clock, reply_to) = reminded(&pool).await;
+
+    for name in ["with_attachments", "human_reply"] {
+        let email = parse(&common::inbound(name, &reply_to)).unwrap();
+        let first = replies(&pool, clock.clone()).receive(&email).await.unwrap();
+        let again = replies(&pool, clock.clone()).receive(&email).await.unwrap();
+        assert_eq!(first, again, "{name}");
+    }
+
+    let count = |sql: &'static str| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, i64>(sql).fetch_one(&pool).await.unwrap() }
+    };
+    assert_eq!(count("select count(*) from replies").await, 2);
+    assert_eq!(count("select count(*) from uploads").await, 1);
+    assert_eq!(
+        count("select count(*) from outbox_messages where reply_to is null").await,
+        2,
+        "one notice each"
+    );
+}
+
+#[sqlx::test]
 async fn g1_a_replys_text_is_deleted_after_90_days_and_the_reply_kept(pool: PgPool) {
     let (santos, clock, reply_to) = reminded(&pool).await;
     let email = parse(&common::inbound("human_reply", &reply_to)).unwrap();

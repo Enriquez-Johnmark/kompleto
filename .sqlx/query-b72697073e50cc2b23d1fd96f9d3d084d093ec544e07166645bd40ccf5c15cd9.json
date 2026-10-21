@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update replies set handled_at = $3 where id = $1 and firm_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b72697073e50cc2b23d1fd96f9d3d084d093ec544e07166645bd40ccf5c15cd9"
+}
