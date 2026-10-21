@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id from upload_links where id = $1 for update",
+  "query": "select id from upload_links where id = $1 and firm_id = $2 for update",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -24,5 +25,5 @@
       false
     ]
   },
-  "hash": "a96f79bd237a9227b24b7b34d12a278f969ac6f58e67c409acb4f53852674f2e"
+  "hash": "ca3145391fe74572e0b7ff2b9641a824780303569e2d2262861ca5415f99f356"
 }

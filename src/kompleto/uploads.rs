@@ -253,15 +253,17 @@ impl Uploads {
         let mut tx = self.pool.begin().await?;
         // One upload at a time per link, so two can't both squeeze under the limits.
         sqlx::query!(
-            "select id from upload_links where id = $1 for update",
-            link.id.as_uuid()
+            "select id from upload_links where id = $1 and firm_id = $2 for update",
+            link.id.as_uuid(),
+            link.firm.as_uuid(),
         )
         .fetch_one(&mut *tx)
         .await?;
         let used = sqlx::query!(
             r#"select count(*) as "files!", coalesce(sum(size_bytes), 0)::bigint as "bytes!"
-               from uploads where link_id = $1"#,
+               from uploads where link_id = $1 and firm_id = $2"#,
             link.id.as_uuid(),
+            link.firm.as_uuid(),
         )
         .fetch_one(&mut *tx)
         .await?;
