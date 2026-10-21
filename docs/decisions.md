@@ -4,6 +4,7 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-21
 
+- **Commit straight to main.** The owner is the only developer: no branches or pull requests from M2 on. Small commits (one behaviour each), every commit green on fmt, clippy and tests, pushed to `main`, with CI fixed immediately if it goes red. This supersedes the Phase 8 "branch per milestone, PR, merge on the owner's word" workflow.
 - **Build in the cloud.** From M2 on, coding happens in Claude Code on the web (4 vCPU / 16 GB VMs), with a start-up hook for Postgres, Mailpit and the pinned Rust. If that fails, the fallback is local builds with lighter settings.
 - **M1 test seams, Tenant, unconfirmed sends.** Five test seams for M1. "Tenant" is the Engine's word for the owner of data (a Firm in Kompleto). A send whose outcome is unknown, through a provider that can't block duplicates (or past Resend's 24-hour window), becomes "unconfirmed" and is never retried automatically. Recorded in `docs/architecture.md`.
 - **Phase 8.** Five decisions:
