@@ -133,6 +133,29 @@ impl TaxPeriod {
         let (year, month) = self.last_month();
         day_in_month(year, month, 31)
     }
+
+    /// A stable text key for storage: `2026-11`, `2026-Q3` or `2026`.
+    pub fn key(self) -> String {
+        match self {
+            Self::Month { year, month } => format!("{year}-{:02}", u8::from(month)),
+            Self::Quarter { year, quarter } => format!("{year}-Q{quarter}"),
+            Self::Year(year) => year.to_string(),
+        }
+    }
+
+    /// Reads a key written by [`TaxPeriod::key`].
+    pub fn parse_key(key: &str) -> Option<Self> {
+        let Some((year, rest)) = key.split_once('-') else {
+            return key.parse().ok().map(Self::Year);
+        };
+        let year = year.parse().ok()?;
+        if let Some(quarter) = rest.strip_prefix('Q') {
+            let quarter = quarter.parse().ok().filter(|q| (1..=4).contains(q))?;
+            return Some(Self::Quarter { year, quarter });
+        }
+        let month = Month::try_from(rest.parse::<u8>().ok()?).ok()?;
+        Some(Self::Month { year, month })
+    }
 }
 
 impl fmt::Display for TaxPeriod {
@@ -151,8 +174,10 @@ pub struct DueDate {
     /// The date the law sets.
     pub statutory: Date,
     /// The date filing is actually due: the statutory date, moved past
-    /// weekends and holidays.
+    /// weekends and holidays, or as a BIR extension sets it.
     pub date: Date,
+    /// The issuance behind an extension, e.g. `"RMC 30-2026"`.
+    pub extension: Option<String>,
 }
 
 /// The built-in calendar is broken; a test keeps this from shipping.
@@ -173,6 +198,7 @@ pub struct Calendar {
     holidays: BTreeSet<Date>,
     holidays_known_from: Date,
     holidays_known_until: Date,
+    extensions: HashMap<(BirForm, TaxPeriod), (Date, String)>,
 }
 
 impl Calendar {
@@ -202,8 +228,20 @@ impl Calendar {
             .iter()
             .map(|holiday| parse_date(&holiday.date))
             .collect::<Result<_, _>>()?;
+        let mut extensions = HashMap::new();
+        for extension in file.extension {
+            let period = TaxPeriod::parse_key(&extension.period)
+                .ok_or_else(|| CalendarError::Invalid(format!("bad period {:?}", extension.period)))?;
+            let due = parse_date(&extension.due)?;
+            for code in &extension.forms {
+                let form = BirForm::parse(code)
+                    .ok_or_else(|| CalendarError::Invalid(format!("unknown form {code:?} in an extension")))?;
+                extensions.insert((form, period), (due, extension.source.clone()));
+            }
+        }
         Ok(Self {
             rules,
+            extensions,
             holidays,
             holidays_known_from: parse_date(&file.holidays.known_from)?,
             holidays_known_until: parse_date(&file.holidays.known_until)?,
@@ -236,9 +274,14 @@ impl Calendar {
             _ => rule.due,
         };
         let statutory = due.after(period.last_day());
+        let (date, extension) = match self.extensions.get(&(form, period)) {
+            Some((extended, source)) => (*extended, Some(source.clone())),
+            None => (statutory, None),
+        };
         Some(DueDate {
             statutory,
-            date: self.next_working_day(statutory),
+            date: self.next_working_day(date),
+            extension,
         })
     }
 }
@@ -248,6 +291,18 @@ impl Calendar {
 struct CalendarFile {
     form: Vec<FormRule>,
     holidays: Holidays,
+    #[serde(default)]
+    extension: Vec<Extension>,
+}
+
+/// A nationwide BIR extension: new due date for some forms for one Period.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Extension {
+    forms: Vec<String>,
+    period: String,
+    due: String,
+    source: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -400,6 +455,35 @@ mod tests {
             let due = calendar().due_date(form, period).map(|due| due.date);
             assert_eq!(due, Some(expected), "{form} {period}");
         }
+    }
+
+    #[test]
+    fn b3_a_bir_extension_is_applied_in_one_place() {
+        let extended = format!(
+            "{BUILT_IN}\n[[extension]]\nforms = [\"2550Q\"]\nperiod = \"2026-Q3\"\n\
+             due = \"2026-11-06\"\nsource = \"RMC 999-2026\"\n"
+        );
+        let calendar = Calendar::from_toml(&extended).unwrap();
+
+        let due = calendar.due_date(BirForm::F2550Q, q(2026, 3)).unwrap();
+        assert_eq!(
+            (due.date, due.extension.as_deref()),
+            (date!(2026 - 11 - 06), Some("RMC 999-2026"))
+        );
+        assert_eq!(due.statutory, date!(2026 - 10 - 25));
+        let other_form = calendar.due_date(BirForm::F2551Q, q(2026, 3)).unwrap();
+        assert_eq!((other_form.date, other_form.extension), (date!(2026 - 10 - 26), None));
+        let other_period = calendar.due_date(BirForm::F2550Q, q(2026, 4)).unwrap();
+        assert_eq!(other_period.date, date!(2027 - 01 - 25));
+    }
+
+    #[test]
+    fn tax_periods_round_trip_through_their_keys() {
+        for period in [m(2026, Month::November), q(2026, 3), TaxPeriod::Year(2026)] {
+            assert_eq!(TaxPeriod::parse_key(&period.key()), Some(period));
+        }
+        assert_eq!(q(2026, 3).key(), "2026-Q3");
+        assert_eq!(TaxPeriod::parse_key("2026-Q5"), None);
     }
 
     #[test]

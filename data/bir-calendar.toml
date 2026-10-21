@@ -129,3 +129,14 @@ dates = [
     { date = "2027-12-30", name = "Rizal Day" },
     { date = "2027-12-31", name = "Last day of the year" },
 ]
+
+# Nationwide BIR extensions. Regional ones (most of them) are applied as
+# per-client overrides instead. Each entry moves the listed forms for one
+# Period (keys: 2026-11, 2026-Q3, 2026); the new date still moves past
+# weekends and holidays. Example:
+#
+# [[extension]]
+# forms = ["1701", "1702"]
+# period = "2026"
+# due = "2027-05-17"
+# source = "RMC 00-2027"
