@@ -108,6 +108,7 @@ impl Bounces {
             tracing::warn!(%firm, kind, "a message to the firm itself bounced");
             return Ok(Recorded::Ignored);
         };
+        let address = sent.to_address.trim().to_ascii_lowercase();
         sqlx::query!(
             "insert into bounces (id, firm_id, client_id, message_id, address, kind, reason, at)
              values ($1, $2, $3, $4, $5, $6, $7, $8)",
@@ -115,7 +116,7 @@ impl Bounces {
             firm.as_uuid(),
             client.as_uuid(),
             sent.id.as_uuid(),
-            sent.to_address.trim().to_ascii_lowercase(),
+            address,
             kind,
             reason,
             self.clock.now(),
@@ -125,8 +126,20 @@ impl Bounces {
         if kind == "soft_bounce" {
             return Ok(Recorded::Noted);
         }
-        self.drafts.cancel_waiting_for_client(firm, client).await?;
-        Ok(Recorded::Stopped)
+        self.drafts.cancel_waiting_to(firm, client, &address).await?;
+        // A late Bounce for an address since replaced stops nothing more.
+        let current = sqlx::query_scalar!(
+            "select lower(trim(email)) as \"email!\" from clients where firm_id = $1 and id = $2",
+            firm.as_uuid(),
+            client.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        if current.as_deref() == Some(address.as_str()) {
+            Ok(Recorded::Stopped)
+        } else {
+            Ok(Recorded::Noted)
+        }
     }
 
     /// A Client's Bounces and complaints, newest first.

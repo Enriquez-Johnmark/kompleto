@@ -87,6 +87,33 @@ async fn g3_a_permanent_bounce_stops_the_clients_reminders_until_its_email_chang
 }
 
 #[sqlx::test]
+async fn g3_a_late_bounce_for_an_old_address_leaves_reminders_to_the_new_one(pool: PgPool) {
+    let (santos, client, clock, scheduler) = sent_and_waiting(&pool).await;
+    let moved = NewClient {
+        email: "nena.new@example.test".to_owned(),
+        ..employer()
+    };
+    Clients::new(pool.clone(), clock.clone())
+        .update(santos, client, &moved)
+        .await
+        .unwrap();
+    clock.advance(Duration::days(2)); // 4 Nov: a Reminder to the new address
+    scheduler.run_once().await.unwrap();
+
+    let recorded = Bounces::new(pool.clone(), clock)
+        .record(&bounce("re_1", true))
+        .await
+        .unwrap();
+
+    assert_eq!(recorded, Recorded::Noted);
+    assert_eq!(
+        statuses(&pool).await,
+        ["sent", "cancelled", "draft"],
+        "only the old address's"
+    );
+}
+
+#[sqlx::test]
 async fn g3_a_complaint_stops_reminders_and_a_temporary_bounce_is_only_noted(pool: PgPool) {
     let (_, _, clock, _) = sent_and_waiting(&pool).await;
     let bounces = Bounces::new(pool.clone(), clock);

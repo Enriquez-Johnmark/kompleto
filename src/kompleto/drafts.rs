@@ -93,24 +93,32 @@ impl Drafts {
     /// Cancels the Client's reminders for `period` that haven't gone out,
     /// because everything owed has arrived (G2); returns how many.
     pub async fn cancel_waiting(&self, firm: FirmId, client: ClientId, period: &str) -> Result<usize, OutboxError> {
-        self.cancel(firm, client, Some(period)).await
+        self.cancel(firm, client, Some(period), None).await
     }
 
-    /// Cancels the Client's Reminders in every Period that haven't gone
-    /// out, because its address bounced (G3); returns how many.
-    pub async fn cancel_waiting_for_client(&self, firm: FirmId, client: ClientId) -> Result<usize, OutboxError> {
-        self.cancel(firm, client, None).await
+    /// Cancels the Client's Reminders to `address` in every Period that
+    /// haven't gone out, because it bounced (G3); returns how many.
+    pub async fn cancel_waiting_to(&self, firm: FirmId, client: ClientId, address: &str) -> Result<usize, OutboxError> {
+        self.cancel(firm, client, None, Some(address)).await
     }
 
-    async fn cancel(&self, firm: FirmId, client: ClientId, period: Option<&str>) -> Result<usize, OutboxError> {
+    async fn cancel(
+        &self,
+        firm: FirmId,
+        client: ClientId,
+        period: Option<&str>,
+        address: Option<&str>,
+    ) -> Result<usize, OutboxError> {
         let waiting = sqlx::query_scalar!(
             "select s.message_id from scheduled_drafts s
              join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
              where s.firm_id = $1 and s.client_id = $2 and ($3::text is null or s.period = $3)
+               and ($4::text is null or lower(trim(m.to_address)) = $4)
                and m.status in ('draft', 'approved')",
             firm.as_uuid(),
             client.as_uuid(),
             period,
+            address,
         )
         .fetch_all(&self.pool)
         .await?;

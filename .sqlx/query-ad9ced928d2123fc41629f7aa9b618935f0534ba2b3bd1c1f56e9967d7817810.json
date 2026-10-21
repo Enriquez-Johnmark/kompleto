@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select lower(trim(email)) as \"email!\" from clients where firm_id = $1 and id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ad9ced928d2123fc41629f7aa9b618935f0534ba2b3bd1c1f56e9967d7817810"
+}
