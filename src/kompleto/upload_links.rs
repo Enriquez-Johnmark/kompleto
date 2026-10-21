@@ -155,6 +155,26 @@ impl UploadLinks {
         })
     }
 
+    /// The Client's link for `period` as [`UploadLinks::open`] gives it, if
+    /// it has one (expired or not).
+    pub async fn find(&self, firm: FirmId, client: ClientId, period: &str) -> Result<Option<OpenLink>, sqlx::Error> {
+        let row = sqlx::query!(
+            "select id, cut_off from upload_links where firm_id = $1 and client_id = $2 and period = $3",
+            firm.as_uuid(),
+            client.as_uuid(),
+            period,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|row| OpenLink {
+            id: row.id.into(),
+            firm,
+            client,
+            period: period.to_owned(),
+            cut_off: row.cut_off,
+        }))
+    }
+
     /// The Client's link for `period`, if it has one.
     pub async fn existing(&self, firm: FirmId, client: ClientId, period: &str) -> Result<Option<String>, sqlx::Error> {
         let id = sqlx::query_scalar!(

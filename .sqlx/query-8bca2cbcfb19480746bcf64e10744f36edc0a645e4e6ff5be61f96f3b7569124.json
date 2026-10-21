@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select s.period from scheduled_drafts s\n             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n             where s.firm_id = $1 and s.client_id = $2 and m.status = 'sent'\n             order by m.sent_at desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "period",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "scheduled_drafts",
+            "name": "period"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8bca2cbcfb19480746bcf64e10744f36edc0a645e4e6ff5be61f96f3b7569124"
+}

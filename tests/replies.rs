@@ -1,0 +1,138 @@
+//! Seam 1 (M5): Replies from sample messages, against Postgres (G1).
+
+#![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
+
+mod common;
+
+use std::sync::Arc;
+
+use common::{clock, firm, nena};
+use kompleto::engine::clock::FixedClock;
+use kompleto::engine::inbound::parse;
+use kompleto::kompleto::calendar::BirForm;
+use kompleto::kompleto::clients::{Clients, NewClient};
+use kompleto::kompleto::firms::FirmId;
+use kompleto::kompleto::reminders::Scheduler;
+use kompleto::kompleto::replies::{Received, Replies};
+use sqlx::PgPool;
+use time::Duration;
+
+fn employer() -> NewClient {
+    NewClient {
+        forms: vec![BirForm::F1601C],
+        ..nena()
+    }
+}
+
+/// A Firm whose employer Client has October's first Reminder waiting (1 Nov
+/// 2026); returns its reply address.
+async fn reminded(pool: &PgPool) -> (FirmId, Arc<FixedClock>, String) {
+    let clock = clock();
+    clock.advance(Duration::days(11));
+    let santos = firm(pool, "Santos Bookkeeping").await;
+    Clients::new(pool.clone(), clock.clone())
+        .create(santos, &employer())
+        .await
+        .unwrap();
+    Scheduler::new(pool.clone(), clock.clone(), common::upload_links(pool, clock.clone()))
+        .unwrap()
+        .run_once()
+        .await
+        .unwrap();
+    let reply_to: String = sqlx::query_scalar("select reply_to from outbox_messages")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    (santos, clock, reply_to)
+}
+
+fn replies(pool: &PgPool, clock: Arc<FixedClock>) -> Replies {
+    Replies::new(pool.clone(), clock.clone(), common::upload_links(pool, clock))
+}
+
+async fn status(pool: &PgPool) -> String {
+    sqlx::query_scalar("select status from outbox_messages")
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn g1_a_human_reply_stops_the_periods_reminders(pool: PgPool) {
+    let (santos, clock, reply_to) = reminded(&pool).await;
+    let email = parse(&common::inbound("human_reply", &reply_to)).unwrap();
+
+    let received = replies(&pool, clock.clone()).receive(&email).await.unwrap();
+
+    let Received::Human(id) = received else {
+        panic!("{received:?}");
+    };
+    assert_eq!(status(&pool).await, "cancelled");
+    let reply = replies(&pool, clock).get(santos, id).await.unwrap();
+    assert_eq!(reply.period, "2026-10");
+    assert!(reply.text.unwrap().starts_with("Hi po! Ipapadala ko po bukas"));
+}
+
+#[sqlx::test]
+async fn g1_an_automatic_reply_is_noted_but_reminders_continue(pool: PgPool) {
+    let (_, clock, reply_to) = reminded(&pool).await;
+
+    for name in ["outlook_ooo", "gmail_vacation"] {
+        let email = parse(&common::inbound(name, &reply_to)).unwrap();
+        let received = replies(&pool, clock.clone()).receive(&email).await.unwrap();
+        assert!(matches!(received, Received::Automatic(_)), "{name}: {received:?}");
+    }
+
+    assert_eq!(status(&pool).await, "draft");
+}
+
+#[sqlx::test]
+async fn g1_mail_with_a_forged_code_from_an_unknown_sender_keeps_nothing(pool: PgPool) {
+    let (_, clock, reply_to) = reminded(&pool).await;
+    let forged = reply_to.replacen("reply+", "reply+0", 1);
+    let raw = String::from_utf8(common::inbound("human_reply", &forged))
+        .unwrap()
+        .replace("Nena@Example.TEST", "stranger@elsewhere.test");
+
+    let received = replies(&pool, clock)
+        .receive(&parse(raw.as_bytes()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(received, Received::Unmatched);
+    let kept: i64 = sqlx::query_scalar("select count(*) from replies")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(kept, 0);
+    assert_eq!(status(&pool).await, "draft");
+}
+
+#[sqlx::test]
+async fn g1_mail_without_a_code_matches_the_only_client_with_that_address(pool: PgPool) {
+    let (santos, clock, _) = reminded(&pool).await;
+    // The Reminder went out; Nena then writes to the plain sending address.
+    sqlx::query("update outbox_messages set status = 'sent', approved_hash = '\\x00', sent_at = $1")
+        .bind(clock.now_plus(Duration::hours(1)))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let email = parse(&common::inbound("human_reply", "reminders@getkompleto.test")).unwrap();
+
+    let first = replies(&pool, clock.clone()).receive(&email).await.unwrap();
+    // A second Client with the same address makes the sender ambiguous.
+    Clients::new(pool.clone(), clock.clone())
+        .create(
+            santos,
+            &NewClient {
+                business_name: "Nena's Other Store".to_owned(),
+                ..employer()
+            },
+        )
+        .await
+        .unwrap();
+    let second = replies(&pool, clock).receive(&email).await.unwrap();
+
+    assert!(matches!(first, Received::Human(_)), "{first:?}");
+    assert_eq!(second, Received::Unmatched);
+}

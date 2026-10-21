@@ -121,6 +121,15 @@ pub fn files(pool: &sqlx::PgPool, clock: Arc<FixedClock>) -> kompleto::engine::f
     )
 }
 
+/// The sample inbound message `name` (tests/fixtures/mail), sent to `to`.
+pub fn inbound(name: &str, to: &str) -> Vec<u8> {
+    let path = format!("{}/tests/fixtures/mail/{name}.eml", env!("CARGO_MANIFEST_DIR"));
+    std::fs::read_to_string(path)
+        .unwrap()
+        .replace("{{TO}}", to)
+        .into_bytes()
+}
+
 /// A sample Client: a non-VAT sole proprietor reminded in Taglish.
 pub fn nena() -> kompleto::kompleto::clients::NewClient {
     use kompleto::kompleto::calendar::BirForm;
