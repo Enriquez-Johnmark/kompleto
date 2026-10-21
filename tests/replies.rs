@@ -84,6 +84,23 @@ async fn g1_a_human_reply_stops_the_periods_reminders(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn g1_after_a_human_reply_no_later_reminder_is_drafted_for_the_period(pool: PgPool) {
+    let (_, clock, reply_to) = reminded(&pool).await;
+    let email = parse(&common::inbound("human_reply", &reply_to)).unwrap();
+    replies(&pool, clock.clone()).receive(&email).await.unwrap();
+
+    clock.advance(Duration::days(3)); // 4 Nov: past the 3- and 1-day reminders' days
+    let scheduler = Scheduler::new(pool.clone(), clock.clone(), common::upload_links(&pool, clock.clone())).unwrap();
+    scheduler.run_once().await.unwrap();
+
+    let drafts: i64 = sqlx::query_scalar("select count(*) from scheduled_drafts")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(drafts, 1, "only the request sent before the reply");
+}
+
+#[sqlx::test]
 async fn g1_an_automatic_reply_is_noted_but_reminders_continue(pool: PgPool) {
     let (_, clock, reply_to) = reminded(&pool).await;
 

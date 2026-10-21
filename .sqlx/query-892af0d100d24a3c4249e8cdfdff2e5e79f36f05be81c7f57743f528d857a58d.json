@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select count(*) as \"drafts!\", coalesce(bool_or(slot = $4), false) as \"this_slot!\",\n                      exists (select 1 from replies r\n                              where r.firm_id = $1 and r.client_id = $2 and r.period = $3 and not r.automatic)\n                          as \"replied!\"\n               from scheduled_drafts where firm_id = $1 and client_id = $2 and period = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "drafts!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "this_slot!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "replied!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "892af0d100d24a3c4249e8cdfdff2e5e79f36f05be81c7f57743f528d857a58d"
+}

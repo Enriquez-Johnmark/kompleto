@@ -180,9 +180,12 @@ impl Scheduler {
             return Ok(false);
         }
         // Checked before drafting, so a slot that can't be recorded never
-        // costs a model call.
+        // costs a model call. A human Reply ends the Period's reminders (G1).
         let taken = sqlx::query!(
-            r#"select count(*) as "drafts!", coalesce(bool_or(slot = $4), false) as "this_slot!"
+            r#"select count(*) as "drafts!", coalesce(bool_or(slot = $4), false) as "this_slot!",
+                      exists (select 1 from replies r
+                              where r.firm_id = $1 and r.client_id = $2 and r.period = $3 and not r.automatic)
+                          as "replied!"
                from scheduled_drafts where firm_id = $1 and client_id = $2 and period = $3"#,
             firm.as_uuid(),
             client.id.as_uuid(),
@@ -191,7 +194,7 @@ impl Scheduler {
         )
         .fetch_one(&self.pool)
         .await?;
-        if taken.this_slot || taken.drafts >= i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4) {
+        if taken.replied || taken.this_slot || taken.drafts >= i64::try_from(MAX_DRAFTS_PER_PERIOD).unwrap_or(4) {
             return Ok(false);
         }
         let link = self.links.issue(firm, client.id, &key, period.cut_off).await?;
