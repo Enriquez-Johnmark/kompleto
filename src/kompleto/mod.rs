@@ -12,6 +12,7 @@ pub mod drafting;
 pub mod drafts;
 pub mod firms;
 pub mod import;
+pub mod payors;
 pub mod periods;
 pub mod presend;
 pub mod reminders;

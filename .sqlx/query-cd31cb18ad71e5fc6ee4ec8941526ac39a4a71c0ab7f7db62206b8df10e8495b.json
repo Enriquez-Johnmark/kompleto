@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into payors (id, firm_id, client_id, name, created_at)\n             select $1, $2, $3, $4, $5\n             where exists (select 1 from clients where firm_id = $2 and id = $3)\n             on conflict do nothing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cd31cb18ad71e5fc6ee4ec8941526ac39a4a71c0ab7f7db62206b8df10e8495b"
+}

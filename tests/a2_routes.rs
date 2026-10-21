@@ -49,6 +49,11 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
         .add(&link, &owed, label, b"%PDF-1.7 statement")
         .await
         .unwrap();
+    // A Payor of the Client.
+    let payor = kompleto::kompleto::payors::Payors::new(pool.clone(), app.clock.clone())
+        .add(santos, client, "Jollibee Foods Corp")
+        .await
+        .unwrap();
     // A Reply from the Client's Contact.
     let reply = uuid::Uuid::now_v7();
     sqlx::query(
@@ -93,7 +98,8 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
             .replace("{item}", &item.to_string())
             .replace("{draft}", &draft.to_string())
             .replace("{upload}", &upload.to_string())
-            .replace("{reply}", &reply.to_string());
+            .replace("{reply}", &reply.to_string())
+            .replace("{payor}", &payor.to_string());
         let hash = outbox.get(santos, draft.into()).await.unwrap().content_hash().to_hex();
         let sample = route.sample_form.replace("{hash}", &hash);
         let form = (route.method == Method::POST).then_some(sample.as_str());

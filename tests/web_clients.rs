@@ -216,3 +216,35 @@ async fn b4_the_checklist_can_be_edited_from_the_client_page(pool: PgPool) {
     let body = app.get(&page, &cookie).await.body;
     assert!(body.contains(bank) && !body.contains(lazada), "{body}");
 }
+
+#[sqlx::test]
+async fn h2_the_firm_lists_a_clients_payors_on_its_page(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (santos, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let client = kompleto::kompleto::clients::Clients::new(app.pool.clone(), app.clock.clone())
+        .create(santos, &common::nena())
+        .await
+        .unwrap();
+
+    let added = app
+        .post(
+            &format!("/clients/{client}/payors"),
+            &cookie,
+            "name=Jollibee+Foods+Corp",
+        )
+        .await;
+    let refused = app
+        .post(&format!("/clients/{client}/payors"), &cookie, "name=www.pay-here.ph")
+        .await;
+    let page = app.get(&format!("/clients/{client}"), &cookie).await;
+
+    assert_eq!(added.status, axum::http::StatusCode::SEE_OTHER);
+    assert_eq!(refused.status, axum::http::StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        refused.body.contains("can&#39;t look like a web address")
+            || refused.body.contains("can't look like a web address"),
+        "{}",
+        refused.body
+    );
+    assert!(page.body.contains("Jollibee Foods Corp"));
+}

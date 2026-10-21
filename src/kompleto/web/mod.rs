@@ -13,6 +13,7 @@ mod drafts;
 mod hooks;
 mod import;
 mod login;
+mod payors;
 mod replies;
 mod settings;
 mod upload;
@@ -43,6 +44,7 @@ use super::dates::show_date;
 use super::drafts::Drafts;
 use super::firms::{FirmError, FirmId, Firms};
 use super::import::xlsx::XlsxReader;
+use super::payors::Payors;
 use super::presend::KompletoChecks;
 use super::replies::Replies;
 use super::upload_links::UploadLinks;
@@ -69,6 +71,7 @@ pub struct AppState {
     links: UploadLinks,
     uploads: Uploads,
     replies: Replies,
+    payors: Payors,
     /// Uploads processed at once.
     upload_slots: Arc<Semaphore>,
     xlsx: XlsxReader,
@@ -126,6 +129,7 @@ impl AppState {
             links,
             uploads: Uploads::new(pool.clone(), clock.clone(), files),
             replies,
+            payors: Payors::new(pool.clone(), clock.clone()),
             upload_slots: Arc::new(Semaphore::new(upload::UPLOAD_SLOTS)),
             pool,
             clock,
@@ -188,6 +192,7 @@ pub fn router(state: AppState) -> Router {
         .merge(uploads::routes())
         .merge(hooks::routes())
         .merge(replies::routes())
+        .merge(payors::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -217,7 +222,7 @@ pub struct ScopedRoute {
     pub method: Method,
     /// The path: `{id}` is a Client, `{item}` one of its extra checklist
     /// items, `{draft}` a reminder Draft, `{upload}` one of its Uploads,
-    /// `{reply}` one of its Replies.
+    /// `{reply}` one of its Replies, `{payor}` one of its Payors.
     pub path: &'static str,
     /// A form body the page accepts, for tests; `{hash}` stands for the
     /// Draft's content hash.
@@ -231,6 +236,7 @@ pub fn scoped_routes() -> Vec<ScopedRoute> {
         .chain(drafts::draft_pages())
         .chain(uploads::upload_pages())
         .chain(replies::reply_pages())
+        .chain(payors::payor_pages())
         .map(|(route, _)| route)
         .collect()
 }

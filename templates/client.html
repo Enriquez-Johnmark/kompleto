@@ -42,6 +42,16 @@ Forms: {% for form in client.details.forms %}{{ form }}{% if !loop.last %}, {% e
   <button>Add</button>
 </form>
 
+<h2 id="payors">Payors</h2>
+<p class="muted">Businesses that withhold tax and owe this client a BIR Form 2307 each quarter. Names only.</p>
+{% if !payors.is_empty() %}<ul>{% for payor in payors %}
+  <li>{{ payor.name }} <form method="post" action="/clients/{{ client.id }}/payors/{{ payor.id }}/delete" class="inline"><button>Remove</button></form></li>
+{% endfor %}</ul>{% endif %}
+<form method="post" action="/clients/{{ client.id }}/payors">
+  <label for="payor-name">Add a Payor</label>
+  <input type="text" id="payor-name" name="name" maxlength="100" required> <button>Add</button>
+</form>
+
 <h2 id="replies">Replies</h2>
 {% if replies.is_empty() %}<p class="muted">No replies yet.</p>{% else %}
 <table>

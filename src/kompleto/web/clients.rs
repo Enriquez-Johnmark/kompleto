@@ -17,6 +17,7 @@ use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::{DEFAULT_ITEMS, ExtraItem, Recurs, owed_documents};
 use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, ExtraItemId, NewClient, ScheduleSettings};
 use crate::kompleto::firms::FirmId;
+use crate::kompleto::payors::Payor;
 use crate::kompleto::periods::ClientCalendar;
 use crate::kompleto::schedule::{ReminderDays, planned_drafts};
 
@@ -261,6 +262,7 @@ struct ClientPage {
     extra_items: Vec<ChecklistItemView>,
     uploads: Vec<UploadView>,
     replies: Vec<ReplyView>,
+    payors: Vec<Payor>,
     error: Option<String>,
 }
 
@@ -353,6 +355,7 @@ async fn client_page(
             subject: reply.subject.unwrap_or_default(),
         })
         .collect();
+    let payors = state.payors.list(firm, id).await?;
     let edits = state.clients.checklist_edits(firm, id).await?;
     let firm_offset = state.firms.get(firm).await?.cut_off_offset_days;
     let calendar = ClientCalendar {
@@ -433,6 +436,7 @@ async fn client_page(
         extra_items,
         uploads,
         replies,
+        payors,
         error,
     })
 }
@@ -516,12 +520,12 @@ async fn delete_item(
 }
 
 /// Shows the client page again with `error`, as the answer to a refused form.
-async fn refuse(state: &AppState, firm: FirmId, id: ClientId, error: String) -> Result<Response, WebError> {
+pub(super) async fn refuse(state: &AppState, firm: FirmId, id: ClientId, error: String) -> Result<Response, WebError> {
     let page = client_page(state, firm, id, Some(error)).await?;
     Ok((StatusCode::UNPROCESSABLE_ENTITY, page).into_response())
 }
 
-fn back_to(id: ClientId) -> Response {
+pub(super) fn back_to(id: ClientId) -> Response {
     Redirect::to(&format!("/clients/{id}")).into_response()
 }
 
