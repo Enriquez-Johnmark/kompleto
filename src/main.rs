@@ -6,6 +6,8 @@
 //! kompleto outbox-drain   send what's due once, then exit
 //! kompleto firm add --name NAME --email EMAIL
 //!                         create a Firm (there is no sign-up page)
+//! kompleto llm-costs --month YYYY-MM
+//!                         every Firm's AI cost for a month (J1)
 //! kompleto demo           (development) put one approved email through the outbox
 //! kompleto parse-xlsx     (internal) the Excel import's sandboxed parser
 //! ```
@@ -20,6 +22,7 @@ use axum::routing::get;
 use kompleto::config::Config;
 use kompleto::config::MailConfig;
 use kompleto::engine::clock::{Clock, SystemClock};
+use kompleto::engine::cost_log;
 use kompleto::engine::ids::TenantId;
 use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{NoExtraChecks, Outbox, Sender};
@@ -93,8 +96,9 @@ async fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Some("firm") => add_firm(pool, clock).await,
+        Some("llm-costs") => llm_costs(pool, clock).await,
         Some("demo") => demo(&config, pool, clock).await,
-        other => bail!("unknown command {other:?}; use serve, migrate, outbox-drain, firm add or demo"),
+        other => bail!("unknown command {other:?}; use serve, migrate, outbox-drain, firm add, llm-costs or demo"),
     }
 }
 
@@ -180,6 +184,36 @@ async fn add_firm(pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
     migrate(&pool).await?;
     let id = Firms::new(pool, clock).create(name, email).await?;
     tracing::info!(%id, "firm created; they can now log in at /login with {email}");
+    Ok(())
+}
+
+/// `kompleto llm-costs --month YYYY-MM`: every Firm's model cost for the
+/// month (Manila time), most expensive first.
+async fn llm_costs(pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    let month = args.iter().position(|a| a == "--month").and_then(|i| args.get(i + 1));
+    let Some((year, month)) = month.and_then(|m| m.split_once('-')).and_then(|(y, m)| {
+        Some((
+            y.parse::<i32>().ok()?,
+            time::Month::try_from(m.parse::<u8>().ok()?).ok()?,
+        ))
+    }) else {
+        bail!("usage: kompleto llm-costs --month YYYY-MM");
+    };
+    let (from, to) = kompleto::kompleto::dates::manila_month(year, month);
+    let firms = Firms::new(pool.clone(), clock);
+    let mut total = cost_log::Totals::default();
+    println!("AI cost for {year}-{:02} (Manila time)", u8::from(month));
+    for (tenant, totals) in cost_log::totals_by_tenant(&pool, from, to).await? {
+        let name = firms
+            .get(tenant)
+            .await
+            .map_or_else(|_| tenant.to_string(), |firm| firm.name);
+        println!("{name:<40} {:>6} calls  US${:.4}", totals.calls, totals.cost_usd());
+        total.calls += totals.calls;
+        total.cost_nano_usd += totals.cost_nano_usd;
+    }
+    println!("{:<40} {:>6} calls  US${:.4}", "Total", total.calls, total.cost_usd());
     Ok(())
 }
 

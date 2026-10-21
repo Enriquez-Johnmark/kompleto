@@ -57,3 +57,37 @@ async fn b3_the_calendar_page_lists_every_due_date_for_the_next_12_months(pool: 
         assert!(page.body.contains(expected), "missing {expected:?} in {}", page.body);
     }
 }
+
+#[sqlx::test]
+async fn j1_settings_show_the_firms_ai_cost_this_month(pool: PgPool) {
+    use kompleto::engine::cost_log::{self, LlmCall, Outcome};
+    use kompleto::engine::llm::Usage;
+    use time::macros::datetime;
+
+    let app = TestApp::new(pool.clone());
+    let (firm, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let call = |at, input| LlmCall {
+        tenant: firm,
+        at,
+        model: "claude-haiku-5-5".to_owned(),
+        usage: Usage {
+            input_tokens: input,
+            output_tokens: 1_000,
+        },
+        request_id: None,
+        outcome: Outcome::Ok,
+    };
+    // Today is 21 Oct 2026; September's call doesn't count.
+    for record in [
+        call(datetime!(2026-10-02 01:00 UTC), 20_000),
+        call(datetime!(2026-10-20 01:00 UTC), 30_000),
+        call(datetime!(2026-09-30 01:00 UTC), 1_000_000),
+    ] {
+        cost_log::record(&pool, &record).await.unwrap();
+    }
+
+    let page = app.get("/settings", &cookie).await.body;
+
+    // 50,000 × $0.10/M + 2,000 × $0.50/M = $0.006.
+    assert!(page.contains("AI cost this month: US$0.0060 (2 drafts)"), "{page}");
+}

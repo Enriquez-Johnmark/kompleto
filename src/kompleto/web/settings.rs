@@ -11,7 +11,9 @@ use serde::Deserialize;
 use time::Duration;
 
 use super::{AppState, CurrentFirm, WebError, show_date};
-use crate::kompleto::firms::Firm;
+use crate::engine::cost_log;
+use crate::kompleto::dates::manila_month;
+use crate::kompleto::firms::{Firm, FirmId};
 use crate::kompleto::schedule::MANILA;
 
 pub(super) fn routes() -> Router<AppState> {
@@ -24,7 +26,19 @@ pub(super) fn routes() -> Router<AppState> {
 #[template(path = "settings.html")]
 struct SettingsPage {
     firm: Firm,
+    ai_cost: String,
     error: Option<String>,
+}
+
+/// "US$0.0060 (2 drafts)": the Firm's model cost this month, Manila time (J1).
+async fn ai_cost(state: &AppState, firm: FirmId) -> Result<String, WebError> {
+    let today = state.clock.now().to_offset(MANILA).date();
+    let (from, to) = manila_month(today.year(), today.month());
+    let totals = cost_log::totals_for_tenant(&state.pool, firm, from, to)
+        .await
+        .map_err(WebError::internal)?;
+    let plural = if totals.calls == 1 { "" } else { "s" };
+    Ok(format!("US${:.4} ({} draft{plural})", totals.cost_usd(), totals.calls))
 }
 
 async fn settings_page(
@@ -32,6 +46,7 @@ async fn settings_page(
     CurrentFirm(firm): CurrentFirm,
 ) -> Result<SettingsPage, WebError> {
     Ok(SettingsPage {
+        ai_cost: ai_cost(&state, firm).await?,
         firm: state.firms.get(firm).await?,
         error: None,
     })
@@ -54,6 +69,7 @@ async fn save_settings(
         }
         _ => {
             let page = SettingsPage {
+                ai_cost: ai_cost(&state, firm).await?,
                 firm: state.firms.get(firm).await?,
                 error: Some("The cut-off offset is 0 to 30 days.".to_owned()),
             };

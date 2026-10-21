@@ -46,6 +46,7 @@ const SESSION_COOKIE: &str = "kompleto_session";
 /// What every handler can reach.
 #[derive(Clone)]
 pub struct AppState {
+    pool: PgPool,
     clock: Arc<dyn Clock>,
     calendar: Arc<Calendar>,
     auth: Auth,
@@ -78,7 +79,8 @@ impl AppState {
             clients: Clients::new(pool.clone(), clock.clone()),
             drafts: Drafts::new(pool.clone(), clock.clone()),
             outbox: Outbox::new(pool.clone(), clock.clone()),
-            checks: KompletoChecks::new(pool, clock.clone(), base_url),
+            checks: KompletoChecks::new(pool.clone(), clock.clone(), base_url),
+            pool,
             clock,
             xlsx,
             wake_sender: Arc::new(Notify::new()),
