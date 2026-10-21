@@ -29,6 +29,7 @@
 {% for draft in approved %}
 <section class="period">
   <p><strong>{{ draft.client }}</strong> · {{ draft.to }} · {{ draft.status }}</p>
+  {% if let Some(problem) = draft.problem %}<p class="error">Not sent: {{ problem }}</p>{% endif %}
   <p><strong>{{ draft.subject }}</strong></p>
   {% include "viber.html" %}
 </section>

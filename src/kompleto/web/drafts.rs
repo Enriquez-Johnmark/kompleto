@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use super::{AppState, CurrentFirm, ScopedRoute, WebError, show_date};
 use crate::engine::ids::MessageId;
-use crate::engine::outbox::{ContentHash, OutboxError};
+use crate::engine::outbox::{ContentHash, MessageStatus, OutboxError};
 use crate::kompleto::drafting::DraftSource;
 use crate::kompleto::drafts::Reminder;
 use crate::kompleto::firms::FirmId;
@@ -63,6 +63,8 @@ struct ReminderView {
     status: &'static str,
     cut_off: Option<String>,
     hash: String,
+    /// Shown for a message held back after approval.
+    problem: Option<String>,
 }
 
 impl From<Reminder> for ReminderView {
@@ -80,6 +82,12 @@ impl From<Reminder> for ReminderView {
             },
             status: reminder.status.as_str(),
             cut_off: reminder.cut_off.map(show_date),
+            problem: reminder.last_error.filter(|_| {
+                matches!(
+                    reminder.status,
+                    MessageStatus::Failed | MessageStatus::Blocked | MessageStatus::Unconfirmed
+                )
+            }),
         }
     }
 }

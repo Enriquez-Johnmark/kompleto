@@ -32,6 +32,8 @@ pub struct Reminder {
     pub source: DraftSource,
     /// The Period's Cut-off.
     pub cut_off: Option<Date>,
+    /// Why it was held back or its last attempt failed.
+    pub last_error: Option<String>,
 }
 
 impl Reminder {
@@ -59,6 +61,7 @@ struct ReminderRow {
     status: String,
     source: String,
     expires_at: Option<OffsetDateTime>,
+    last_error: Option<String>,
 }
 
 impl ReminderRow {
@@ -83,6 +86,7 @@ impl ReminderRow {
             cut_off: self
                 .expires_at
                 .map(|at| at.to_offset(MANILA).date() - Duration::days(1)),
+            last_error: self.last_error,
         })
     }
 }
@@ -98,7 +102,7 @@ impl Drafts {
         let rows = sqlx::query_as!(
             ReminderRow,
             "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,
-                    m.body_text, m.status, s.source, m.expires_at
+                    m.body_text, m.status, s.source, m.expires_at, m.last_error
              from scheduled_drafts s
              join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
              join clients c on c.id = s.client_id and c.firm_id = s.firm_id
@@ -112,16 +116,18 @@ impl Drafts {
         Ok(rows.into_iter().filter_map(ReminderRow::into_reminder).collect())
     }
 
-    /// Reminders approved or sent in the last week, newest first.
+    /// Reminders approved in the last week, newest first: sent, on their
+    /// way, or held back (failed, blocked, unconfirmed) with the reason.
     pub async fn recently_approved(&self, firm: FirmId) -> Result<Vec<Reminder>, sqlx::Error> {
         let rows = sqlx::query_as!(
             ReminderRow,
             "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,
-                    m.body_text, m.status, s.source, m.expires_at
+                    m.body_text, m.status, s.source, m.expires_at, m.last_error
              from scheduled_drafts s
              join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
              join clients c on c.id = s.client_id and c.firm_id = s.firm_id
-             where s.firm_id = $1 and m.status in ('approved', 'sending', 'sent') and m.approved_at > $2
+             where s.firm_id = $1 and m.approved_at > $2
+               and m.status in ('approved', 'sending', 'sent', 'failed', 'blocked', 'unconfirmed')
              order by m.approved_at desc",
             firm.as_uuid(),
             self.clock.now() - Duration::days(7),
@@ -137,7 +143,7 @@ impl Drafts {
         let row = sqlx::query_as!(
             ReminderRow,
             "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,
-                    m.body_text, m.status, s.source, m.expires_at
+                    m.body_text, m.status, s.source, m.expires_at, m.last_error
              from scheduled_drafts s
              join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
              join clients c on c.id = s.client_id and c.firm_id = s.firm_id

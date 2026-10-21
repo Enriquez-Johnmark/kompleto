@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,\n                    m.body_text, m.status, s.source, m.expires_at\n             from scheduled_drafts s\n             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n             join clients c on c.id = s.client_id and c.firm_id = s.firm_id\n             where s.firm_id = $1 and m.status in ('approved', 'sending', 'sent') and m.approved_at > $2\n             order by m.approved_at desc",
+  "query": "select m.id, c.business_name as client, m.to_address, m.from_name, m.reply_to, m.subject,\n                    m.body_text, m.status, s.source, m.expires_at, m.last_error\n             from scheduled_drafts s\n             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id\n             join clients c on c.id = s.client_id and c.firm_id = s.firm_id\n             where s.firm_id = $1 and m.approved_at > $2\n               and m.status in ('approved', 'sending', 'sent', 'failed', 'blocked', 'unconfirmed')\n             order by m.approved_at desc",
   "describe": {
     "columns": [
       {
@@ -112,6 +112,17 @@
             "name": "expires_at"
           }
         }
+      },
+      {
+        "ordinal": 10,
+        "name": "last_error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "outbox_messages",
+            "name": "last_error"
+          }
+        }
       }
     ],
     "parameters": {
@@ -130,8 +141,9 @@
       false,
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "5eb53e64a07e5c5ac442cd9f9cb986a5b573993c7b73ffca12c810d5c015fcad"
+  "hash": "ca2e5b1437d098b9effa0d878f6f6559a9cb753dd57d300ebc352969a9446491"
 }

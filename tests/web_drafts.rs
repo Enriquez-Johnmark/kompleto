@@ -311,3 +311,52 @@ async fn a2_batch_pages_refuse_another_firms_drafts(pool: PgPool) {
     );
     assert_eq!(status(&app, firm, drafts[0]).await, MessageStatus::Draft);
 }
+
+#[sqlx::test]
+async fn d7_a_reminder_blocked_at_sending_stays_on_the_drafts_page_with_its_reason(pool: PgPool) {
+    use std::sync::Arc;
+
+    use kompleto::kompleto::presend::KompletoChecks;
+
+    let app = TestApp::new(pool);
+    let (firm, cookie, draft) = firm_with_draft(&app, "Santos Bookkeeping").await;
+    let hash = hash_hex(&app, firm, draft).await;
+    app.post(&format!("/drafts/{draft}/approve"), &cookie, &format!("hash={hash}"))
+        .await;
+    let client: Uuid = sqlx::query_scalar("select id from clients")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    // The client's address changes before the message goes out.
+    let moved = app
+        .post(
+            &format!("/clients/{client}"),
+            &cookie,
+            &EMPLOYER.replace("lito%40example.test", "lito%40new.test"),
+        )
+        .await;
+    assert_eq!(moved.status, StatusCode::SEE_OTHER);
+    let checks = Arc::new(KompletoChecks::new(
+        app.pool.clone(),
+        app.clock.clone(),
+        common::web::BASE_URL,
+    ));
+    kompleto::engine::outbox::Sender::new(
+        app.pool.clone(),
+        common::RecordingMailer::idempotent(),
+        app.clock.clone(),
+        checks,
+    )
+    .drain_once(10)
+    .await
+    .unwrap();
+    assert_eq!(status(&app, firm, draft).await, MessageStatus::Blocked);
+
+    let page = app.get("/drafts", &cookie).await.body;
+
+    assert!(page.contains("Lito Hardware") && page.contains("blocked"), "{page}");
+    assert!(
+        unescape(&page).contains("the recipient isn't the client's stored email"),
+        "{page}"
+    );
+}
