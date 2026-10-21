@@ -93,12 +93,15 @@ async fn d5_anything_but_valid_wording_gives_a_template_labelled_as_one(pool: Pg
     with_amount["opening"] = json!("Hi Nena, may balance po kayong ₱5,000.");
     let mut with_tin = good_wording();
     with_tin["opening"] = json!("Hi Nena, TIN 123-456-789-000 po ba ito?");
+    let mut bare_domain = good_wording();
+    bare_domain["closing"] = json!("I-send po sa gcash-pay.ph/upload, salamat!");
     let mut long_subject = good_wording();
     long_subject["subject"] = json!("x".repeat(121));
     let cases = [
         ("not JSON", ResponseTemplate::new(200).set_body_json(json!({"type": "message", "model": "m", "content": [{"type": "text", "text": "Sure! Here you go"}], "stop_reason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}}))),
         ("missing field", answer(json!({"subject": "Hi"}))),
         ("a link", answer(with_link)),
+        ("a bare domain", answer(bare_domain)),
         ("a peso amount", answer(with_amount)),
         ("a TIN", answer(with_tin)),
         ("a long subject", answer(long_subject)),

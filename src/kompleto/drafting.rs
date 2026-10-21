@@ -20,6 +20,7 @@ use crate::engine::clock::Clock;
 use crate::engine::cost_log::{self, LlmCall, Outcome};
 use crate::engine::ids::TenantId;
 use crate::engine::llm::{LanguageModel, LlmError, LlmRequest, Usage};
+use crate::engine::outbox::links;
 
 /// How firm a message is (M3 round: friendlier first, firmer near the Cut-off).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -219,9 +220,9 @@ fn is_valid(wording: &Wording) -> bool {
         && [subject, &wording.opening, &wording.closing].into_iter().all(plain)
 }
 
+/// The same link rule the pre-send check applies (D7), plus any address.
 fn has_link_or_address(text: &str) -> bool {
-    let lower = text.to_lowercase();
-    ["://", "www.", "@"].iter().any(|marker| lower.contains(marker))
+    !links(text).is_empty() || text.contains('@')
 }
 
 /// True if `text` has a peso amount or a run of nine or more digits (a TIN
