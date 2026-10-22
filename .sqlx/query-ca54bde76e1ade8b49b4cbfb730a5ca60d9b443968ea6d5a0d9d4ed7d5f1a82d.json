@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update firms set closed_at = null, erase_after = null\n         where lower(login_email) = lower($1) and closed_at is not null and erase_after > $2\n         returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "firms",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ca54bde76e1ade8b49b4cbfb730a5ca60d9b443968ea6d5a0d9d4ed7d5f1a82d"
+}

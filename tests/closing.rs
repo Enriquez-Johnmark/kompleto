@@ -152,3 +152,45 @@ async fn i2_a_closed_accounts_data_and_files_are_all_deleted_after_7_days(pool: 
         .await;
     assert!(refused.is_err(), "the log stays append-only otherwise");
 }
+
+#[sqlx::test]
+async fn i2_an_operator_can_reopen_a_closed_account_before_it_is_erased(pool: PgPool) {
+    use kompleto::kompleto::closing::reopen;
+    use kompleto::kompleto::firms::Firms;
+
+    let clock = clock();
+    let files = common::files(&pool, clock.clone());
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let dynamic: Arc<dyn kompleto::engine::clock::Clock> = clock.clone();
+    close(
+        &pool,
+        &dynamic,
+        santos,
+        "Santos Bookkeeping",
+        "santos.bookkeeping@firm.test",
+    )
+    .await
+    .unwrap();
+
+    assert!(reopen(&pool, &dynamic, "SANTOS.bookkeeping@firm.test").await.unwrap());
+    assert!(!reopen(&pool, &dynamic, "nobody@firm.test").await.unwrap());
+
+    let firms = Firms::new(pool.clone(), clock.clone());
+    assert!(
+        firms
+            .find_by_login_email("santos.bookkeeping@firm.test")
+            .await
+            .unwrap()
+            .is_some(),
+        "can log in"
+    );
+    clock.advance(Duration::days(8));
+    assert_eq!(erase_due(&pool, &files, clock.now()).await.unwrap(), 0, "not erased");
+    let logged: i64 =
+        sqlx::query_scalar("select count(*) from audit_events where tenant_id = $1 and action = 'firm.reopened'")
+            .bind(santos.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(logged, 1);
+}

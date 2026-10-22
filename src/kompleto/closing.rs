@@ -1,7 +1,7 @@
 //! Closing a Firm's account (I2). At once: sending stops, waiting messages
 //! are cancelled, sessions end, logins and Upload links stop working. After
 //! [`GRACE_DAYS`] all its data is deleted; until then an operator can undo
-//! it.
+//! it ([`reopen`]). Cancelled messages stay cancelled.
 
 use std::sync::Arc;
 
@@ -11,6 +11,7 @@ use time::{Duration, OffsetDateTime};
 
 use super::activity::record_by_firm;
 use super::firms::FirmId;
+use crate::engine::audit::{self, AuditEvent};
 use crate::engine::clock::Clock;
 use crate::engine::files::{FileError, Files};
 use crate::engine::outbox::{Outbox, OutboxError};
@@ -80,6 +81,38 @@ pub async fn close(
         }
     }
     Ok(erase_after)
+}
+
+/// Reopens the closed account that logs in as `login_email`, before it's
+/// erased; an operator does this when a Firm asks. False if there's no such
+/// closed account.
+pub async fn reopen(pool: &PgPool, clock: &Arc<dyn Clock>, login_email: &str) -> Result<bool, sqlx::Error> {
+    let now = clock.now();
+    let mut tx = pool.begin().await?;
+    let reopened = sqlx::query_scalar!(
+        "update firms set closed_at = null, erase_after = null
+         where lower(login_email) = lower($1) and closed_at is not null and erase_after > $2
+         returning id",
+        login_email.trim(),
+        now,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(id) = reopened else {
+        return Ok(false);
+    };
+    let event = AuditEvent {
+        tenant: id.into(),
+        at: now,
+        actor: "operator",
+        action: "firm.reopened",
+        subject_type: "firm",
+        subject_id: id,
+        details: json!({}),
+    };
+    audit::record(&mut *tx, &event).await?;
+    tx.commit().await?;
+    Ok(true)
 }
 
 /// Deletes all data and files of every Firm closed [`GRACE_DAYS`] ago by

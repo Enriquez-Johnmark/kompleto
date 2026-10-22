@@ -120,7 +120,7 @@ async fn run() -> anyhow::Result<()> {
         Some("dev-schedule") => dev_schedule(&config, pool).await,
         other => {
             bail!(
-                "unknown command {other:?}; use serve, migrate, outbox-drain, firm add, llm-costs, gen-key, demo or dev-schedule"
+                "unknown command {other:?}; use serve, migrate, outbox-drain, firm add, firm reopen, llm-costs, gen-key, demo or dev-schedule"
             )
         }
     }
@@ -243,9 +243,16 @@ async fn shutdown() {
 async fn add_firm(pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(2).collect();
     let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1));
+    if let (Some("reopen"), Some(email)) = (args.first().map(String::as_str), value("--email")) {
+        if closing::reopen(&pool, &clock, email).await? {
+            tracing::info!("account reopened; {email} can log in again");
+            return Ok(());
+        }
+        bail!("no closed account still waiting to be erased logs in as {email}");
+    }
     let (Some("add"), Some(name), Some(email)) = (args.first().map(String::as_str), value("--name"), value("--email"))
     else {
-        bail!("usage: kompleto firm add --name NAME --email EMAIL");
+        bail!("usage: kompleto firm add --name NAME --email EMAIL, or kompleto firm reopen --email EMAIL");
     };
     migrate(&pool).await?;
     let id = Firms::new(pool, clock).create(name, email).await?;
