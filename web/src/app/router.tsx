@@ -30,6 +30,18 @@ export const router = createBrowserRouter([
           Component: (await import("@/features/drafts/drafts-page")).DraftsPage,
         }),
       },
+      {
+        path: "clients",
+        lazy: async () => ({
+          Component: (await import("@/features/clients/clients-page")).ClientsPage,
+        }),
+      },
+      {
+        path: "clients/new",
+        lazy: async () => ({
+          Component: (await import("@/features/clients/new-client-page")).NewClientPage,
+        }),
+      },
       { path: "*", Component: NotFoundPage },
     ],
   },
