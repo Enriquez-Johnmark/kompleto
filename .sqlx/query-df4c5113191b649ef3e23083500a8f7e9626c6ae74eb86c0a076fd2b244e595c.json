@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from firm_members where lower(email) = lower($1)) as \"member!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "member!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "df4c5113191b649ef3e23083500a8f7e9626c6ae74eb86c0a076fd2b244e595c"
+}

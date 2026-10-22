@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "lock table account_requests in share row exclusive mode",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "fc5af7b82af1624088aa8043f74694d5f0da96ce8638ae9d63a42eca47c55c72"
+}

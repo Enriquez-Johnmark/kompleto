@@ -63,6 +63,7 @@ Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a
   - system-wide workers (the outbox sender and job workers), which sweep across tenants and even then name the row's tenant in every update;
   - operator commands run from the command line (`kompleto llm-costs`), which no Firm's page can reach;
   - the inbound-email and delivery-event handlers under `/hooks/`, which find the Firm from a signed reply code, the sender's address or the provider's message ID before any Firm is known.
+  - login and sign-up, which look up a member by the address typed in before any Firm is known; account requests belong to no Firm and only the operator's command reads them.
 - **Time:** read time only through the injected `Clock`. Direct system-clock calls are banned with clippy `disallowed-methods`. UUIDv7 IDs embed wall-clock time; they are identifiers only, never used to decide anything about time.
 - **Untrusted input:** model output, inbound email and Uploads are untrusted. Parse them into strict types, and never echo them into commands or SQL. Model requests carry only the fields allowed by `docs/adr/0003-the-model-never-sees-documents-or-tax-data.md` (D6).
 - **Engine boundary:** `src/engine` never depends on `src/kompleto`; a CI check fails the build otherwise (`docs/adr/0001-engine-and-product-in-one-crate.md`).

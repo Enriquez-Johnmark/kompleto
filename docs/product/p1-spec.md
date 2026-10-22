@@ -269,6 +269,10 @@ Kompleto's first version is done when every criterion below passes. Each criteri
 - **K2.** Staff can do the daily work (Clients, Drafts, approving, Uploads, Replies). Only the owner can export the Firm's data, close the account, or invite and remove staff; the API refuses staff.
 - **K3.** The activity log names the person who did each thing.
 
+### Sign-up (M10, owner-approved 2026-10-22)
+
+- **L1.** Anyone can request an account with a firm name and an email, accepting the terms and the data processing agreement. A request creates no Firm and sends no email; the operator approves or declines it from the command line, and approving creates the Firm and emails its owner a welcome login link. The answer to a request is the same whether or not the address already has an account, and decided requests are deleted.
+
 ## Open
 
 1. Blind Taglish test result: confirms Haiku 5.5, or switches to Sonnet 5.5. It doesn't affect the architecture, since the model is a configuration value behind our own client.

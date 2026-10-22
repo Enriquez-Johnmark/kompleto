@@ -76,16 +76,7 @@ impl Firms {
     /// Creates a Firm.
     pub async fn create(&self, name: &str, login_email: &str) -> Result<FirmId, FirmError> {
         let (name, login_email) = (name.trim(), login_email.trim());
-        if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
-            return Err(FirmError::Invalid("a firm name is 1 to 100 characters".to_owned()));
-        }
-        // The name signs every email; one that reads as a link would make
-        // the pre-send checks (D7) refuse them all.
-        if !links(name).is_empty() {
-            return Err(FirmError::Invalid(format!(
-                "{name:?} looks like a web address; use the business name"
-            )));
-        }
+        check_name(name).map_err(FirmError::Invalid)?;
         if !is_email_address(login_email) {
             return Err(FirmError::Invalid(format!("{login_email:?} is not an email address")));
         }
@@ -184,4 +175,17 @@ impl Firms {
             None => Ok(None),
         }
     }
+}
+
+/// Why `name` can't be a Firm's name, if it can't.
+pub(crate) fn check_name(name: &str) -> Result<(), String> {
+    if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
+        return Err("a firm name is 1 to 100 characters".to_owned());
+    }
+    // The name signs every email; one that reads as a link would make the
+    // pre-send checks (D7) refuse them all.
+    if !links(name).is_empty() {
+        return Err(format!("{name:?} looks like a web address; use the business name"));
+    }
+    Ok(())
 }

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select firm_name, email from account_requests where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "firm_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account_requests",
+            "name": "firm_name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account_requests",
+            "name": "email"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c38c6a3f43b6f3dde2d10d6d1ec23094eea157efdbe6d490006bd0baa8d364e2"
+}

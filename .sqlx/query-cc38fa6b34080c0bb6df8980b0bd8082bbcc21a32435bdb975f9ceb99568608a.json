@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into account_requests (id, firm_name, email, accepted_at, created_at)\n             values ($1, $2, $3, $4, $4)\n             on conflict (lower(email)) do nothing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc38fa6b34080c0bb6df8980b0bd8082bbcc21a32435bdb975f9ceb99568608a"
+}
