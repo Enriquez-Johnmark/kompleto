@@ -70,3 +70,28 @@ async fn send_budget_holds_reminders_past_it_nearest_deadline_first(pool: PgPool
     sender.drain_once(50).await.unwrap();
     assert_eq!(sent(&mailer)[4..], ["login3@x.test", "d5@x.test", "d9@x.test"]);
 }
+
+#[sqlx::test]
+async fn a_reminder_held_past_its_deadline_expires_instead_of_going_out_late(pool: PgPool) {
+    let clock = clock();
+    let outbox = Outbox::new(pool.clone(), clock.clone());
+    approved(&pool, &outbox, &clock, "d1@x.test", Some(1)).await;
+    approved(&pool, &outbox, &clock, "d2@x.test", Some(2)).await;
+    approved(&pool, &outbox, &clock, "d3@x.test", Some(3)).await;
+    let mailer = RecordingMailer::idempotent();
+    let sender = Sender::new(pool.clone(), mailer.clone(), clock.clone(), Arc::new(NoExtraChecks))
+        .with_budget(SendBudget { per_day: 1, reserve: 0 });
+    sender.drain_once(50).await.unwrap();
+
+    clock.advance(Duration::hours(50)); // d2's deadline has passed, d3's hasn't
+    sender.drain_once(50).await.unwrap();
+    outbox.expire_overdue().await.unwrap();
+
+    let sent: Vec<String> = mailer.calls().into_iter().map(|(email, _)| email.to_address).collect();
+    assert_eq!(sent, ["d1@x.test", "d3@x.test"]);
+    let expired: Vec<String> = sqlx::query_scalar("select to_address from outbox_messages where status = 'expired'")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(expired, ["d2@x.test"]);
+}

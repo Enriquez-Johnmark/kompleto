@@ -87,7 +87,7 @@ async fn d4_overdue_drafts_are_swept_to_expired_and_others_left_alone(pool: PgPo
         .unwrap();
 
     clock.advance(Duration::hours(1));
-    assert_eq!(outbox.expire_overdue().await.unwrap(), 1);
+    assert_eq!(outbox.expire_overdue().await.unwrap(), 2);
 
     assert_eq!(
         outbox.get(tenant, overdue).await.unwrap().status,
@@ -96,8 +96,8 @@ async fn d4_overdue_drafts_are_swept_to_expired_and_others_left_alone(pool: PgPo
     assert_eq!(outbox.get(tenant, later).await.unwrap().status, MessageStatus::Draft);
     assert_eq!(
         outbox.get(tenant, approved).await.unwrap().status,
-        MessageStatus::Approved,
-        "approved in time, so it still goes"
+        MessageStatus::Expired,
+        "approved, but held (by the send budget) past its deadline: never sent late"
     );
 }
 
