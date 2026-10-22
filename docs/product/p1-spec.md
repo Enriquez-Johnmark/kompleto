@@ -281,6 +281,24 @@ Kompleto's first version is done when every criterion below passes. Each criteri
 
   Evidence for the columns (accessed 2026-10-22): how Philippine Xero and QuickBooks Online users record creditable withholding tax is not found in either vendor's documentation. For comparison, Odoo's Philippine localisation records it as withholding tax lines on invoices and bills ([Odoo docs](https://www.odoo.com/documentation/18.0/applications/finance/fiscal_localizations/philippines.html), vendor docs). Confidence in the column names below: L. Common practice is a CWT receivable account or a negative "Less: CWT" invoice line, so the reader accepts either and the preview lets the bookkeeper untick a wrong name. A title block above the header row, as QuickBooks reports have, is skipped.
 
+### Payroll chasing (M13, owner-approved 2026-10-22)
+
+Kompleto chases the documents payroll needs and the proof that contributions were paid. It never computes pay, contributions or tax.
+
+- **P1.** A Client's payroll chasing is off, twice a month (paydays on the 15th and the last day) or monthly (the last day). When it's on, Kompleto asks before each payday for timesheets or DTRs, overtime and leave approvals, and new hires and resignations. Each payday is its own Period: the first request comes 8 days before payday, the Cut-off is 3 days before it, and the request goes through the usual Draft → approve → send → upload loop, stopping on a Reply or once everything is uploaded.
+- **P2.** For a Client with payroll chasing on, each month's SSS, PhilHealth and Pag-IBIG contributions get one Period asking for the proof of payment. Each receipt is asked for only after its own due date has passed:
+  - SSS: the last day of the following month, moved to the next working day;
+  - PhilHealth and Pag-IBIG: a day of the following month the bookkeeper sets per Client, defaulting to the 20th and the last day (moved to the next working day).
+
+  The Period opens the day after the earliest due date, and its Cut-off is 7 days after the latest.
+
+  Evidence (accessed 2026-10-22; official sites were read through search extracts only, as direct fetches failed):
+  - **SSS** pays by the last day of the month after the applicable month, and the deadline moves to the next working day ([SSS, Pay contribution](https://www.sss.gov.ph/pay-contribution/); Circular 2019-012; official; confidence H).
+  - **PhilHealth** sources conflict. The Employer's Quick Guide says the 10th of the following month. The [payment procedures page](https://www.philhealth.gov.ph/partners/employers/pay_procedures.php) and Circular 01 s.2014 say the 11th–15th or 16th–20th, by the last digit of the PEN. Household employers pay by the 25th (Circular 016-2015). All official; confidence M.
+  - **Pag-IBIG** dates are staggered by the employer name's first letter, from the 10th–14th up to the 25th to the month's end (HDMF Circular 275). This comes from secondary sources only; on pagibigfund.gov.ph it is not found. Confidence M.
+
+  Because the bookkeeper's view of each Client's actual date beats any default, both stay settings. The defaults take the latest plausible date, since asking a few days late for a receipt is harmless.
+
 ### Sign-up (M10, owner-approved 2026-10-22)
 
 - **L1.** Anyone can request an account with a firm name and an email, accepting the terms and the data processing agreement. A request creates no Firm and sends no email; the operator approves or declines it from the command line, and approving creates the Firm and emails its owner a welcome login link. The answer to a request is the same whether or not the address already has an account, and decided requests are deleted.
