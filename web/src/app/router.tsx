@@ -70,6 +70,24 @@ export const router = createBrowserRouter([
           Component: (await import("@/features/import/import-page")).ImportPage,
         }),
       },
+      {
+        path: "tracker",
+        lazy: async () => ({
+          Component: (await import("@/features/tracker/tracker-page")).TrackerPage,
+        }),
+      },
+      {
+        path: "calendar",
+        lazy: async () => ({
+          Component: (await import("@/features/calendar/calendar-page")).CalendarPage,
+        }),
+      },
+      {
+        path: "activity",
+        lazy: async () => ({
+          Component: (await import("@/features/activity/activity-page")).ActivityPage,
+        }),
+      },
       { path: "*", Component: NotFoundPage },
     ],
   },

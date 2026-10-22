@@ -1,7 +1,7 @@
 // Dates come from the API; the app only formats them, always in Manila
 // time (docs/frontend.md: dates are shown, not computed).
 
-const dayFormat = new Intl.DateTimeFormat("en-GB", {
+const dayFormat = new Intl.DateTimeFormat("en-US", {
   weekday: "short",
   day: "numeric",
   month: "short",
