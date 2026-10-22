@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use sqlx::PgPool;
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use super::firms::{FirmError, FirmId, Firms, check_name};
@@ -25,6 +25,10 @@ id_type!(
 /// The most requests waiting at once; beyond it, new ones are refused until
 /// the operator catches up.
 pub const MAX_PENDING: i64 = 200;
+/// The most new requests an hour, so one script can't fill the queue at once.
+pub const MAX_PER_HOUR: i64 = 20;
+/// Days a request waits before it is deleted unanswered.
+pub const EXPIRES_AFTER_DAYS: i64 = 30;
 
 /// One request waiting for the operator.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,25 +94,41 @@ impl Signups {
         if !problems.is_empty() {
             return Err(SignupError::Invalid(problems));
         }
+        let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
+        // One request at a time, so the limits hold under parallel requests.
+        sqlx::query!("lock table account_requests in share row exclusive mode")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query!(
+            "delete from account_requests where created_at < $1",
+            now - Duration::days(EXPIRES_AFTER_DAYS)
+        )
+        .execute(&mut *tx)
+        .await?;
+        let counts = sqlx::query!(
+            r#"select count(*) as "pending!", count(*) filter (where created_at > $1) as "last_hour!"
+               from account_requests"#,
+            now - Duration::hours(1),
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        // Checked before anything about the address, so a full queue answers
+        // members and strangers alike.
+        if counts.pending >= MAX_PENDING || counts.last_hour >= MAX_PER_HOUR {
+            return Err(SignupError::TooMany);
+        }
         let member = sqlx::query_scalar!(
-            r#"select exists (select 1 from firm_members where lower(email) = lower($1)) as "member!""#,
+            r#"select exists (
+                   select 1 from firm_members m join firms f on f.id = m.firm_id and f.closed_at is null
+                   where lower(m.email) = lower($1)
+               ) as "member!""#,
             email
         )
         .fetch_one(&mut *tx)
         .await?;
         if member {
             return Ok(());
-        }
-        // One count at a time, so the limit holds under parallel requests.
-        sqlx::query!("lock table account_requests in share row exclusive mode")
-            .execute(&mut *tx)
-            .await?;
-        let pending = sqlx::query_scalar!(r#"select count(*) as "count!" from account_requests"#)
-            .fetch_one(&mut *tx)
-            .await?;
-        if pending >= MAX_PENDING {
-            return Err(SignupError::TooMany);
         }
         let now = self.clock.now();
         sqlx::query!(

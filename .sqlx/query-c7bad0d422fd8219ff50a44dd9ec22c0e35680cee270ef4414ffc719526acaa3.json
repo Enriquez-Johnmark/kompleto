@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select exists (select 1 from firm_members where lower(email) = lower($1)) as \"member!\"",
+  "query": "select exists (\n                   select 1 from firm_members m join firms f on f.id = m.firm_id and f.closed_at is null\n                   where lower(m.email) = lower($1)\n               ) as \"member!\"",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       null
     ]
   },
-  "hash": "df4c5113191b649ef3e23083500a8f7e9626c6ae74eb86c0a076fd2b244e595c"
+  "hash": "c7bad0d422fd8219ff50a44dd9ec22c0e35680cee270ef4414ffc719526acaa3"
 }
