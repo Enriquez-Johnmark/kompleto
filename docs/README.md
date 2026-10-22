@@ -8,5 +8,7 @@
 | [adr/](adr/) | Hard-to-reverse trade-offs, one file each |
 | [../GLOSSARY.md](../GLOSSARY.md) | The project's words and what they mean |
 | [decisions.md](decisions.md) | Every owner-approved decision, dated, including superseded ones |
+| [deploy.md](deploy.md) | Step-by-step go-live guide, followed once the domain is bought |
+| [outreach/](outreach/) | Drafted posts and messages to find pilot bookkeepers, with a log of what was sent |
 | [research/README.md](research/README.md) | Research index: market, competitors, scoring, kill-checks, Harvey |
 
