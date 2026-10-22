@@ -72,7 +72,7 @@ async fn b2_an_xlsx_file_is_read_like_a_csv() {
     ]
     .concat();
 
-    let rows = reader().read(&xlsx("", &sheet)).await.unwrap();
+    let rows = reader().read(&xlsx("", &sheet)).await.unwrap().rows(None).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].row, 2);

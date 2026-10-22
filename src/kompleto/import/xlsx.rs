@@ -12,7 +12,7 @@ use calamine::{Reader, Xlsx};
 use rustix::process::{Resource, Rlimit, setrlimit};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use super::{ImportError, ImportRow, MAX_BYTES, MAX_ROWS, rows_from_cells};
+use super::{ImportError, MAX_BYTES, MAX_ROWS, Sheet, rows_from_cells};
 
 /// The hidden subcommand that runs the parser.
 pub const CHILD_COMMAND: &str = "parse-xlsx";
@@ -39,7 +39,7 @@ impl XlsxReader {
     }
 
     /// The first sheet's rows.
-    pub async fn read(&self, bytes: &[u8]) -> Result<Vec<ImportRow>, ImportError> {
+    pub async fn read(&self, bytes: &[u8]) -> Result<Sheet, ImportError> {
         if bytes.len() > MAX_BYTES {
             return Err(ImportError::TooLarge);
         }

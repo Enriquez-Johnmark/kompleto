@@ -71,8 +71,8 @@ async fn check_upload(
 ) -> Result<Json<ImportPreview>, ApiError> {
     let mut file = None;
     // For files without Language or Forms columns, such as Xero's and
-    // QuickBooks' exports (B5).
-    let mut defaults = BatchDefaults::default();
+    // QuickBooks' exports, when the bookkeeper chose them (B5).
+    let mut defaults: Option<BatchDefaults> = None;
     while let Ok(Some(field)) = multipart.next_field().await {
         match field.name() {
             Some("file") => {
@@ -80,8 +80,19 @@ async fn check_upload(
                 let bytes = field.bytes().await.map_err(|_| refused(ImportError::TooLarge))?;
                 file = Some((name, bytes));
             }
-            Some("default_language") => defaults.language = field.text().await.unwrap_or_default(),
-            Some("default_forms") => defaults.forms.push(field.text().await.unwrap_or_default()),
+            Some(name @ ("default_language" | "default_forms")) => {
+                let name = name.to_owned();
+                let value = field
+                    .text()
+                    .await
+                    .map_err(|_| refused("The import didn't arrive whole; try again."))?;
+                let defaults = defaults.get_or_insert_default();
+                if name == "default_language" {
+                    defaults.language = value;
+                } else {
+                    defaults.forms.push(value);
+                }
+            }
             _ => {}
         }
     }
@@ -93,7 +104,7 @@ async fn check_upload(
     } else {
         return Err(refused("Upload a .csv or .xlsx file."));
     };
-    let rows = import::with_defaults(rows.map_err(refused)?, &defaults);
+    let rows = rows.and_then(|sheet| sheet.rows(defaults.as_ref())).map_err(refused)?;
     Ok(Json(preview(&state, firm, rows).await?))
 }
 

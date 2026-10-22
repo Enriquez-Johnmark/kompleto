@@ -31,16 +31,19 @@ const BUSINESS: [&str; 7] = [
     "displayname",
     "name",
 ];
+/// Columns that hold a company's name; a row with it blank falls back to the
+/// customer's own name, as QuickBooks leaves Company blank for individuals.
+const COMPANY: [&str; 2] = ["company", "companyname"];
 const FIRST_NAME: [&str; 2] = ["contactfirstname", "firstname"];
-/// A person's whole name, whose first word is the contact's first name when
-/// no column gives it, as in a QuickBooks customer list.
+/// A person's whole name beside the company's, as in a QuickBooks customer
+/// list, whose first word is the contact's first name.
 const PERSON: [&str; 3] = ["fullname", "customer", "name"];
 const EMAIL: [&str; 3] = ["email", "emailaddress", "primaryemail"];
 const LANGUAGE: [&str; 1] = ["language"];
 const FORMS: [&str; 2] = ["forms", "birforms"];
 
-/// What fills a row's empty Language and Forms, chosen for the whole file,
-/// e.g. for a Xero or QuickBooks export, which has neither.
+/// The Language and Forms for a file without those columns, such as a Xero
+/// or QuickBooks export, chosen for the whole file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BatchDefaults {
     /// `taglish` or `english`.
@@ -49,18 +52,41 @@ pub struct BatchDefaults {
     pub forms: Vec<String>,
 }
 
-/// `rows` with `defaults` in every empty Language and Forms; values in the
-/// file win.
-pub fn with_defaults(mut rows: Vec<ImportRow>, defaults: &BatchDefaults) -> Vec<ImportRow> {
-    for row in &mut rows {
-        if row.input.language.trim().is_empty() {
-            row.input.language.clone_from(&defaults.language);
+/// A file's rows, and which of the optional columns it has.
+#[derive(Debug, Clone)]
+pub struct Sheet {
+    rows: Vec<ImportRow>,
+    has_language: bool,
+    has_forms: bool,
+}
+
+impl Sheet {
+    /// The rows. With `defaults`, they fill the Language and Forms columns
+    /// the file lacks; a column the file has keeps its cells, blank or not.
+    /// Without `defaults`, both columns are required.
+    pub fn rows(self, defaults: Option<&BatchDefaults>) -> Result<Vec<ImportRow>, ImportError> {
+        let Some(defaults) = defaults else {
+            let missing: Vec<&'static str> = [(self.has_language, COLUMNS[3]), (self.has_forms, COLUMNS[4])]
+                .into_iter()
+                .filter(|(has, _)| !has)
+                .map(|(_, column)| column)
+                .collect();
+            if missing.is_empty() {
+                return Ok(self.rows);
+            }
+            return Err(ImportError::MissingColumns(missing));
+        };
+        let mut rows = self.rows;
+        for row in &mut rows {
+            if !self.has_language {
+                row.input.language.clone_from(&defaults.language);
+            }
+            if !self.has_forms {
+                row.input.forms.clone_from(&defaults.forms);
+            }
         }
-        if row.input.forms.is_empty() {
-            row.input.forms.clone_from(&defaults.forms);
-        }
+        Ok(rows)
     }
-    rows
 }
 
 /// One data row, numbered as in a spreadsheet (the header is row 1).
@@ -103,7 +129,7 @@ pub struct Preview {
 
 /// Reads a CSV file: UTF-8 (with or without a byte-order mark), or
 /// Windows-1252 as older Excel saves it.
-pub fn read_csv(bytes: &[u8]) -> Result<Vec<ImportRow>, ImportError> {
+pub fn read_csv(bytes: &[u8]) -> Result<Sheet, ImportError> {
     if bytes.len() > MAX_BYTES {
         return Err(ImportError::TooLarge);
     }
@@ -155,12 +181,12 @@ fn line_breaks(bytes: &[u8]) -> usize {
 }
 
 /// Turns a sheet's cells, header row first, into rows.
-pub fn rows_from_cells(cells: Vec<Vec<String>>) -> Result<Vec<ImportRow>, ImportError> {
+pub fn rows_from_cells(cells: Vec<Vec<String>>) -> Result<Sheet, ImportError> {
     rows_from_records(cells.into_iter().enumerate().map(|(i, row)| (i + 1, row)).collect())
 }
 
 /// Rows numbered as the bookkeeper sees them, header first.
-fn rows_from_records(records: Vec<(usize, Vec<String>)>) -> Result<Vec<ImportRow>, ImportError> {
+fn rows_from_records(records: Vec<(usize, Vec<String>)>) -> Result<Sheet, ImportError> {
     let mut records = records.into_iter();
     let header = records.next().map(|(_, cells)| cells).unwrap_or_default();
     let header: Vec<String> = header.iter().map(|name| squash(name)).collect();
@@ -171,54 +197,66 @@ fn rows_from_records(records: Vec<(usize, Vec<String>)>) -> Result<Vec<ImportRow
             .filter_map(|name| header.iter().position(|found| found == name))
             .collect()
     };
-    let (business, first_name, person, email) = (find(&BUSINESS), find(&FIRST_NAME), find(&PERSON), find(&EMAIL));
+    // The business name comes from one column: the best one the file has.
+    let business = find(&BUSINESS).first().copied();
+    let is_company = |column: usize| COMPANY.iter().any(|name| header[column] == *name);
+    let person: Vec<usize> = find(&PERSON).into_iter().filter(|&c| Some(c) != business).collect();
+    let (first_name, email) = (find(&FIRST_NAME), find(&EMAIL));
     let (language, forms) = (find(&LANGUAGE), find(&FORMS));
     let mut missing = Vec::new();
-    if business.is_empty() {
+    if business.is_none() {
         missing.push(COLUMNS[0]);
+    }
+    if first_name.is_empty() && person.is_empty() {
+        missing.push(COLUMNS[1]);
     }
     if email.is_empty() {
         missing.push(COLUMNS[2]);
     }
-    if !missing.is_empty() {
+    let Some(business) = business.filter(|_| missing.is_empty()) else {
         return Err(ImportError::MissingColumns(missing));
-    }
+    };
     let mut rows = Vec::new();
     for (row, cells) in records.filter(|(_, cells)| cells.iter().any(|c| !c.trim().is_empty())) {
         if rows.len() == MAX_ROWS {
             return Err(ImportError::TooManyRows);
         }
-        // The first non-empty cell among `columns`, and which column it was.
-        let first = |columns: &[usize]| -> (Option<usize>, String) {
+        let cell = |column: usize| cells.get(column).map_or("", |c| c.trim());
+        // The first non-empty cell among `columns`.
+        let first = |columns: &[usize]| {
             columns
                 .iter()
-                .map(|&column| (column, cells.get(column).map_or("", |c| c.trim())))
-                .find(|(_, value)| !value.is_empty())
-                .map_or((None, String::new()), |(column, value)| {
-                    (Some(column), value.to_owned())
-                })
+                .map(|&column| cell(column))
+                .find(|value| !value.is_empty())
+                .unwrap_or("")
+                .to_owned()
         };
-        let (business_column, business_name) = first(&business);
-        let mut contact_first_name = first(&first_name).1;
-        if contact_first_name.is_empty() {
-            // A person's name beside the company name, or, when the business
-            // is listed under the person's name, that name.
-            let others: Vec<usize> = person.iter().copied().filter(|&c| Some(c) != business_column).collect();
-            let mut whole = first(&others).1;
-            if whole.is_empty() && business_column.is_some_and(|c| person.contains(&c)) {
-                whole.clone_from(&business_name);
-            }
-            contact_first_name = whole.split_whitespace().next().unwrap_or("").to_owned();
+        let person_name = first(&person);
+        let mut business_name = cell(business).to_owned();
+        if business_name.is_empty() && is_company(business) {
+            // An individual: QuickBooks leaves their Company blank.
+            business_name.clone_from(&person_name);
+        }
+        let mut contact_first_name = first(&first_name);
+        // A person's name beside a company's gives the first name, unless
+        // it's the company's own name again.
+        let first_word = |text: &str| text.split_whitespace().next().unwrap_or("").to_owned();
+        let company = cell(business);
+        if contact_first_name.is_empty()
+            && is_company(business)
+            && !company.is_empty()
+            && !first_word(&person_name).eq_ignore_ascii_case(&first_word(company))
+        {
+            contact_first_name = first_word(&person_name);
         }
         rows.push(ImportRow {
             row,
             input: ClientInput {
-                business_name: business_name.clone(),
+                business_name,
                 contact_first_name,
-                email: first(&email).1,
-                language: first(&language).1,
+                email: first(&email),
+                language: first(&language),
                 forms: first(&forms)
-                    .1
                     .split([',', ';', '/', '\n'])
                     .map(|f| f.trim().to_owned())
                     .filter(|f| !f.is_empty())
@@ -229,7 +267,11 @@ fn rows_from_records(records: Vec<(usize, Vec<String>)>) -> Result<Vec<ImportRow
     if rows.is_empty() {
         return Err(ImportError::Empty);
     }
-    Ok(rows)
+    Ok(Sheet {
+        rows,
+        has_language: !language.is_empty(),
+        has_forms: !forms.is_empty(),
+    })
 }
 
 /// A header name reduced to lowercase letters and digits.
