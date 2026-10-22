@@ -246,3 +246,23 @@ fn p1_p2_payroll_templates_say_what_the_documents_are_for() {
         receipts.body
     );
 }
+
+#[sqlx::test]
+async fn p1_p2_the_model_is_told_documents_can_be_for_payroll_or_contributions(pool: PgPool) {
+    let (drafter, server) = drafter_answering(&pool, answer(good_wording())).await;
+    let payroll = DraftBrief {
+        period: "payroll on Thu 15 Oct 2026".to_owned(),
+        purpose: Purpose::Payroll,
+        ..brief()
+    };
+
+    drafter.draft(TenantId::new(), "Santos Bookkeeping", &payroll).await;
+
+    let request = &server.received_requests().await.unwrap()[0];
+    let body: Value = serde_json::from_slice(&request.body).unwrap();
+    let system = body["system"].to_string();
+    assert!(
+        system.contains("payroll") && system.contains("contribution"),
+        "{system}"
+    );
+}

@@ -122,9 +122,12 @@ pub struct Drafter<M> {
 }
 
 const SYSTEM: &str = "You write the wording of a short email from a Philippine bookkeeper to a small-business client \
-who owes documents for a BIR filing. The email itself will list the documents and the deadline; you write only:
+who owes documents. The period says what they are for: BIR filings (e.g. \"September 2026\" or \"Q3 2026\"), \
+a payroll (e.g. \"payroll on Thu 15 Oct 2026\"), or proof that SSS, PhilHealth or Pag-IBIG contributions were paid \
+(e.g. \"September 2026 SSS and Pag-IBIG contributions\"). The email itself will list the documents and the deadline; \
+you write only:
 - subject: one line, at most 100 characters;
-- opening: one to three sentences that greet the contact by first name and say documents are still needed for the period;
+- opening: one to three sentences that greet the contact by first name and say documents are still needed for that purpose;
 - closing: one short sentence of thanks.
 Write in the requested language. Taglish means natural Tagalog-English as Filipino bookkeepers write to clients, \
 with \"po\" where respectful. Match the requested tone; later reminders are firmer but stay polite.
