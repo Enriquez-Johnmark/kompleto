@@ -143,3 +143,27 @@ test("k1 the owner invites staff, who log in without the owner's settings", asyn
   await expect(theirPage.getByText(email)).toBeVisible()
   await theirs.close()
 })
+
+test("l1 a visitor requests an account, which waits for the operator", async ({
+  browser,
+  baseURL,
+}) => {
+  const visitor = await browser.newContext({ baseURL, storageState: undefined })
+  const page = await visitor.newPage()
+  const email = `new-${run}@example.test`
+  await page.goto("/login")
+  await page.getByRole("link", { name: "Request an account" }).click()
+
+  await page.getByLabel("Firm name").fill(`Cruz Bookkeeping ${run}`)
+  await page.getByLabel("Your email").fill(email)
+  await page.getByRole("button", { name: "Request an account" }).click()
+  await expect(
+    page.getByText("Accept the terms and the data processing agreement", { exact: true })
+  ).toBeVisible()
+  await page.getByRole("checkbox").click()
+  await page.getByRole("button", { name: "Request an account" }).click()
+
+  await expect(page.getByText("Thanks! Your request is in")).toBeVisible()
+  expect(kompleto("requests")).toContain(email)
+  await visitor.close()
+})
