@@ -286,11 +286,11 @@ Kompleto's first version is done when every criterion below passes. Each criteri
 Kompleto chases the documents payroll needs and the proof that contributions were paid. It never computes pay, contributions or tax.
 
 - **P1.** A Client's payroll chasing is off, twice a month (paydays on the 15th and the last day) or monthly (the last day). When it's on, Kompleto asks before each payday for timesheets or DTRs, overtime and leave approvals, and new hires and resignations. Each payday is its own Period: the first request comes 8 days before payday, the Cut-off is 3 days before it, and the request goes through the usual Draft → approve → send → upload loop, stopping on a Reply or once everything is uploaded.
-- **P2.** For a Client with payroll chasing on, each month's SSS, PhilHealth and Pag-IBIG contributions get one Period asking for the proof of payment. Each receipt is asked for only after its own due date has passed:
+- **P2.** For a Client with payroll chasing on, Kompleto asks for proof that each month's SSS, PhilHealth and Pag-IBIG contributions were paid, each only after its own due date. Each due date is its own Period, shared by the agencies due that day, so a Reply to one request never stops the request for a receipt due later. The due dates:
   - SSS: the last day of the following month, moved to the next working day;
   - PhilHealth and Pag-IBIG: a day of the following month the bookkeeper sets per Client, defaulting to the 20th and the last day (moved to the next working day).
 
-  The Period opens the day after the earliest due date, and its Cut-off is 7 days after the latest.
+  A Period opens the day after its due date, and its Cut-off is 7 days after it.
 
   Evidence (accessed 2026-10-22; official sites were read through search extracts only, as direct fetches failed):
   - **SSS** pays by the last day of the month after the applicable month, and the deadline moves to the next working day ([SSS, Pay contribution](https://www.sss.gov.ph/pay-contribution/); Circular 2019-012; official; confidence H).

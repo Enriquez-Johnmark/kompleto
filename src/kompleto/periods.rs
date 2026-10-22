@@ -179,8 +179,8 @@ mod tests {
         assert_eq!(period_label("2026-09"), "September 2026");
         assert_eq!(period_label("payroll-2026-10-15"), "payroll on Thu 15 Oct 2026");
         assert_eq!(
-            period_label("remit-2026-09"),
-            "September 2026 SSS, PhilHealth and Pag-IBIG contributions"
+            period_label("remit-2026-09-sss-pagibig"),
+            "September 2026 SSS and Pag-IBIG contributions"
         );
     }
 

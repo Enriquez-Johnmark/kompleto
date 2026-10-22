@@ -516,7 +516,7 @@ async fn p1_p2_a_payroll_link_asks_for_the_payroll_documents_or_the_receipts(poo
         .await
         .unwrap();
     let receipts = links
-        .for_period(santos, client, "remit-2026-09", date!(2026 - 11 - 10))
+        .for_period(santos, client, "remit-2026-09-sss-pagibig", date!(2026 - 11 - 10))
         .await
         .unwrap();
 
@@ -528,4 +528,9 @@ async fn p1_p2_a_payroll_link_asks_for_the_payroll_documents_or_the_receipts(poo
     assert!(!payroll.body.contains("Sales invoices"), "{}", payroll.body);
     assert!(receipts.body.contains("SSS payment receipt"), "{}", receipts.body);
     assert!(receipts.body.contains("Pag-IBIG payment receipt"), "{}", receipts.body);
+    assert!(
+        !receipts.body.contains("PhilHealth payment receipt"),
+        "{}",
+        receipts.body
+    );
 }

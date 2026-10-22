@@ -31,7 +31,7 @@ use super::clients::{Client, ClientError, ClientId, Clients};
 use super::drafting::{DraftBrief, Drafter, Purpose, Tone};
 use super::drafts::Drafts;
 use super::firms::FirmId;
-use super::payroll::PayrollKind;
+use super::payroll::PayrollKey;
 use super::periods::ClientCalendar;
 use super::schedule::{MANILA, MAX_DRAFTS_PER_PERIOD, PlannedDraft, Slot, appears_at, planned_between};
 use super::upload_links::UploadLinks;
@@ -157,15 +157,15 @@ impl Scheduler {
         // P1, P2: payroll Periods, when the Client has them.
         if let Some(payroll) = self.clients.payroll(firm, id).await? {
             chases.extend(payroll.upcoming(&self.calendar, today).into_iter().map(|period| Chase {
-                key: period.key(),
-                label: period.as_key().label(),
-                purpose: match period.kind {
-                    PayrollKind::Inputs { .. } => Purpose::Payroll,
-                    PayrollKind::Receipts { .. } => Purpose::Contributions,
+                key: period.key.to_string(),
+                label: period.key.label(),
+                purpose: match period.key {
+                    PayrollKey::Inputs(_) => Purpose::Payroll,
+                    PayrollKey::Receipts { .. } => Purpose::Contributions,
                 },
                 opens_on: period.opens_on,
                 cut_off: period.cut_off,
-                owed: period.owed_on(today),
+                owed: period.key.documents(),
             }));
         }
         let mut created = 0;

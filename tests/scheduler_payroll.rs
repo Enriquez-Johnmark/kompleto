@@ -79,22 +79,33 @@ async fn p1_payroll_documents_are_asked_for_before_payday(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn p2_contribution_receipts_are_asked_for_once_each_due_date_has_passed(pool: PgPool) {
+async fn p2_contribution_receipts_are_asked_for_after_each_due_date(pool: PgPool) {
     let drafts = payroll_drafts(&pool, date!(2026 - 11 - 08)).await;
 
-    let receipts: Vec<&(String, Date, String)> = drafts.iter().filter(|(p, ..)| p == "remit-2026-09").collect();
-    // PhilHealth was due 20 Oct; SSS and Pag-IBIG on 31 Oct, moved to 3 Nov.
-    let dates: Vec<Date> = receipts.iter().map(|(_, on, _)| *on).collect();
+    // PhilHealth was due Tue 20 Oct; SSS and Pag-IBIG on Sat 31 Oct, moved
+    // to Tue 3 Nov past All Saints' and All Souls' Days.
+    let receipts: Vec<(&str, Date)> = drafts
+        .iter()
+        .filter(|(p, ..)| p.starts_with("remit-2026-09"))
+        .map(|(p, on, _)| (p.as_str(), *on))
+        .collect();
     assert_eq!(
-        dates,
-        [date!(2026 - 10 - 22), date!(2026 - 11 - 03), date!(2026 - 11 - 07)]
+        receipts,
+        [
+            ("remit-2026-09-philhealth", date!(2026 - 10 - 22)),
+            ("remit-2026-09-philhealth", date!(2026 - 10 - 24)),
+            ("remit-2026-09-philhealth", date!(2026 - 10 - 26)),
+            ("remit-2026-09-sss-pagibig", date!(2026 - 11 - 04)),
+            ("remit-2026-09-sss-pagibig", date!(2026 - 11 - 07)),
+        ]
     );
-    let first = &receipts[0].2;
-    assert!(first.contains("PhilHealth payment receipt"), "{first}");
-    assert!(!first.contains("SSS payment receipt"), "{first}");
-    let last = &receipts[2].2;
+    let body = |period: &str| &drafts.iter().find(|(p, ..)| p == period).unwrap().2;
+    let philhealth = body("remit-2026-09-philhealth");
+    assert!(philhealth.contains("PhilHealth payment receipt"), "{philhealth}");
+    assert!(!philhealth.contains("SSS payment receipt"), "{philhealth}");
+    let later = body("remit-2026-09-sss-pagibig");
     assert!(
-        last.contains("SSS payment receipt") && last.contains("Pag-IBIG payment receipt"),
-        "{last}"
+        later.contains("SSS payment receipt") && later.contains("Pag-IBIG payment receipt"),
+        "{later}"
     );
 }

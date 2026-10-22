@@ -3,6 +3,9 @@
 //! PhilHealth and Pag-IBIG were paid. Kompleto never computes pay,
 //! contributions or tax: these Periods only ask for documents.
 
+use std::collections::BTreeMap;
+use std::fmt;
+
 use time::{Date, Duration, Month};
 
 use super::calendar::{Calendar, day_in_month};
@@ -75,7 +78,7 @@ pub struct PayrollSettings {
 }
 
 /// An agency whose contributions an employer remits each month.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Agency {
     Sss,
     PhilHealth,
@@ -83,6 +86,8 @@ pub enum Agency {
 }
 
 impl Agency {
+    const ALL: [Self; 3] = [Self::Sss, Self::PhilHealth, Self::PagIbig];
+
     /// The Owed document: proof that the month's contributions were paid.
     pub fn receipt(self) -> &'static str {
         match self {
@@ -91,82 +96,51 @@ impl Agency {
             Self::PagIbig => "Pag-IBIG payment receipt (MCRF or OR)",
         }
     }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Sss => "SSS",
+            Self::PhilHealth => "PhilHealth",
+            Self::PagIbig => "Pag-IBIG",
+        }
+    }
+
+    /// Its part of a Period key.
+    fn code(self) -> &'static str {
+        match self {
+            Self::Sss => "sss",
+            Self::PhilHealth => "philhealth",
+            Self::PagIbig => "pagibig",
+        }
+    }
 }
 
-/// What a payroll Period asks for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PayrollKind {
-    /// The documents for one payday (P1).
-    Inputs {
-        /// The payday.
-        payday: Date,
-    },
-    /// The receipts for one month's contributions (P2).
-    Receipts {
-        /// The month the contributions are for.
-        year: i32,
-        /// The month the contributions are for.
-        month: Month,
-        /// Each agency's due date.
-        dues: [(Agency, Date); 3],
-    },
-}
-
-/// One payroll Period: its documents, when it opens and its Cut-off.
+/// One payroll Period: what it asks for, when it opens and its Cut-off.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PayrollPeriod {
-    /// What it asks for.
-    pub kind: PayrollKind,
+    /// What it asks for, which is also its storage key.
+    pub key: PayrollKey,
     /// The day of the first request.
     pub opens_on: Date,
     /// The day the Firm wants the documents by.
     pub cut_off: Date,
 }
 
-impl PayrollPeriod {
-    /// The storage key: `payroll-2026-10-15` or `remit-2026-09`.
-    pub fn key(&self) -> String {
-        match &self.kind {
-            PayrollKind::Inputs { payday } => format!("payroll-{payday}"),
-            PayrollKind::Receipts { year, month, .. } => format!("remit-{year}-{:02}", u8::from(*month)),
-        }
-    }
-
-    /// What its key stands for.
-    pub fn as_key(&self) -> PayrollKey {
-        match self.kind {
-            PayrollKind::Inputs { payday } => PayrollKey::Inputs(payday),
-            PayrollKind::Receipts { year, month, .. } => PayrollKey::Receipts(year, month),
-        }
-    }
-
-    /// The Owed documents on `today`: receipts only once their due date
-    /// has passed.
-    pub fn owed_on(&self, today: Date) -> Vec<String> {
-        match &self.kind {
-            PayrollKind::Inputs { .. } => PAYROLL_INPUTS.iter().map(|&d| d.to_owned()).collect(),
-            PayrollKind::Receipts { dues, .. } => dues
-                .iter()
-                .filter(|(_, due)| *due < today)
-                .map(|(agency, _)| agency.receipt().to_owned())
-                .collect(),
-        }
-    }
-}
-
 impl PayrollSettings {
     /// The Client's payroll Periods whose Cut-off is on or after `today`
     /// and that open within 60 days.
     pub fn upcoming(&self, calendar: &Calendar, today: Date) -> Vec<PayrollPeriod> {
-        let months: Vec<(i32, Month)> = (-3..=2).map(|n| month_offset(today, n)).collect();
+        let months: Vec<(i32, Month)> = (-2..=2).map(|n| month_offset(today, n)).collect();
         let inputs = months.iter().flat_map(|&(year, month)| {
             self.cycle.paydays(year, month).into_iter().map(|payday| PayrollPeriod {
-                kind: PayrollKind::Inputs { payday },
+                key: PayrollKey::Inputs(payday),
                 opens_on: payday - Duration::days(INPUTS_OPEN_DAYS_BEFORE),
                 cut_off: payday - Duration::days(INPUTS_CUT_OFF_DAYS_BEFORE),
             })
         });
-        let receipts = months.iter().map(|&(year, month)| self.receipts(calendar, year, month));
+        let receipts = months
+            .iter()
+            .flat_map(|&(year, month)| self.receipts(calendar, year, month));
         let mut periods: Vec<PayrollPeriod> = inputs
             .chain(receipts)
             .filter(|p| p.cut_off >= today && p.opens_on <= today + Duration::days(60))
@@ -175,32 +149,59 @@ impl PayrollSettings {
         periods
     }
 
-    /// The receipts Period for one month's contributions.
-    fn receipts(&self, calendar: &Calendar, year: i32, month: Month) -> PayrollPeriod {
+    /// The receipts Periods for one month's contributions: one per due
+    /// date, so each is asked for once it's due, and a Reply to one
+    /// request never stops the requests for receipts due later.
+    fn receipts(&self, calendar: &Calendar, year: i32, month: Month) -> Vec<PayrollPeriod> {
         let (due_year, due_month) = next_month(year, month);
-        let due = |day| calendar.next_working_day(day_in_month(due_year, due_month, day));
-        let dues = [
-            (Agency::Sss, due(31)),
-            (Agency::PhilHealth, due(self.philhealth_due_day)),
-            (Agency::PagIbig, due(self.pagibig_due_day)),
-        ];
-        let earliest = dues.iter().map(|(_, d)| *d).min().unwrap_or(Date::MIN);
-        let latest = dues.iter().map(|(_, d)| *d).max().unwrap_or(Date::MIN);
-        PayrollPeriod {
-            kind: PayrollKind::Receipts { year, month, dues },
-            opens_on: earliest + Duration::days(1),
-            cut_off: latest + Duration::days(RECEIPTS_CUT_OFF_DAYS_AFTER),
+        let due = |agency| {
+            let day = match agency {
+                Agency::Sss => 31,
+                Agency::PhilHealth => self.philhealth_due_day,
+                Agency::PagIbig => self.pagibig_due_day,
+            };
+            calendar.next_working_day(day_in_month(due_year, due_month, day))
+        };
+        let mut by_due: BTreeMap<Date, Vec<Agency>> = BTreeMap::new();
+        for agency in Agency::ALL {
+            by_due.entry(due(agency)).or_default().push(agency);
         }
+        by_due
+            .into_iter()
+            .map(|(due, agencies)| PayrollPeriod {
+                key: PayrollKey::Receipts { year, month, agencies },
+                opens_on: due + Duration::days(1),
+                cut_off: due + Duration::days(RECEIPTS_CUT_OFF_DAYS_AFTER),
+            })
+            .collect()
     }
 }
 
-/// What a payroll Period key is about, for labels and the upload page.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What a payroll Period asks for; written out, its storage key:
+/// `payroll-2026-10-15` or `remit-2026-09-sss-pagibig`.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PayrollKey {
-    /// A payday's documents.
+    /// A payday's documents (P1).
     Inputs(Date),
-    /// A month's contribution receipts.
-    Receipts(i32, Month),
+    /// Receipts for one month's contributions to `agencies`, all due on
+    /// the same day (P2).
+    Receipts {
+        year: i32,
+        month: Month,
+        agencies: Vec<Agency>,
+    },
+}
+
+impl fmt::Display for PayrollKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Inputs(payday) => write!(f, "payroll-{payday}"),
+            Self::Receipts { year, month, agencies } => {
+                write!(f, "remit-{year}-{:02}", u8::from(*month))?;
+                agencies.iter().try_for_each(|agency| write!(f, "-{}", agency.code()))
+            }
+        }
+    }
 }
 
 impl PayrollKey {
@@ -210,28 +211,38 @@ impl PayrollKey {
             let format = time::macros::format_description!("[year]-[month]-[day]");
             return Date::parse(date, &format).ok().map(Self::Inputs);
         }
-        let (year, month) = key.strip_prefix("remit-")?.split_once('-')?;
-        let month = Month::try_from(month.parse::<u8>().ok()?).ok()?;
-        Some(Self::Receipts(year.parse().ok()?, month))
+        let mut parts = key.strip_prefix("remit-")?.split('-');
+        let year = parts.next()?.parse().ok()?;
+        let month = Month::try_from(parts.next()?.parse::<u8>().ok()?).ok()?;
+        let agencies: Vec<Agency> = parts
+            .map(|code| Agency::ALL.into_iter().find(|agency| agency.code() == code))
+            .collect::<Option<_>>()?;
+        let parsed = Self::Receipts { year, month, agencies };
+        // Only the spelling `Display` writes: one key per Period.
+        (!matches!(&parsed, Self::Receipts { agencies, .. } if agencies.is_empty()) && parsed.to_string() == key)
+            .then_some(parsed)
     }
 
     /// How people see it, e.g. "payroll on Thu 15 Oct 2026".
-    pub fn label(self) -> String {
+    pub fn label(&self) -> String {
         match self {
-            Self::Inputs(payday) => format!("payroll on {}", show_date(payday)),
-            Self::Receipts(year, month) => format!("{month} {year} SSS, PhilHealth and Pag-IBIG contributions"),
+            Self::Inputs(payday) => format!("payroll on {}", show_date(*payday)),
+            Self::Receipts { year, month, agencies } => {
+                let names: Vec<&str> = agencies.iter().map(|agency| agency.name()).collect();
+                let names = match names.as_slice() {
+                    [.., last] if names.len() > 1 => format!("{} and {last}", names[..names.len() - 1].join(", ")),
+                    _ => names.concat(),
+                };
+                format!("{month} {year} {names} contributions")
+            }
         }
     }
 
-    /// Everything the upload page offers: every receipt, even before its
-    /// due date, since a Contact may have paid early.
-    pub fn documents(self) -> Vec<String> {
+    /// The Owed documents.
+    pub fn documents(&self) -> Vec<String> {
         match self {
             Self::Inputs(_) => PAYROLL_INPUTS.iter().map(|&d| d.to_owned()).collect(),
-            Self::Receipts(..) => [Agency::Sss, Agency::PhilHealth, Agency::PagIbig]
-                .iter()
-                .map(|agency| agency.receipt().to_owned())
-                .collect(),
+            Self::Receipts { agencies, .. } => agencies.iter().map(|agency| agency.receipt().to_owned()).collect(),
         }
     }
 }
@@ -268,9 +279,9 @@ mod tests {
     fn inputs(periods: &[PayrollPeriod]) -> Vec<(Date, Date, Date)> {
         periods
             .iter()
-            .filter_map(|p| match p.kind {
-                PayrollKind::Inputs { payday } => Some((payday, p.opens_on, p.cut_off)),
-                PayrollKind::Receipts { .. } => None,
+            .filter_map(|p| match p.key {
+                PayrollKey::Inputs(payday) => Some((payday, p.opens_on, p.cut_off)),
+                PayrollKey::Receipts { .. } => None,
             })
             .collect()
     }
@@ -288,14 +299,7 @@ mod tests {
                 (date!(2026 - 11 - 30), date!(2026 - 11 - 22), date!(2026 - 11 - 27)),
             ]
         );
-        assert_eq!(
-            periods
-                .iter()
-                .find(|p| p.key() == "payroll-2026-10-31")
-                .unwrap()
-                .owed_on(date!(2026 - 10 - 23)),
-            PAYROLL_INPUTS
-        );
+        assert_eq!(PayrollKey::Inputs(date!(2026 - 10 - 31)).documents(), PAYROLL_INPUTS);
     }
 
     #[test]
@@ -308,48 +312,65 @@ mod tests {
     }
 
     #[test]
-    fn p2_each_receipt_is_owed_once_its_due_date_has_passed() {
+    fn p2_each_due_date_gets_its_own_receipts_period() {
         let calendar = Calendar::built_in().unwrap();
         let settings = PayrollSettings {
             philhealth_due_day: 15,
             ..settings(PayCycle::Monthly)
         };
-        let september = settings
+        let september: Vec<(String, Date, Date)> = settings
             .upcoming(&calendar, date!(2026 - 10 - 01))
             .into_iter()
-            .find(|p| p.key() == "remit-2026-09")
-            .unwrap();
+            .filter(|p| p.key.to_string().starts_with("remit-2026-09"))
+            .map(|p| (p.key.to_string(), p.opens_on, p.cut_off))
+            .collect();
 
         // October 2026: PhilHealth on Thu the 15th; SSS and Pag-IBIG on
         // Sat the 31st, moved to Tue 3 November past All Saints' and All
         // Souls' Days.
-        assert_eq!(september.opens_on, date!(2026 - 10 - 16));
-        assert_eq!(september.cut_off, date!(2026 - 11 - 10));
-        assert!(september.owed_on(date!(2026 - 10 - 15)).is_empty());
-        assert_eq!(september.owed_on(date!(2026 - 10 - 16)), [Agency::PhilHealth.receipt()]);
-        assert_eq!(september.owed_on(date!(2026 - 11 - 03)).len(), 1);
-        assert_eq!(september.owed_on(date!(2026 - 11 - 04)).len(), 3);
+        assert_eq!(
+            september,
+            [
+                (
+                    "remit-2026-09-philhealth".to_owned(),
+                    date!(2026 - 10 - 16),
+                    date!(2026 - 10 - 22)
+                ),
+                (
+                    "remit-2026-09-sss-pagibig".to_owned(),
+                    date!(2026 - 11 - 04),
+                    date!(2026 - 11 - 10)
+                ),
+            ]
+        );
     }
 
     #[test]
-    fn p2_keys_name_the_payday_or_the_month_and_read_back() {
+    fn p2_keys_name_the_payday_or_the_month_and_agencies_and_read_back() {
+        let receipts = PayrollKey::Receipts {
+            year: 2026,
+            month: Month::September,
+            agencies: vec![Agency::Sss, Agency::PagIbig],
+        };
         assert_eq!(
             PayrollKey::parse("payroll-2026-10-15"),
             Some(PayrollKey::Inputs(date!(2026 - 10 - 15)))
         );
-        assert_eq!(
-            PayrollKey::parse("remit-2026-09"),
-            Some(PayrollKey::Receipts(2026, Month::September))
-        );
-        assert_eq!(PayrollKey::parse("2026-09"), None);
-        assert_eq!(PayrollKey::parse("remit-2026-13"), None);
+        assert_eq!(PayrollKey::parse("remit-2026-09-sss-pagibig"), Some(receipts.clone()));
+        for other in [
+            "2026-09",
+            "remit-2026-09",
+            "remit-2026-13-sss",
+            "remit-2026-9-sss",
+            "remit-2026-09-gsis",
+        ] {
+            assert_eq!(PayrollKey::parse(other), None, "{other}");
+        }
         assert_eq!(
             PayrollKey::Inputs(date!(2026 - 10 - 15)).label(),
             "payroll on Thu 15 Oct 2026"
         );
-        assert_eq!(
-            PayrollKey::Receipts(2026, Month::September).label(),
-            "September 2026 SSS, PhilHealth and Pag-IBIG contributions"
-        );
+        assert_eq!(receipts.label(), "September 2026 SSS and Pag-IBIG contributions");
+        assert_eq!(receipts.documents().len(), 2);
     }
 }
