@@ -12,7 +12,9 @@ use time::{Duration, OffsetDateTime};
 use super::activity::record_by_firm;
 use super::firms::FirmId;
 use crate::engine::clock::Clock;
+use crate::engine::files::{FileError, Files};
 use crate::engine::outbox::{Outbox, OutboxError};
+use crate::engine::tenants;
 
 /// Days between closing and deleting everything.
 pub const GRACE_DAYS: i64 = 7;
@@ -78,6 +80,26 @@ pub async fn close(
         }
     }
     Ok(erase_after)
+}
+
+/// Deletes all data and files of every Firm closed [`GRACE_DAYS`] ago by
+/// `now`; returns how many Firms. A system-wide worker: it names each Firm
+/// in every delete. The engine's rows go first and the Firm's row last, so
+/// a crash part way leaves the Firm to be found and finished next time.
+pub async fn erase_due(pool: &PgPool, files: &Files, now: OffsetDateTime) -> Result<usize, FileError> {
+    let due = sqlx::query_scalar!("select id from firms where erase_after <= $1", now)
+        .fetch_all(pool)
+        .await?;
+    for &id in &due {
+        let firm = FirmId::from(id);
+        tenants::erase(pool, files, firm).await?;
+        // Its Clients and everything about them go with it (on delete cascade).
+        sqlx::query!("delete from firms where id = $1 and erase_after <= $2", id, now)
+            .execute(pool)
+            .await?;
+        tracing::info!(%firm, "closed account erased");
+    }
+    Ok(due.len())
 }
 
 /// Marks `firm` closed, ends its sessions and logs it.
