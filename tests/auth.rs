@@ -198,3 +198,16 @@ async fn k1_removing_and_inviting_again_doesnt_reset_the_hourly_limit(pool: PgPo
 
     assert_eq!(sent, 5, "at most five emails an hour to one address");
 }
+
+#[sqlx::test]
+async fn k1_a_login_email_names_the_firm_without_calling_the_person_by_it(pool: PgPool) {
+    let (auth, _, _) = setup(&pool).await;
+
+    auth.request_link("ana@santos.test").await.unwrap();
+
+    let (_, _, body) = login_emails(&pool).await.pop().unwrap();
+    assert!(
+        body.starts_with("Hi,\n\nOpen this link to log in to Santos Bookkeeping on Kompleto:"),
+        "{body}"
+    );
+}

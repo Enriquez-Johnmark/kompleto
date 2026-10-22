@@ -164,7 +164,7 @@ impl Auth {
         let (subject, opening) = match invited_by {
             None => (
                 "Your Kompleto login link".to_owned(),
-                format!("Hi {},\n\nOpen this link to log in to Kompleto:", member.firm_name),
+                format!("Hi,\n\nOpen this link to log in to {} on Kompleto:", member.firm_name),
             ),
             Some(owner) => (
                 format!("You've been added to {} on Kompleto", member.firm_name),
