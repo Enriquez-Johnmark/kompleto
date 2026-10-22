@@ -2,9 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@/api/client"
 import type { BirFormOption } from "@/api/generated/BirFormOption"
+import type { ClientDetail } from "@/api/generated/ClientDetail"
 import type { ClientInput } from "@/api/generated/ClientInput"
 import type { ClientSummary } from "@/api/generated/ClientSummary"
 import type { Created } from "@/api/generated/Created"
+import type { DueDateChange } from "@/api/generated/DueDateChange"
+import type { ItemKey } from "@/api/generated/ItemKey"
+import type { NewItem } from "@/api/generated/NewItem"
+import type { NewPayor } from "@/api/generated/NewPayor"
+import type { ScheduleChange } from "@/api/generated/ScheduleChange"
 import { dashboardKeys } from "@/features/dashboard/queries"
 
 export const clientKeys = {
@@ -54,4 +60,65 @@ export function useUpdateClient(id: string) {
     mutationFn: (input: ClientInput) => api("PUT", `/api/clients/${id}`, input),
     onSuccess: refresh,
   })
+}
+
+export function useClient(id: string) {
+  return useQuery({
+    queryKey: clientKeys.detail(id),
+    queryFn: () => api<ClientDetail>("GET", `/api/clients/${id}`),
+  })
+}
+
+/** A change made from a Client's page; it refreshes the page afterwards. */
+function useClientChange<TInput>(request: (input: TInput) => Promise<unknown>) {
+  const refresh = useRefreshClients()
+  return useMutation({ mutationFn: request, onSuccess: refresh })
+}
+
+export function useSetSchedule(id: string) {
+  return useClientChange((change: ScheduleChange) =>
+    api("PUT", `/api/clients/${id}/schedule`, change)
+  )
+}
+
+export function useSetDueDate(id: string) {
+  return useClientChange((change: DueDateChange) =>
+    api("PUT", `/api/clients/${id}/due-dates`, change)
+  )
+}
+
+/** Stops or starts asking for a built-in document. */
+export function useToggleItem(id: string) {
+  return useClientChange(({ key, removed }: { key: string; removed: boolean }) =>
+    api("POST", `/api/clients/${id}/checklist/${removed ? "restore" : "remove"}`, {
+      key,
+    } satisfies ItemKey)
+  )
+}
+
+export function useAddItem(id: string) {
+  return useClientChange((item: NewItem) =>
+    api("POST", `/api/clients/${id}/checklist/extras`, item)
+  )
+}
+
+export function useDeleteItem(id: string) {
+  return useClientChange((item: string) =>
+    api("DELETE", `/api/clients/${id}/checklist/extras/${item}`)
+  )
+}
+
+export function useAddPayor(id: string) {
+  return useClientChange((payor: NewPayor) => api("POST", `/api/clients/${id}/payors`, payor))
+}
+
+export function useRemovePayor(id: string) {
+  return useClientChange((payor: string) => api("DELETE", `/api/clients/${id}/payors/${payor}`))
+}
+
+/** F3: starts the Upload's 30 days before deletion. */
+export function useMarkReceived(id: string) {
+  return useClientChange((upload: string) =>
+    api("POST", `/api/clients/${id}/uploads/${upload}/received`)
+  )
 }
