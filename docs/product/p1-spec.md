@@ -19,7 +19,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 | In | Later |
 |---|---|
 | Client list, added by form or CSV/Excel upload | ~~Payroll-input and remittance chasing~~ (built at M13) |
-| BIR forms each client files | ~~Matching 2307s against invoices~~ (M12, names only) |
+| BIR forms each client files | ~~Matching 2307s against invoices~~ (M12: Payors from a sales export, names only) |
 | Deadline calendar | ~~Xero / QuickBooks import~~ (M11, from export files) |
 | Checklist of documents owed per month or quarter | SMS (link-free reminders only) |
 | Reminder drafts the bookkeeper approves | |
@@ -274,6 +274,12 @@ Kompleto's first version is done when every criterion below passes. Each criteri
 - **B5.** A Xero contact export or a QuickBooks Online customer list (CSV or Excel) imports like Kompleto's own template: business name, contact first name and email come from their columns, the language and BIR forms chosen for the batch fill the rows that have none, every row is previewed with its problems before anything is added, and no other column (a TIN, for instance) is read.
 
   Evidence for the column names (accessed 2026-10-22): Xero contact files use `ContactName`, `EmailAddress`, `FirstName` and `LastName` (third-party docs: [Moment](https://docs.moment.team/help/moment-by-topic/integrations/file-exports/file-export-accounting-system/xero), [Zynk](https://docs.zynk.com/workflow/documentation/xero/export-contacts.html); confidence M); QuickBooks Online's customer export has `Name` or `Customer` (it differs by region), `Company` and `Email Address` ([Intuit help](https://quickbooks.intuit.com/learn-support/en-us/help-articles/export-customer-data-to-excel/00/262148), vendor docs; confidence M). Xero's official header list: not found. The reader accepts all these spellings, ignoring case, spaces and Xero's leading `*`.
+
+### Payors from a sales export (M12, owner-approved 2026-10-22)
+
+- **H3.** The bookkeeper uploads one quarter's sales, invoice or account-transactions export (CSV or Excel) for a Client. Kompleto keeps the names of customers on rows that show tax withheld: a withholding column with a non-zero value, or an account, description or tax-type cell naming withholding, CWT, EWT or 2307. The bookkeeper sees the names, with those already listed marked, and adds the ones they tick as Payors. Only names are kept: amounts are never parsed into numbers or stored, no other column (a TIN, for instance) is read, and nothing is matched against 2307 files.
+
+  Evidence for the columns (accessed 2026-10-22): how Philippine Xero and QuickBooks Online users record creditable withholding tax is not found in either vendor's documentation. For comparison, Odoo's Philippine localisation records it as withholding tax lines on invoices and bills ([Odoo docs](https://www.odoo.com/documentation/18.0/applications/finance/fiscal_localizations/philippines.html), vendor docs). Confidence in the column names below: L. Common practice is a CWT receivable account or a negative "Less: CWT" invoice line, so the reader accepts either and the preview lets the bookkeeper untick a wrong name. A title block above the header row, as QuickBooks reports have, is skipped.
 
 ### Sign-up (M10, owner-approved 2026-10-22)
 
