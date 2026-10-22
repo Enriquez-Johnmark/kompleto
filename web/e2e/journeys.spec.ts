@@ -4,7 +4,7 @@ import { join } from "node:path"
 
 import { expect, test } from "@playwright/test"
 
-import { firstOfNextMonth, kompleto } from "./support.ts"
+import { firstOfNextMonth, kompleto, loginLink } from "./support.ts"
 
 // Names unique to this run, so the tests can share one Firm.
 const run = Date.now().toString(36)
@@ -119,4 +119,27 @@ test("f1 the upload page asks for a note only for something else", async ({ page
   await page.getByRole("combobox").selectOption("other")
 
   await expect(note).toBeVisible()
+})
+
+test("k1 the owner invites staff, who log in without the owner's settings", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const email = `staff-${run}@example.test`
+  await page.goto("/settings")
+  const staff = page.locator("[data-slot=card]", { hasText: "Staff" })
+  await staff.getByLabel("Staff member's email").fill(email)
+  await staff.getByRole("button", { name: "Invite" }).click()
+  await expect(staff.getByText(email)).toBeVisible()
+
+  const theirs = await browser.newContext({ baseURL, storageState: undefined })
+  const theirPage = await theirs.newPage()
+  await theirPage.goto(await loginLink(email))
+  await theirPage.getByRole("button", { name: "Log in" }).click()
+  await theirPage.goto("/settings")
+  await expect(theirPage.getByText("Only the firm's owner")).toBeVisible()
+  await expect(theirPage.getByRole("link", { name: "Download all data" })).toHaveCount(0)
+  await expect(theirPage.getByText(email)).toBeVisible()
+  await theirs.close()
 })

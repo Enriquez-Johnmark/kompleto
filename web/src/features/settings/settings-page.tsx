@@ -15,11 +15,15 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
+import { useMe } from "@/app/queries"
 import { CloseAccountCard } from "@/features/settings/close-account-card"
+import { StaffCard } from "@/features/settings/staff-card"
 
 const settingsKey = ["settings"] as const
 
 export function SettingsPage() {
+  const me = useMe()
+  const isOwner = me.data?.role === "owner"
   const settings = useQuery({
     queryKey: settingsKey,
     queryFn: () => api<Settings>("GET", "/api/settings"),
@@ -36,8 +40,18 @@ export function SettingsPage() {
             key={settings.data.cut_off_offset_days}
             days={settings.data.cut_off_offset_days}
           />
-          <ExportCard />
-          <CloseAccountCard firmName={settings.data.firm_name} />
+          {isOwner ? (
+            <>
+              <StaffCard />
+              <ExportCard />
+              <CloseAccountCard firmName={settings.data.firm_name} />
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Only the firm's owner, {settings.data.login_email}, can change staff, download all
+              data or close the account.
+            </p>
+          )}
         </div>
       ) : null}
     </>
