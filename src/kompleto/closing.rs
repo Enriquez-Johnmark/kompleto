@@ -118,21 +118,37 @@ pub async fn reopen(pool: &PgPool, clock: &Arc<dyn Clock>, login_email: &str) ->
 /// Deletes all data and files of every Firm closed [`GRACE_DAYS`] ago by
 /// `now`; returns how many Firms. A system-wide worker: it names each Firm
 /// in every delete. The engine's rows go first and the Firm's row last, so
-/// a crash part way leaves the Firm to be found and finished next time.
+/// a crash part way leaves the Firm to be found and finished next time. One
+/// Firm that fails is logged and tried again next time; the rest go on.
 pub async fn erase_due(pool: &PgPool, files: &Files, now: OffsetDateTime) -> Result<usize, FileError> {
     let due = sqlx::query_scalar!("select id from firms where erase_after <= $1", now)
         .fetch_all(pool)
         .await?;
-    for &id in &due {
+    let mut erased = 0;
+    for id in due {
         let firm = FirmId::from(id);
-        tenants::erase(pool, files, firm).await?;
-        // Its Clients and everything about them go with it (on delete cascade).
-        sqlx::query!("delete from firms where id = $1 and erase_after <= $2", id, now)
-            .execute(pool)
-            .await?;
-        tracing::info!(%firm, "closed account erased");
+        match erase(pool, files, firm, now).await {
+            Ok(()) => {
+                erased += 1;
+                tracing::info!(%firm, "closed account erased");
+            }
+            Err(err) => tracing::error!(%firm, %err, "erasing a closed account failed"),
+        }
     }
-    Ok(due.len())
+    Ok(erased)
+}
+
+async fn erase(pool: &PgPool, files: &Files, firm: FirmId, now: OffsetDateTime) -> Result<(), FileError> {
+    tenants::erase(pool, files, firm).await?;
+    // Its Clients and everything about them go with it (on delete cascade).
+    sqlx::query!(
+        "delete from firms where id = $1 and erase_after <= $2",
+        firm.as_uuid(),
+        now
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 /// Marks `firm` closed, ends its sessions and logs it.
