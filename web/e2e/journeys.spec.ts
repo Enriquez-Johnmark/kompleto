@@ -74,6 +74,27 @@ test("b2 an import is previewed and only confirming adds the valid rows", async 
   await expect(page.getByRole("link", { name: `Lito Hardware ${run}` })).toBeVisible()
 })
 
+test("b5 a Xero contact export imports with the forms chosen for it", async ({ page }) => {
+  const file = join(tmpdir(), `kompleto-xero-${run}.csv`)
+  writeFileSync(
+    file,
+    "*ContactName,EmailAddress,FirstName,LastName,TaxNumber\n" +
+      `Aquino Rice ${run},aquino@example.test,Mario,Aquino,123-456-789-000\n`
+  )
+  await page.goto("/import")
+  const defaults = page.locator("[data-slot=card]", { hasText: "For files without" })
+  await defaults.getByLabel("Language").selectOption("english")
+  await defaults.getByRole("checkbox", { name: /2551Q/ }).click()
+  await page.locator("input[type=file]").setInputFiles(file)
+
+  await expect(page.getByRole("cell", { name: "Mario" })).toBeVisible()
+  await page.getByRole("button", { name: "Add 1 client" }).click()
+  await page.getByRole("link", { name: `Aquino Rice ${run}` }).click()
+
+  await expect(page.getByText("English")).toBeVisible()
+  await expect(page.getByText("2551Q", { exact: true }).first()).toBeVisible()
+})
+
 test("d3 a batch shows every draft in full before any is approved", async ({ page }) => {
   // An employer files 1601-C monthly, so next month's first day drafts a reminder.
   await page.goto("/clients/new")

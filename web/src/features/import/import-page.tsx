@@ -23,14 +23,21 @@ import {
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
 import { useRefreshClients } from "@/features/clients/queries"
+import { BatchDefaultsCard, type BatchDefaults } from "@/features/import/batch-defaults-card"
 
-/** B2: upload a file, see every row checked, then add the valid ones. */
+/** B2, B5: upload a file (Kompleto's template, or a Xero or QuickBooks
+ *  export), see every row checked, then add the valid ones. */
 export function ImportPage() {
   const navigate = useNavigate()
   const refresh = useRefreshClients()
   const [fileName, setFileName] = useState("")
+  const [defaults, setDefaults] = useState<BatchDefaults>({ language: "taglish", forms: [] })
   const check = useMutation({
-    mutationFn: (file: File) => apiUpload<ImportPreview>("/api/import", file),
+    mutationFn: (file: File) =>
+      apiUpload<ImportPreview>("/api/import", file, [
+        ["default_language", defaults.language],
+        ...defaults.forms.map((form): [string, string] => ["default_forms", form]),
+      ]),
   })
   const confirm = useMutation({
     mutationFn: (confirmation: ImportConfirmation) =>
@@ -56,7 +63,7 @@ export function ImportPage() {
     <>
       <PageHeader
         title="Import clients"
-        description="Upload a .csv or .xlsx file with up to 500 clients. Nothing is added until you confirm."
+        description="Upload Kompleto's template, or a client list exported from Xero or QuickBooks: .csv or .xlsx, up to 500 clients. Nothing is added until you confirm."
       >
         <Button
           variant="outline"
@@ -67,6 +74,7 @@ export function ImportPage() {
           Download the template
         </Button>
       </PageHeader>
+      <BatchDefaultsCard defaults={defaults} onChange={setDefaults} />
       <Card>
         <CardHeader>
           <CardTitle>Choose a file</CardTitle>
