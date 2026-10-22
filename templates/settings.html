@@ -14,4 +14,11 @@
 </form>
 <h2>Your data</h2>
 <p><a href="/settings/export">Download all data</a> <span class="muted">(one zip: spreadsheets of your clients, Payors, checklists, messages, uploads, replies and activity, plus the uploaded files still held)</span></p>
+<h2>Close your account</h2>
+<p>Sending stops and everyone is logged out at once. All your data and files are deleted 7 days later; until then, contact Kompleto to undo it. Download your data first if you want to keep it.</p>
+<form method="post" action="/settings/close">
+  <label for="confirm">Type your firm's name, {{ firm.name }}, to confirm</label>
+  <input type="text" id="confirm" name="confirm" required autocomplete="off">
+  <p><button>Close account</button></p>
+</form>
 {% endblock %}

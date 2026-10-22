@@ -159,7 +159,9 @@ impl UploadLinks {
     /// it has one (expired or not).
     pub async fn find(&self, firm: FirmId, client: ClientId, period: &str) -> Result<Option<OpenLink>, sqlx::Error> {
         let row = sqlx::query!(
-            "select id, cut_off from upload_links where firm_id = $1 and client_id = $2 and period = $3",
+            "select l.id, l.cut_off from upload_links l
+             join firms f on f.id = l.firm_id and f.closed_at is null
+             where l.firm_id = $1 and l.client_id = $2 and l.period = $3",
             firm.as_uuid(),
             client.as_uuid(),
             period,
@@ -194,7 +196,9 @@ impl UploadLinks {
     pub async fn open(&self, token: &str) -> Result<OpenLink, LinkError> {
         let id = self.signer.verify(token).ok_or(LinkError::NotFound)?;
         let row = sqlx::query!(
-            "select firm_id, client_id, period, cut_off, expires_at from upload_links where id = $1",
+            "select l.firm_id, l.client_id, l.period, l.cut_off, l.expires_at from upload_links l
+             join firms f on f.id = l.firm_id and f.closed_at is null
+             where l.id = $1",
             id,
         )
         .fetch_optional(&self.pool)
@@ -230,7 +234,9 @@ impl UploadLinks {
             return Ok(None);
         };
         let row = sqlx::query!(
-            "select firm_id, client_id, period, cut_off from upload_links where id = $1",
+            "select l.firm_id, l.client_id, l.period, l.cut_off from upload_links l
+             join firms f on f.id = l.firm_id and f.closed_at is null
+             where l.id = $1",
             id,
         )
         .fetch_optional(&self.pool)

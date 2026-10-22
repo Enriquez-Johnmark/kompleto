@@ -102,7 +102,7 @@ impl Scheduler {
             SweepRow,
             "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset
              from clients c join firms f on f.id = c.firm_id
-             where not c.paused
+             where not c.paused and f.closed_at is null
                and not exists (
                    select 1 from bounces b
                    where b.firm_id = c.firm_id and b.client_id = c.id

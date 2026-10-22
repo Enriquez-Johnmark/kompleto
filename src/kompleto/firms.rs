@@ -127,7 +127,7 @@ impl Firms {
     /// has no Firm yet, so this is the one lookup not scoped by a `FirmId`.
     pub async fn find_by_login_email(&self, email: &str) -> Result<Option<Firm>, FirmError> {
         let id = sqlx::query_scalar!(
-            "select id from firms where lower(login_email) = lower($1)",
+            "select id from firms where lower(login_email) = lower($1) and closed_at is null",
             email.trim()
         )
         .fetch_optional(&self.pool)

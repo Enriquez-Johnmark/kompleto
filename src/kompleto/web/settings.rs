@@ -3,15 +3,16 @@
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Form, Router};
 use serde::Deserialize;
 use time::Duration;
 
-use super::{AppState, CurrentFirm, WebError, show_date};
+use super::{AppState, CurrentFirm, SESSION_COOKIE, WebError, show_date};
 use crate::engine::cost_log;
+use crate::kompleto::closing::{self, ClosingError};
 use crate::kompleto::dates::manila_month;
 use crate::kompleto::firms::{Firm, FirmId};
 use crate::kompleto::schedule::MANILA;
@@ -19,6 +20,7 @@ use crate::kompleto::schedule::MANILA;
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/settings", get(settings_page).post(save_settings))
+        .route("/settings/close", post(close_account))
         .route("/calendar", get(calendar_page))
 }
 
@@ -75,6 +77,44 @@ async fn save_settings(
             };
             Ok((StatusCode::UNPROCESSABLE_ENTITY, page).into_response())
         }
+    }
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "closed.html")]
+struct ClosedPage {
+    erase_on: String,
+}
+
+#[derive(Deserialize)]
+struct CloseForm {
+    confirm: String,
+}
+
+/// Closes the account once the Firm's name is typed (I2), and logs out.
+async fn close_account(
+    State(state): State<AppState>,
+    CurrentFirm(firm): CurrentFirm,
+    Form(form): Form<CloseForm>,
+) -> Result<Response, WebError> {
+    let actor = super::actor(&state, firm).await?;
+    match closing::close(&state.pool, &state.clock, firm, &form.confirm, &actor).await {
+        Ok(erase_after) => {
+            let page = ClosedPage {
+                erase_on: show_date(erase_after.to_offset(MANILA).date()),
+            };
+            let cookie = format!("{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+            Ok(([(header::SET_COOKIE, cookie)], page).into_response())
+        }
+        Err(ClosingError::NameMismatch) => {
+            let page = SettingsPage {
+                ai_cost: ai_cost(&state, firm).await?,
+                firm: state.firms.get(firm).await?,
+                error: Some("Type your firm's name exactly to close the account.".to_owned()),
+            };
+            Ok((StatusCode::UNPROCESSABLE_ENTITY, page).into_response())
+        }
+        Err(err) => Err(WebError::internal(err)),
     }
 }
 

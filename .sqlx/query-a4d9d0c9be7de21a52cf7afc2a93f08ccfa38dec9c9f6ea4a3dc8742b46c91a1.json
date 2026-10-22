@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update firms set closed_at = $2, erase_after = $3 where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4d9d0c9be7de21a52cf7afc2a93f08ccfa38dec9c9f6ea4a3dc8742b46c91a1"
+}

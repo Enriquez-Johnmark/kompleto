@@ -7,6 +7,7 @@ pub mod bounces;
 pub mod calendar;
 pub mod checklist;
 pub mod clients;
+pub mod closing;
 pub mod dashboard;
 pub mod dates;
 pub mod drafting;

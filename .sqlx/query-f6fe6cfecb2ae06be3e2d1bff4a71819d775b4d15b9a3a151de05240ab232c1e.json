@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select firm_id, client_id, period, cut_off, expires_at from upload_links where id = $1",
+  "query": "select l.firm_id, l.client_id, l.period, l.cut_off from upload_links l\n             join firms f on f.id = l.firm_id and f.closed_at is null\n             where l.id = $1",
   "describe": {
     "columns": [
       {
@@ -46,17 +46,6 @@
             "name": "cut_off"
           }
         }
-      },
-      {
-        "ordinal": 4,
-        "name": "expires_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "upload_links",
-            "name": "expires_at"
-          }
-        }
       }
     ],
     "parameters": {
@@ -68,9 +57,8 @@
       false,
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "1d661b22daa978b86c91715d5eb13cdeb26a8b06ecbc0d4f5c4387e93a8f16ec"
+  "hash": "f6fe6cfecb2ae06be3e2d1bff4a71819d775b4d15b9a3a151de05240ab232c1e"
 }
