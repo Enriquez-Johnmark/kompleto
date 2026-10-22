@@ -501,3 +501,31 @@ async fn f1_while_files_cant_be_scanned_none_are_kept(pool: PgPool) {
     assert!(refused.body.contains("subukan po ulit mamaya"), "{}", refused.body);
     assert_eq!(kept_files(&app).await, (0, 0));
 }
+
+#[sqlx::test]
+async fn p1_p2_a_payroll_link_asks_for_the_payroll_documents_or_the_receipts(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let santos = common::firm(&app.pool, "Santos Bookkeeping").await;
+    let client = Clients::new(app.pool.clone(), app.clock.clone())
+        .create(santos, &nena())
+        .await
+        .unwrap();
+    let links = common::upload_links(&app.pool, app.clock.clone());
+    let payroll = links
+        .for_period(santos, client, "payroll-2026-10-31", date!(2026 - 10 - 28))
+        .await
+        .unwrap();
+    let receipts = links
+        .for_period(santos, client, "remit-2026-09", date!(2026 - 11 - 10))
+        .await
+        .unwrap();
+
+    let payroll = app.get(payroll.trim_start_matches(common::web::BASE_URL), "").await;
+    let receipts = app.get(receipts.trim_start_matches(common::web::BASE_URL), "").await;
+
+    assert_eq!(payroll.status, StatusCode::OK, "{}", payroll.body);
+    assert!(payroll.body.contains("Timesheets or DTRs"), "{}", payroll.body);
+    assert!(!payroll.body.contains("Sales invoices"), "{}", payroll.body);
+    assert!(receipts.body.contains("SSS payment receipt"), "{}", receipts.body);
+    assert!(receipts.body.contains("Pag-IBIG payment receipt"), "{}", receipts.body);
+}

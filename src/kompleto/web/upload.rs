@@ -27,6 +27,7 @@ use super::{AppState, NotFoundPage, WebError, show_date};
 use crate::kompleto::calendar::TaxPeriod;
 use crate::kompleto::checklist::{ANOTHER_PAYOR_2307, is_received_2307, owed_documents, payor_2307};
 use crate::kompleto::clients::{Client, Language};
+use crate::kompleto::payroll::PayrollKey;
 use crate::kompleto::upload_links::{LinkError, OpenLink};
 use crate::kompleto::uploads::{Label, LabelProblem, MAX_FILE_BYTES, UploadError, uploaded_documents};
 
@@ -205,10 +206,15 @@ async fn details(state: &AppState, link: OpenLink) -> Result<Opened, WebError> {
     let firm_name = state.firms.get(link.firm).await?.name;
     let client = state.clients.get(link.firm, link.client).await?;
     let edits = state.clients.checklist_edits(link.firm, link.client).await?;
-    let (_, month) = TaxPeriod::parse_key(&link.period)
-        .ok_or_else(|| WebError::internal(format!("bad period key {:?}", link.period)))?
-        .last_month();
-    let owed = owed_documents(&client.details.forms, month, &edits);
+    // P1, P2: a payroll Period asks for its own documents.
+    let owed = if let Some(payroll) = PayrollKey::parse(&link.period) {
+        payroll.documents()
+    } else {
+        let (_, month) = TaxPeriod::parse_key(&link.period)
+            .ok_or_else(|| WebError::internal(format!("bad period key {:?}", link.period)))?
+            .last_month();
+        owed_documents(&client.details.forms, month, &edits)
+    };
     let mut choices = owed.clone();
     if edits.payors.iter().any(|payor| owed.contains(&payor_2307(payor))) {
         choices.push(ANOTHER_PAYOR_2307.to_owned());
