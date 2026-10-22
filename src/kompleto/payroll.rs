@@ -132,6 +132,14 @@ impl PayrollPeriod {
         }
     }
 
+    /// What its key stands for.
+    pub fn as_key(&self) -> PayrollKey {
+        match self.kind {
+            PayrollKind::Inputs { payday } => PayrollKey::Inputs(payday),
+            PayrollKind::Receipts { year, month, .. } => PayrollKey::Receipts(year, month),
+        }
+    }
+
     /// The Owed documents on `today`: receipts only once their due date
     /// has passed.
     pub fn owed_on(&self, today: Date) -> Vec<String> {

@@ -23,6 +23,7 @@
 use std::sync::Arc;
 
 use sqlx::PgPool;
+use time::Date;
 
 use super::calendar::{Calendar, CalendarError};
 use super::checklist::owed_documents;
@@ -30,8 +31,9 @@ use super::clients::{Client, ClientError, ClientId, Clients};
 use super::drafting::{DraftBrief, Drafter, Purpose, Tone};
 use super::drafts::Drafts;
 use super::firms::FirmId;
-use super::periods::{ClientCalendar, CollectionPeriod};
-use super::schedule::{MANILA, MAX_DRAFTS_PER_PERIOD, PlannedDraft, Slot, appears_at, planned_drafts};
+use super::payroll::PayrollKind;
+use super::periods::ClientCalendar;
+use super::schedule::{MANILA, MAX_DRAFTS_PER_PERIOD, PlannedDraft, Slot, appears_at, planned_between};
 use super::upload_links::UploadLinks;
 use super::uploads::uploaded_documents;
 use crate::engine::clock::Clock;
@@ -137,17 +139,45 @@ impl Scheduler {
                 .unwrap_or_else(|| u8::try_from(row.firm_offset).unwrap_or(5)),
         };
         let now = self.clock.now();
+        let today = now.to_offset(MANILA).date();
         let added_on = row.created_at.to_offset(MANILA).date();
+        let edits = self.clients.checklist_edits(firm, id).await?;
+        let mut chases: Vec<Chase> = calendar
+            .upcoming(today)
+            .into_iter()
+            .map(|period| Chase {
+                key: period.key(),
+                label: period.label.to_string(),
+                purpose: Purpose::BirFilings,
+                opens_on: period.opens_on(),
+                cut_off: period.cut_off,
+                owed: owed_documents(&client.details.forms, period.month, &edits),
+            })
+            .collect();
+        // P1, P2: payroll Periods, when the Client has them.
+        if let Some(payroll) = self.clients.payroll(firm, id).await? {
+            chases.extend(payroll.upcoming(&self.calendar, today).into_iter().map(|period| Chase {
+                key: period.key(),
+                label: period.as_key().label(),
+                purpose: match period.kind {
+                    PayrollKind::Inputs { .. } => Purpose::Payroll,
+                    PayrollKind::Receipts { .. } => Purpose::Contributions,
+                },
+                opens_on: period.opens_on,
+                cut_off: period.cut_off,
+                owed: period.owed_on(today),
+            }));
+        }
         let mut created = 0;
-        for period in calendar.upcoming(now.to_offset(MANILA).date()) {
-            if period.cut_off <= added_on {
+        for chase in chases {
+            if chase.cut_off <= added_on {
                 continue;
             }
-            let latest_due = planned_drafts(&period, &client.reminder_days)
+            let latest_due = planned_between(chase.opens_on, chase.cut_off, &client.reminder_days)
                 .into_iter()
                 .rfind(|draft| appears_at(draft.on) <= now);
             if let Some(draft) = latest_due
-                && self.create(&row.firm_name, &client, firm, &period, draft).await?
+                && self.create(&row.firm_name, &client, firm, &chase, draft).await?
             {
                 created += 1;
             }
@@ -162,15 +192,16 @@ impl Scheduler {
         firm_name: &str,
         client: &Client,
         firm: FirmId,
-        period: &CollectionPeriod,
+        period: &Chase,
         draft: PlannedDraft,
     ) -> Result<bool, SchedulerError> {
-        let (key, slot) = (period.key(), slot_key(draft.slot));
-        let edits = self.clients.checklist_edits(firm, client.id).await?;
+        let (key, slot) = (period.key.clone(), slot_key(draft.slot));
         let uploaded = uploaded_documents(&self.pool, firm, client.id, &key).await?;
-        let owed: Vec<String> = owed_documents(&client.details.forms, period.month, &edits)
-            .into_iter()
-            .filter(|document| !uploaded.contains(document))
+        let owed: Vec<String> = period
+            .owed
+            .iter()
+            .filter(|document| !uploaded.contains(*document))
+            .cloned()
             .collect();
         // Checked on every run, even when this slot already has its Draft, so
         // a Draft left waiting after the last upload (say, one drafted while
@@ -202,8 +233,8 @@ impl Scheduler {
             business_name: client.details.business_name.clone(),
             contact_first_name: client.details.contact_first_name.clone(),
             owed,
-            period: period.label.to_string(),
-            purpose: Purpose::BirFilings,
+            period: period.label.clone(),
+            purpose: period.purpose,
             cut_off: period.cut_off,
             language: client.details.language,
             tone: Tone::for_reminder(match draft.slot {
@@ -259,6 +290,19 @@ impl Scheduler {
         tx.commit().await?;
         Ok(true)
     }
+}
+
+/// One Period's request, whatever its documents are for.
+struct Chase {
+    /// The Period's storage key.
+    key: String,
+    /// What the Client is told it covers.
+    label: String,
+    purpose: Purpose,
+    opens_on: Date,
+    cut_off: Date,
+    /// Everything owed, before Uploads are taken off.
+    owed: Vec<String>,
 }
 
 /// One Client as the sweep sees it.

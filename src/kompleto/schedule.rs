@@ -83,13 +83,18 @@ pub struct PlannedDraft {
 
 /// The Drafts for `period`, in date order.
 pub fn planned_drafts(period: &CollectionPeriod, reminders: &ReminderDays) -> Vec<PlannedDraft> {
+    planned_between(period.opens_on(), period.cut_off, reminders)
+}
+
+/// The Drafts for any Period that opens on `opens_on`, in date order.
+pub fn planned_between(opens_on: Date, cut_off: Date, reminders: &ReminderDays) -> Vec<PlannedDraft> {
     let first = PlannedDraft {
         slot: Slot::FirstRequest,
-        on: period.opens_on(),
+        on: opens_on,
     };
     let reminders = reminders.days().iter().map(|&days_before| PlannedDraft {
         slot: Slot::Reminder { days_before },
-        on: period.cut_off - Duration::days(i64::from(days_before)),
+        on: cut_off - Duration::days(i64::from(days_before)),
     });
     std::iter::once(first)
         .chain(reminders.filter(|reminder| reminder.on > first.on))
