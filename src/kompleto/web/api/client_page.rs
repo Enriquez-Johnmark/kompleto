@@ -13,10 +13,9 @@ use uuid::Uuid;
 
 use super::clients::language;
 use super::{ApiError, ApiFirm, ApiPath};
-use crate::kompleto::calendar::TaxPeriod;
 use crate::kompleto::checklist::{DEFAULT_ITEMS, Recurs, owed_documents};
 use crate::kompleto::clients::ClientId;
-use crate::kompleto::periods::ClientCalendar;
+use crate::kompleto::periods::{ClientCalendar, period_label};
 use crate::kompleto::schedule::{MANILA, planned_drafts};
 use crate::kompleto::web::{AppState, ScopedRoute};
 
@@ -181,10 +180,6 @@ pub struct ReplySummary {
 
 pub(super) fn rfc3339(at: OffsetDateTime) -> String {
     at.format(&Rfc3339).unwrap_or_default()
-}
-
-pub(super) fn period_label(key: &str) -> String {
-    TaxPeriod::parse_key(key).map_or_else(|| key.to_owned(), |period| period.to_string())
 }
 
 fn recurs(recurs: Recurs) -> &'static str {

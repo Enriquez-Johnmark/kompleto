@@ -8,8 +8,9 @@ use axum::{Json, Router};
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::client_page::{period_label, rfc3339};
+use super::client_page::rfc3339;
 use super::{ApiError, ApiFirm, ApiPath};
+use crate::kompleto::periods::period_label;
 use crate::kompleto::replies::ReplyId;
 use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
 

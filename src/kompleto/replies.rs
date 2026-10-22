@@ -15,10 +15,10 @@ use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use super::calendar::TaxPeriod;
 use super::clients::{ClientId, Clients};
 use super::drafts::Drafts;
 use super::firms::{FirmId, Firms};
+use super::periods::period_label;
 use super::presend::KompletoChecks;
 use super::upload_links::{OpenLink, UploadLinks};
 use super::uploads::{Label, UploadError, Uploads};
@@ -294,8 +294,7 @@ impl Replies {
             .get(link.firm, link.client)
             .await
             .map_err(|err| ReplyError::Notice(err.to_string()))?;
-        let period =
-            TaxPeriod::parse_key(&link.period).map_or_else(|| link.period.clone(), |period| period.to_string());
+        let period = period_label(&link.period);
         let (contact, business) = (&client.details.contact_first_name, &client.details.business_name);
         let email = Email {
             to_address: firm.login_email,

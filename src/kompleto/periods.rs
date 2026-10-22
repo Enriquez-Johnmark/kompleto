@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use time::{Date, Duration, Month};
 
 use super::calendar::{BirForm, Calendar, TaxPeriod};
+use super::payroll::PayrollKey;
 
 /// Due dates the bookkeeper set by hand for one Client, replacing the
 /// calendar's date for that form and Period only (B3).
@@ -138,6 +139,15 @@ impl ClientCalendar<'_> {
     }
 }
 
+/// How people see a Period's storage key: "September 2026", "Q3 2026",
+/// "payroll on Thu 15 Oct 2026"; an unknown key as it is.
+pub fn period_label(key: &str) -> String {
+    if let Some(payroll) = PayrollKey::parse(key) {
+        return payroll.label();
+    }
+    TaxPeriod::parse_key(key).map_or_else(|| key.to_owned(), |period| period.to_string())
+}
+
 /// The month at 0-based index `index` (0 = January).
 fn month_from_index(index: i32) -> Month {
     u8::try_from(index + 1)
@@ -162,6 +172,16 @@ mod tests {
             cut_off_offset_days: 5,
         }
         .period(year, month)
+    }
+
+    #[test]
+    fn p1_p2_payroll_periods_are_named_in_words() {
+        assert_eq!(period_label("2026-09"), "September 2026");
+        assert_eq!(period_label("payroll-2026-10-15"), "payroll on Thu 15 Oct 2026");
+        assert_eq!(
+            period_label("remit-2026-09"),
+            "September 2026 SSS, PhilHealth and Pag-IBIG contributions"
+        );
     }
 
     #[test]
