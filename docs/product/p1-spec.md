@@ -198,7 +198,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 
   A miss means reassessing, with S1 as the fallback. These replace the old thresholds written for B.
 - **Registration timing:** pilots run without a registered business.
-  - **Before the first pilot:** the privacy paperwork (privacy notice, data processing agreement, owner as data protection officer, NPC sworn declaration). Claude drafts it.
+  - **Before the first pilot:** the privacy paperwork (privacy notice, data processing agreement, owner as data protection officer, NPC sworn declaration). Claude drafts it. Drafted at M8: the privacy notice, terms and data processing agreement are public pages (`docs/legal.md`); the owner fills in the bracketed details, designates themself DPO and files the sworn declaration.
   - **In pilot week 3:** register the DTI name (₱530) and register with the BIR online (₱30, 8% option); ask the barangay and city hall whether a home-based online service needs a permit.
   - **First payment:** by personal GCash, with a BIR invoice issued.
 

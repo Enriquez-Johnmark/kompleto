@@ -121,6 +121,7 @@ docs/             spec, architecture, decisions, research, deploy guide, outreac
 | `docs/architecture.md` | How it's built, and the build order |
 | `docs/frontend.md` | React conventions and folder layout |
 | `docs/decisions.md` | Every decision the owner made, dated |
+| `docs/legal.md` | The help page, privacy notice, terms and data processing agreement |
 | `docs/deploy.md` | Going live, step by step |
 | `AGENTS.md` | The rules for working on this repository |
 | `GLOSSARY.md` | The project's words: Firm, Client, Payor, Cut-off… |

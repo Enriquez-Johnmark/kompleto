@@ -104,11 +104,14 @@ kompleto/
 │       │   ├── tracker/
 │       │   ├── activity/
 │       │   ├── settings/
-│       │   └── login/
+│       │   ├── login/
+│       │   ├── help/           help page; its text is help.md
+│       │   └── legal/          privacy notice, terms, data processing agreement (.md + pages)
 │       ├── components/
 │       │   ├── ui/             shadcn components
 │       │   └── …               shared app components (page-header, empty-state, status-badge)
-│       ├── lib/                small helpers: utils.ts (cn), dates.ts (Manila formatting)
+│       ├── lib/                small helpers: utils.ts (cn), dates.ts (Manila formatting),
+│       │                       markdown.tsx (renders our own .md documents as React elements)
 │       └── styles/
 │           └── globals.css     Tailwind and the theme's CSS variables
 └── …
