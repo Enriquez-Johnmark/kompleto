@@ -23,6 +23,17 @@ jobs:
           --health-cmd "pg_isready -U kompleto"
           --health-interval 2s
           --health-retries 30
+      # Real ClamAV for the scanner test; its built-in signatures suffice.
+      clamav:
+        image: clamav/clamav:1.4.3
+        env:
+          CLAMAV_NO_FRESHCLAMD: "true"
+        ports:
+          - 3310:3310
+        options: >-
+          --health-cmd "clamdcheck.sh"
+          --health-interval 5s
+          --health-retries 60
     env:
       DATABASE_URL: postgres://kompleto:kompleto@localhost:5432/kompleto
       # Compile SQL checks from the committed .sqlx/ data; tests still run
@@ -39,6 +50,10 @@ jobs:
         run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - name: Test (including the E1 crash test)
         run: cargo test --all-features --locked
+      - name: Virus scanning against a real ClamAV
+        run: cargo test --all-features --locked --test scan -- --ignored
+        env:
+          CLAMD_TEST_ADDR: 127.0.0.1:3310
       - name: The API's TypeScript types are committed (written by cargo test)
         run: |
           git status --porcelain web/src/api/generated
