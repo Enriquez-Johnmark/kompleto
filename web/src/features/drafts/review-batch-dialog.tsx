@@ -32,19 +32,24 @@ type ReviewBatchDialogProps = {
 export function ReviewBatchDialog({ drafts, onApproved }: ReviewBatchDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [result, setResult] = useState<BatchResult | null>(null)
+  // The drafts as they were when the review opened. A refresh of the list
+  // while reading never changes the text being reviewed, or what's approved:
+  // a draft edited meanwhile is refused by its hash instead.
+  const [reviewed, setReviewed] = useState<DraftView[]>([])
   const approve = useApproveBatch()
-  const count = drafts.length
+  const count = isOpen ? reviewed.length : drafts.length
 
   function handleOpenChange(open: boolean) {
     setIsOpen(open)
-    if (!open) {
+    if (open) setReviewed(drafts)
+    else {
       setResult(null)
       approve.reset()
     }
   }
 
   function handleApprove() {
-    approve.mutate(drafts, {
+    approve.mutate(reviewed, {
       onSuccess: (outcome) => {
         onApproved()
         toast.add({
@@ -91,7 +96,7 @@ export function ReviewBatchDialog({ drafts, onApproved }: ReviewBatchDialogProps
           </Alert>
         ) : (
           <ol className="-mx-1 flex flex-col gap-4 overflow-y-auto px-1">
-            {drafts.map((draft) => (
+            {reviewed.map((draft) => (
               <li key={draft.id} className="flex flex-col gap-2">
                 <DraftHeading draft={draft} />
                 <MessageText subject={draft.subject} body={draft.body} />
