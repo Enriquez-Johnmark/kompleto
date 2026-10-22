@@ -8,6 +8,7 @@
 //!   JSON body, which a cross-site form can't send.
 //! - Errors are JSON ([`ErrorBody`]) without internal details.
 
+mod client_page;
 mod clients;
 mod dashboard;
 mod drafts;
@@ -29,6 +30,7 @@ use crate::kompleto::firms::{FirmError, FirmId};
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .merge(client_page::routes())
         .merge(clients::routes())
         .merge(dashboard::routes())
         .merge(drafts::routes())
@@ -42,6 +44,7 @@ pub(super) fn scoped_endpoints() -> Vec<(super::ScopedRoute, axum::routing::Meth
     drafts::draft_endpoints()
         .into_iter()
         .chain(clients::client_endpoints())
+        .chain(client_page::page_endpoints())
         .collect()
 }
 
@@ -109,6 +112,24 @@ impl From<WebError> for ApiError {
 impl From<ClientError> for ApiError {
     fn from(err: ClientError) -> Self {
         WebError::from(err).into()
+    }
+}
+
+impl From<crate::kompleto::uploads::UploadError> for ApiError {
+    fn from(err: crate::kompleto::uploads::UploadError) -> Self {
+        match err {
+            crate::kompleto::uploads::UploadError::NotFound => Self::NotFound,
+            other => Self::internal(other),
+        }
+    }
+}
+
+impl From<crate::kompleto::replies::ReplyError> for ApiError {
+    fn from(err: crate::kompleto::replies::ReplyError) -> Self {
+        match err {
+            crate::kompleto::replies::ReplyError::NotFound => Self::NotFound,
+            other => Self::internal(other),
+        }
     }
 }
 
