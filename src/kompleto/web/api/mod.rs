@@ -8,6 +8,7 @@
 //!   JSON body, which a cross-site form can't send.
 //! - Errors are JSON ([`ErrorBody`]) without internal details.
 
+mod clients;
 mod dashboard;
 mod drafts;
 mod login;
@@ -28,6 +29,7 @@ use crate::kompleto::firms::{FirmError, FirmId};
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .merge(clients::routes())
         .merge(dashboard::routes())
         .merge(drafts::routes())
         .merge(login::routes())
@@ -38,6 +40,9 @@ pub(super) fn routes() -> Router<AppState> {
 /// Every endpoint about one of a Firm's records (A2).
 pub(super) fn scoped_endpoints() -> Vec<(super::ScopedRoute, axum::routing::MethodRouter<AppState>)> {
     drafts::draft_endpoints()
+        .into_iter()
+        .chain(clients::client_endpoints())
+        .collect()
 }
 
 async fn not_found() -> ApiError {

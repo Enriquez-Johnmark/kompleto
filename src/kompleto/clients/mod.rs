@@ -40,6 +40,7 @@ impl Language {
 /// A Client's details as typed into the form or a row of an import file.
 /// Untrusted until [`NewClient::parse`] accepts it.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ClientInput {
     /// Business name.
     pub business_name: String,
