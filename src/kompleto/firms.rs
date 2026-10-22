@@ -3,7 +3,8 @@
 
 use std::sync::Arc;
 
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
+use time::OffsetDateTime;
 
 use super::activity::record_as;
 use super::members::{MemberId, is_email_address};
@@ -75,39 +76,8 @@ impl Firms {
 
     /// Creates a Firm.
     pub async fn create(&self, name: &str, login_email: &str) -> Result<FirmId, FirmError> {
-        let (name, login_email) = (name.trim(), login_email.trim());
-        check_name(name).map_err(FirmError::Invalid)?;
-        if !is_email_address(login_email) {
-            return Err(FirmError::Invalid(format!("{login_email:?} is not an email address")));
-        }
-        let id = FirmId::new();
-        let now = self.clock.now();
-        let taken = |err: sqlx::Error| match err.as_database_error().and_then(|db| db.constraint()) {
-            Some("firms_login_email" | "firm_members_email") => FirmError::LoginEmailTaken,
-            _ => FirmError::Database(err),
-        };
         let mut tx = self.pool.begin().await?;
-        sqlx::query!(
-            "insert into firms (id, name, login_email, created_at) values ($1, $2, $3, $4)",
-            id.as_uuid(),
-            name,
-            login_email,
-            now,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(taken)?;
-        // Its login address is its owner's.
-        sqlx::query!(
-            "insert into firm_members (id, firm_id, email, role, created_at) values ($1, $2, $3, 'owner', $4)",
-            MemberId::new().as_uuid(),
-            id.as_uuid(),
-            login_email,
-            now,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(taken)?;
+        let id = create_in(&mut tx, self.clock.now(), name, login_email).await?;
         tx.commit().await?;
         Ok(id)
     }
@@ -188,4 +158,46 @@ pub(crate) fn check_name(name: &str) -> Result<(), String> {
         return Err(format!("{name:?} looks like a web address; use the business name"));
     }
     Ok(())
+}
+
+/// Creates a Firm, and its owner as its first member, in the caller's
+/// transaction.
+pub(crate) async fn create_in(
+    tx: &mut PgConnection,
+    now: OffsetDateTime,
+    name: &str,
+    login_email: &str,
+) -> Result<FirmId, FirmError> {
+    let (name, login_email) = (name.trim(), login_email.trim());
+    check_name(name).map_err(FirmError::Invalid)?;
+    if !is_email_address(login_email) {
+        return Err(FirmError::Invalid(format!("{login_email:?} is not an email address")));
+    }
+    let id = FirmId::new();
+    let taken = |err: sqlx::Error| match err.as_database_error().and_then(|db| db.constraint()) {
+        Some("firms_login_email" | "firm_members_email") => FirmError::LoginEmailTaken,
+        _ => FirmError::Database(err),
+    };
+    sqlx::query!(
+        "insert into firms (id, name, login_email, created_at) values ($1, $2, $3, $4)",
+        id.as_uuid(),
+        name,
+        login_email,
+        now,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(taken)?;
+    // Its login address is its owner's.
+    sqlx::query!(
+        "insert into firm_members (id, firm_id, email, role, created_at) values ($1, $2, $3, 'owner', $4)",
+        MemberId::new().as_uuid(),
+        id.as_uuid(),
+        login_email,
+        now,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(taken)?;
+    Ok(id)
 }

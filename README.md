@@ -81,7 +81,7 @@ Other commands:
 | Command | What it does |
 |---|---|
 | `cargo run -- demo` | Sends one approved email through the outbox into Mailpit |
-| `cargo run -- requests` | Account requests from the sign-up page; `requests approve ID` opens the firm and emails its owner a welcome login link, `requests decline ID` deletes it |
+| `cargo run -- requests` | Account requests from the sign-up page; `requests approve ID` opens the firm and emails its owner a welcome login link, `requests decline ID` deletes it, `requests decline-all` clears a flood |
 | `cargo run -- dev-schedule --date 2026-11-01` | Creates the reminder Drafts due on that date, to try the whole loop before real dates come round |
 | `cargo run -- llm-costs --month 2026-11` | AI cost per Firm for that month |
 | `cargo run -- gen-key` | Makes a new key for encrypting uploaded files |

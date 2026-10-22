@@ -6,7 +6,7 @@
 //! kompleto outbox-drain   send what's due once, then exit
 //! kompleto firm add --name NAME --email EMAIL
 //!                         create a Firm without a request
-//! kompleto requests [approve ID | decline ID]
+//! kompleto requests [approve ID | decline ID | decline-all]
 //!                         list account requests from the sign-up page, or
 //!                         open or turn one down (L1)
 //! kompleto llm-costs --month YYYY-MM
@@ -34,7 +34,7 @@ use kompleto::engine::ids::TenantId;
 use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{NoExtraChecks, Outbox, Sender};
 use kompleto::engine::scan::Clamd;
-use kompleto::kompleto::auth::Auth;
+use kompleto::kompleto::auth::{Auth, LoginOutcome};
 use kompleto::kompleto::calendar::Calendar;
 use kompleto::kompleto::closing;
 use kompleto::kompleto::demo::{self, DemoServices};
@@ -320,13 +320,8 @@ async fn requests(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyho
         }
         (Some("approve"), Some(text)) => {
             let id = id(text)?;
-            let request = signups
-                .pending()
-                .await?
-                .into_iter()
-                .find(|request| request.id == id)
-                .context("no such request")?;
-            let firm = signups.approve(id).await?;
+            // Everything the welcome email needs is checked before the Firm
+            // is opened, so a bad setting can't leave it half done.
             let links = UploadLinks::new(
                 pool.clone(),
                 clock.clone(),
@@ -334,19 +329,31 @@ async fn requests(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyho
                 &config.public_base_url,
             );
             let checks = KompletoChecks::new(pool.clone(), clock.clone(), &config.public_base_url, links);
-            Auth::new(pool, clock, &config.public_base_url, checks)
-                .welcome(&request.email)
-                .await?;
-            println!(
-                "Opened {} ({firm}); a welcome login link to {} goes out with the server's next send.",
-                request.firm_name, request.email
-            );
+            let auth = Auth::new(pool, clock, &config.public_base_url, checks);
+            let (firm, request) = signups.approve(id).await?;
+            println!("Opened {} ({firm}).", request.firm_name);
+            match auth.welcome(&request.email).await {
+                Ok(LoginOutcome::Sent) => {
+                    println!(
+                        "A welcome login link to {} goes out with the server's next send.",
+                        request.email
+                    );
+                }
+                outcome => println!(
+                    "The welcome email couldn't be sent ({outcome:?}); {} can still log in at {}/login.",
+                    request.email, config.public_base_url
+                ),
+            }
         }
         (Some("decline"), Some(text)) => {
             signups.decline(id(text)?).await?;
             println!("Request deleted.");
         }
-        _ => bail!("usage: kompleto requests [approve ID | decline ID]"),
+        (Some("decline-all"), None) => {
+            let deleted = signups.decline_all().await?;
+            println!("{deleted} request(s) deleted.");
+        }
+        _ => bail!("usage: kompleto requests [approve ID | decline ID | decline-all]"),
     }
     Ok(())
 }

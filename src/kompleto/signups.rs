@@ -12,7 +12,7 @@ use sqlx::PgPool;
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
-use super::firms::{FirmError, FirmId, Firms, check_name};
+use super::firms::{FirmError, FirmId, check_name, create_in};
 use super::members::is_email_address;
 use crate::engine::clock::Clock;
 use crate::engine::ids::id_type;
@@ -163,20 +163,29 @@ impl Signups {
             .collect())
     }
 
-    /// Opens the account `id` asked for, and deletes the request.
-    pub async fn approve(&self, id: RequestId) -> Result<FirmId, SignupError> {
-        let request = sqlx::query!(
-            "select firm_name, email from account_requests where id = $1",
+    /// Opens the account `id` asked for and deletes the request, together;
+    /// returns the new Firm and what the request said.
+    pub async fn approve(&self, id: RequestId) -> Result<(FirmId, AccountRequest), SignupError> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query!(
+            "select firm_name, email, created_at from account_requests where id = $1 for update",
             id.as_uuid()
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or(SignupError::NotFound)?;
-        let firm = Firms::new(self.pool.clone(), self.clock.clone())
-            .create(&request.firm_name, &request.email)
+        let request = AccountRequest {
+            id,
+            firm_name: row.firm_name,
+            email: row.email,
+            requested_at: row.created_at,
+        };
+        let firm = create_in(&mut tx, self.clock.now(), &request.firm_name, &request.email).await?;
+        sqlx::query!("delete from account_requests where id = $1", id.as_uuid())
+            .execute(&mut *tx)
             .await?;
-        self.delete(id.as_uuid()).await?;
-        Ok(firm)
+        tx.commit().await?;
+        Ok((firm, request))
     }
 
     /// Turns down request `id`, deleting it.
@@ -186,6 +195,13 @@ impl Signups {
         } else {
             Err(SignupError::NotFound)
         }
+    }
+
+    /// Turns down every waiting request, e.g. after a flood of junk ones;
+    /// returns how many.
+    pub async fn decline_all(&self) -> Result<u64, SignupError> {
+        let deleted = sqlx::query!("delete from account_requests").execute(&self.pool).await?;
+        Ok(deleted.rows_affected())
     }
 
     async fn delete(&self, id: Uuid) -> Result<bool, sqlx::Error> {

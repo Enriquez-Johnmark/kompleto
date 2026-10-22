@@ -24,7 +24,8 @@ async fn l1_a_request_creates_nothing_until_the_operator_approves_it(pool: PgPoo
         .await
         .unwrap();
     let pending = signups.pending().await.unwrap();
-    let firm = signups.approve(pending[0].id).await.unwrap();
+    let (firm, approved) = signups.approve(pending[0].id).await.unwrap();
+    assert_eq!(approved.email, "Mia@Cruz.test");
 
     assert_eq!(firms_before, 0);
     assert_eq!(pending.len(), 1);
@@ -161,4 +162,14 @@ async fn l1_the_owner_of_a_closed_firm_can_ask_again(pool: PgPool) {
         .unwrap();
 
     assert_eq!(signups.pending().await.unwrap().len(), 1);
+}
+
+#[sqlx::test]
+async fn l1_the_operator_can_turn_down_every_waiting_request(pool: PgPool) {
+    let signups = Signups::new(pool.clone(), clock());
+    signups.request("Junk", "a@spam.test", true).await.unwrap();
+    signups.request("Junk", "b@spam.test", true).await.unwrap();
+
+    assert_eq!(signups.decline_all().await.unwrap(), 2);
+    assert!(signups.pending().await.unwrap().is_empty());
 }

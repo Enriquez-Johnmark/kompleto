@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select firm_name, email from account_requests where id = $1",
+  "query": "select firm_name, email, created_at from account_requests where id = $1 for update",
   "describe": {
     "columns": [
       {
@@ -24,6 +24,17 @@
             "name": "email"
           }
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "account_requests",
+            "name": "created_at"
+          }
+        }
       }
     ],
     "parameters": {
@@ -33,8 +44,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "c38c6a3f43b6f3dde2d10d6d1ec23094eea157efdbe6d490006bd0baa8d364e2"
+  "hash": "3bd776e094bbb86de58745c06da9135c76baec511db0588d50ebe95d72511781"
 }
