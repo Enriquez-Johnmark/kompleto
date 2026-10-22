@@ -34,6 +34,9 @@ const TEXT: [&str; 9] = [
     "taxrate",
 ];
 
+/// Words in a squashed header that mark a column of identifiers, not amounts.
+const IDENTIFIERS: [&str; 5] = ["tin", "code", "number", "agent", "atc"];
+
 /// Why a file gave no names.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PayorImportError {
@@ -75,7 +78,8 @@ pub fn withholding_customers(
                 .iter()
                 .any(|&c| cell(c).chars().any(|d| ('1'..='9').contains(&d)))
             || columns.text.iter().any(|&c| names_withholding(cell(c)));
-        if withheld && !names.iter().any(|known| known.eq_ignore_ascii_case(name)) {
+        // Compared as the Payor list's unique index does.
+        if withheld && !names.iter().any(|known| known.to_lowercase() == name.to_lowercase()) {
             if names.len() == MAX_NAMES {
                 return Err(PayorImportError::TooMany);
             }
@@ -105,8 +109,11 @@ impl Columns {
             .collect();
         let is_text = |c: &usize| TEXT.contains(&squashed[*c].as_str());
         let text = (0..header.len()).filter(is_text).collect();
+        // A column that identifies rather than measures, such as the
+        // withholding agent's TIN or the ATC, is never read.
+        let identifies = |c: &usize| IDENTIFIERS.iter().any(|word| squashed[*c].contains(word));
         let amount = (0..header.len())
-            .filter(|c| !is_text(c) && names_withholding(&header[*c]))
+            .filter(|c| !is_text(c) && !identifies(c) && names_withholding(&header[*c]))
             .collect();
         (!name.is_empty()).then_some(Self { name, amount, text })
     }
@@ -198,6 +205,17 @@ mod tests {
             withholding_customers(file, true),
             Ok(vec!["Jollibee Foods".to_owned(), "Puregold".to_owned()])
         );
+    }
+
+    #[test]
+    fn h3_never_reads_a_withholding_tin_or_code_column() {
+        let file = records(&[
+            &["Customer", "Amount", "Withholding Agent TIN", "WHT Code", "EWT"],
+            &["Jollibee Foods", "100", "000-123-456-000", "WC158", "0"],
+            &["Niño Foods", "100", "000-999-456-000", "WC158", "2"],
+            &["NIÑO FOODS", "100", "", "", "2"],
+        ]);
+        assert_eq!(withholding_customers(file, false), Ok(vec!["Niño Foods".to_owned()]));
     }
 
     #[test]
