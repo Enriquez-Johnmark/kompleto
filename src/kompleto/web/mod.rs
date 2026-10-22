@@ -30,10 +30,10 @@ use askama_web::WebTemplate;
 use axum::Router;
 use axum::extract::{FromRequestParts, Request, State};
 use axum::http::request::Parts;
-use axum::http::{Method, StatusCode, header};
+use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::MethodRouter;
+use axum::routing::{MethodRouter, get};
 use secrecy::SecretString;
 use sqlx::PgPool;
 use tokio::sync::{Notify, Semaphore};
@@ -191,9 +191,45 @@ pub fn router(state: AppState) -> Router {
         .merge(tracker::routes())
         .merge(activity::routes())
         .merge(export::routes())
+        .route("/static/kompleto.js", get(script))
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
+        .layer(middleware::from_fn_with_state(state.clone(), security_headers))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// What a page may load: our own script and nothing else from anywhere.
+/// Styles are inline in each page. The script is a file, not inline, so no
+/// injected script can run.
+const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; \
+     img-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+
+/// Security headers on every response; HSTS only when served over HTTPS.
+async fn security_headers(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(CONTENT_SECURITY_POLICY),
+    );
+    headers.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    headers.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));
+    if state.secure_cookies {
+        headers.insert(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000"),
+        );
+    }
+    response
+}
+
+/// Kompleto's one script (`static/kompleto.js`), built into the binary.
+async fn script() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+        include_str!("../../../static/kompleto.js"),
+    )
 }
 
 /// Refuses form posts whose `Origin` isn't our own.

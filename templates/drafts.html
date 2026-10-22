@@ -9,7 +9,7 @@
 {% else %}
 <form method="post" action="/drafts/review" id="batch">
   <button>Review the ticked drafts</button>
-  <label class="inline"><input type="checkbox" onclick="for (const box of document.querySelectorAll('input[name=ids]')) box.checked = this.checked"> Tick all</label>
+  <label class="inline"><input type="checkbox" data-tick-all> Tick all</label>
 </form>
 {% for draft in drafts %}
 <section class="period">
