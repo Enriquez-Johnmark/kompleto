@@ -9,7 +9,7 @@ Every month, bookkeepers chase each client for receipts, bank statements, GCash 
 - **reminder emails in Taglish or English**, sent only after the bookkeeper approves them;
 - a **private upload link** that clients open on their phone, with no app and no login; every file is scanned for viruses before it is kept;
 - reminders that **stop** once the client uploads everything or replies;
-- a **2307 tracker** showing which Payors have sent their 2307s and which are still missing;
+- a **2307 tracker** showing which Payors have sent their 2307s and which are still missing, with the Payor list filled from a Xero, QuickBooks or spreadsheet sales export;
 - a **dashboard** of what's missing, nearest cut-off first;
 - **staff logins:** the owner invites up to 5 staff, and the activity log names who did what.
 
@@ -35,10 +35,11 @@ Kompleto never keeps books, computes tax, files returns or produces BIR-format f
 | **M9** Staff logins: an owner and up to 5 staff | Done |
 | **M10** "Request an account" page, approved by the operator | Done |
 | **M11** Client import from Xero and QuickBooks export files | Done |
-| **M12–M13** 2307 matching, payroll chasing | **Next** |
+| **M12** Payors filled from a sales export (names only) | Done |
+| **M13** Payroll chasing: payroll inputs and remittance receipts | **Next** |
 | Go live, then 3–5 free 4-week pilots | After M13, once the domain is bought and a bookkeeper says yes |
 
-All 28 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.
+All 34 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.
 
 ## How it's built
 
