@@ -24,7 +24,7 @@ use axum::Router;
 use axum::routing::get;
 use kompleto::config::Config;
 use kompleto::config::MailConfig;
-use kompleto::engine::clock::{Clock, FixedClock, SystemClock};
+use kompleto::engine::clock::{Clock, FixedClock, ShiftedClock, SystemClock};
 use kompleto::engine::cost_log;
 use kompleto::engine::files::{FileCipher, Files, LocalDisk, MasterKey};
 use kompleto::engine::ids::TenantId;
@@ -32,6 +32,7 @@ use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{NoExtraChecks, Outbox, Sender};
 use kompleto::kompleto::calendar::Calendar;
 use kompleto::kompleto::closing;
+use kompleto::kompleto::demo::{self, DemoServices};
 use kompleto::kompleto::firms::Firms;
 use kompleto::kompleto::import::xlsx::{self, XlsxReader};
 use kompleto::kompleto::presend::KompletoChecks;
@@ -90,7 +91,15 @@ async fn run() -> anyhow::Result<()> {
         .connect(&config.database_url)
         .await
         .context("connecting to Postgres")?;
-    let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+    let clock: Arc<dyn Clock> = match config.demo_date {
+        None => Arc::new(SystemClock),
+        Some(date) => {
+            // Days, not seconds: time still passes as usual on the demo date.
+            let today = SystemClock.now().to_offset(MANILA).date();
+            tracing::warn!(%date, "DEMO_DATE is set: Kompleto runs as if today were {date}");
+            Arc::new(ShiftedClock::new(date - today))
+        }
+    };
 
     match std::env::args().nth(1).as_deref() {
         Some("serve") => serve(&config, pool, clock).await,
@@ -120,9 +129,11 @@ async fn run() -> anyhow::Result<()> {
         Some("llm-costs") => llm_costs(pool, clock).await,
         Some("demo") => demo(&config, pool, clock).await,
         Some("dev-schedule") => dev_schedule(&config, pool).await,
+        Some("demo-firm") => demo_firm(&config, pool, clock).await,
         other => {
             bail!(
-                "unknown command {other:?}; use serve, migrate, outbox-drain, firm add, firm reopen, llm-costs, gen-key, demo or dev-schedule"
+                "unknown command {other:?}; use serve, migrate, outbox-drain, firm add, firm reopen, llm-costs, gen-key, \
+                 demo, dev-schedule or demo-firm"
             )
         }
     }
@@ -359,5 +370,62 @@ async fn dev_schedule(config: &Config, pool: PgPool) -> anyhow::Result<()> {
     .with_replies(config.reply_domain());
     let created = Scheduler::new(pool, clock, links)?.run_once().await?;
     println!("{created} reminder draft(s) created as of {date}; approve them on the Drafts page.");
+    Ok(())
+}
+
+/// `kompleto demo-firm --email EMAIL [--name NAME] [--date YYYY-MM-DD]`
+/// (development only): a demo Firm with 15 Clients and their history up to
+/// the date (default: today, or `DEMO_DATE`), for showing Kompleto. Serve
+/// with the same `DEMO_DATE` to see it as of that day.
+async fn demo_firm(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
+    if !matches!(config.mail, MailConfig::Mailpit { .. }) {
+        bail!("demo-firm is for development only and runs only with MAIL_PROVIDER=mailpit");
+    }
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1));
+    let Some(email) = value("--email") else {
+        bail!("usage: kompleto demo-firm --email EMAIL [--name NAME] [--date YYYY-MM-DD]");
+    };
+    let name = value("--name").map_or("Santos Bookkeeping", String::as_str);
+    let as_of = match value("--date") {
+        Some(text) => time::Date::parse(text, time::macros::format_description!("[year]-[month]-[day]"))
+            .context("--date is YYYY-MM-DD")?,
+        None => clock.now().to_offset(MANILA).date(),
+    };
+    migrate(&pool).await?;
+    let master = config.master_key()?;
+    let demo_clock = Arc::new(FixedClock::new(clock.now()));
+    let shared: Arc<dyn Clock> = demo_clock.clone();
+    let links = UploadLinks::new(pool.clone(), shared.clone(), &master, &config.public_base_url)
+        .with_replies(config.reply_domain());
+    let files = Files::new(
+        pool.clone(),
+        shared.clone(),
+        Arc::new(LocalDisk::new(&config.upload_dir)),
+        Arc::new(FileCipher::new(&master)),
+    );
+    let checks = Arc::new(KompletoChecks::new(
+        pool.clone(),
+        shared.clone(),
+        &config.public_base_url,
+        links.clone(),
+    ));
+    let sender = Sender::new(pool.clone(), config.mailer()?, shared, checks);
+    let services = DemoServices {
+        pool,
+        clock: demo_clock,
+        links,
+        files,
+        base_url: config.public_base_url.clone(),
+    };
+    let summary = demo::seed(&services, name, email, as_of, async || {
+        sender.drain_once(DRAIN_BATCH).await
+    })
+    .await?;
+    println!(
+        "{name} is ready as of {as_of}: {} clients, {} reminders sent, {} uploads, {} replies, {} drafts waiting.\n\
+         Log in as {email}. To see it as of that day, serve with DEMO_DATE={as_of}.",
+        summary.clients, summary.sent, summary.uploads, summary.replies, summary.waiting
+    );
     Ok(())
 }

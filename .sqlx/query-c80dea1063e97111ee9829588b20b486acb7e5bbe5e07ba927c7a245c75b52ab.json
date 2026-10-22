@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select period from upload_links\n         where firm_id = $1 and client_id = $2 and created_at >= $3 and created_at < $4\n         order by created_at limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "period",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "upload_links",
+            "name": "period"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c80dea1063e97111ee9829588b20b486acb7e5bbe5e07ba927c7a245c75b52ab"
+}

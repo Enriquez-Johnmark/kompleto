@@ -78,6 +78,9 @@ pub struct Config {
     /// Where Firms write for help (`SUPPORT_EMAIL`), shown when an account
     /// closes. Route it to a person, not to the reply Worker.
     pub support_email: Option<String>,
+    /// Run as if today were this date (`DEMO_DATE`, `YYYY-MM-DD`, Manila),
+    /// for showing a demo Firm. Only with Mailpit, so never in production.
+    pub demo_date: Option<time::Date>,
 }
 
 /// Where and which model drafts.
@@ -117,6 +120,21 @@ impl Config {
                 reason: err.to_string(),
             })?;
         let public_base_url = public_base_url(optional("PUBLIC_BASE_URL").as_deref(), bind_addr)?;
+        let demo_date = match optional("DEMO_DATE") {
+            None => None,
+            Some(text) => {
+                let invalid = |reason: &str| ConfigError::Invalid {
+                    name: "DEMO_DATE",
+                    reason: reason.to_owned(),
+                };
+                if !matches!(mail, MailConfig::Mailpit { .. }) {
+                    return Err(invalid("only for demos, with MAIL_PROVIDER=mailpit"));
+                }
+                let date = time::Date::parse(&text, time::macros::format_description!("[year]-[month]-[day]"))
+                    .map_err(|_| invalid("not a YYYY-MM-DD date"))?;
+                Some(date)
+            }
+        };
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             bind_addr,
@@ -134,6 +152,7 @@ impl Config {
             inbound_secret: optional("INBOUND_SECRET").map(SecretString::from),
             resend_webhook_secret: optional("RESEND_WEBHOOK_SECRET").map(SecretString::from),
             support_email: optional("SUPPORT_EMAIL"),
+            demo_date,
         })
     }
 

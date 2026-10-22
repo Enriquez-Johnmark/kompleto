@@ -10,6 +10,7 @@ pub mod clients;
 pub mod closing;
 pub mod dashboard;
 pub mod dates;
+pub mod demo;
 pub mod drafting;
 pub mod drafts;
 pub mod export;

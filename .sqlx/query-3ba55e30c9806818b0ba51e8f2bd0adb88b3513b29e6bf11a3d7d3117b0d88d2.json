@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select m.reply_to, m.provider_message_id from outbox_messages m\n         join scheduled_drafts s on s.message_id = m.id and s.firm_id = m.tenant_id\n         where s.client_id = $1 and m.status = 'sent'\n         order by m.sent_at desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "reply_to",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "outbox_messages",
+            "name": "reply_to"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_message_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "outbox_messages",
+            "name": "provider_message_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "3ba55e30c9806818b0ba51e8f2bd0adb88b3513b29e6bf11a3d7d3117b0d88d2"
+}
