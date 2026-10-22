@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import { LoginLayout } from "@/features/login/login-layout"
+import { CenteredLayout } from "@/components/centered-layout"
 
 const schema = z.object({
   email: z.email("Enter your email address."),
@@ -30,7 +30,7 @@ export function LoginPage() {
   })
 
   return (
-    <LoginLayout>
+    <CenteredLayout>
       <Card>
         <CardHeader>
           <CardTitle>Log in to Kompleto</CardTitle>
@@ -77,6 +77,6 @@ export function LoginPage() {
           )}
         </CardContent>
       </Card>
-    </LoginLayout>
+    </CenteredLayout>
   )
 }

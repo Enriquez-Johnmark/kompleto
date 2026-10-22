@@ -1,12 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react"
 import { Link, useSearchParams } from "react-router"
 
-import { api } from "@/api/client"
-import type { Tracker } from "@/api/generated/Tracker"
 import type { TrackedClient } from "@/api/generated/TrackedClient"
 import { PageHeader } from "@/components/page-header"
 import { QueryError } from "@/components/query-error"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -20,7 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useRefreshClients } from "@/features/clients/queries"
+import { useAddPayor } from "@/features/clients/queries"
+import { trackerKeys, useTracker } from "@/features/tracker/queries"
 
 const statusBadge = {
   received: { label: "Received", variant: "success" },
@@ -32,14 +32,7 @@ const statusBadge = {
 export function TrackerPage() {
   const [params, setParams] = useSearchParams()
   const quarter = params.get("quarter")
-  const tracker = useQuery({
-    queryKey: ["tracker", quarter],
-    queryFn: () =>
-      api<Tracker>(
-        "GET",
-        quarter ? `/api/tracker?quarter=${encodeURIComponent(quarter)}` : "/api/tracker"
-      ),
-  })
+  const tracker = useTracker(quarter)
   const data = tracker.data
   return (
     <>
@@ -130,12 +123,13 @@ function TrackerTable({ clients }: { clients: TrackedClient[] }) {
 
 function PayorList({ client }: { client: TrackedClient }) {
   const queryClient = useQueryClient()
-  const refreshClients = useRefreshClients()
-  const add = useMutation({
-    mutationFn: (name: string) => api("POST", `/api/clients/${client.id}/payors`, { name }),
-    onSuccess: () =>
-      Promise.all([queryClient.invalidateQueries({ queryKey: ["tracker"] }), refreshClients()]),
-  })
+  const add = useAddPayor(client.id)
+  function handleAdd(name: string) {
+    add.mutate(
+      { name },
+      { onSuccess: () => queryClient.invalidateQueries({ queryKey: trackerKeys.all() }) }
+    )
+  }
   if (client.payors.length === 0 && client.unexpected.length === 0) {
     return <span className="text-muted-foreground">No Payors listed</span>
   }
@@ -157,7 +151,7 @@ function PayorList({ client }: { client: TrackedClient }) {
           <Button
             variant="ghost"
             size="xs"
-            onClick={() => add.mutate(name)}
+            onClick={() => handleAdd(name)}
             disabled={add.isPending}
           >
             <PlusIcon data-icon="inline-start" />
@@ -165,6 +159,13 @@ function PayorList({ client }: { client: TrackedClient }) {
           </Button>
         </li>
       ))}
+      {add.isError ? (
+        <li>
+          <Alert variant="destructive">
+            <AlertDescription>{add.error.message}</AlertDescription>
+          </Alert>
+        </li>
+      ) : null}
     </ul>
   )
 }

@@ -2,14 +2,14 @@ import { useLocation } from "react-router"
 
 import type { Closed } from "@/api/generated/Closed"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { LoginLayout } from "@/features/login/login-layout"
+import { CenteredLayout } from "@/components/centered-layout"
 import { formatDate } from "@/lib/dates"
 
 /** Shown once, right after the account is closed. */
 export function ClosedPage() {
   const closed = useLocation().state as Closed | null
   return (
-    <LoginLayout>
+    <CenteredLayout>
       <Card>
         <CardHeader>
           <CardTitle>Your account is closed</CardTitle>
@@ -35,6 +35,6 @@ export function ClosedPage() {
           ) : null}
         </CardContent>
       </Card>
-    </LoginLayout>
+    </CenteredLayout>
   )
 }

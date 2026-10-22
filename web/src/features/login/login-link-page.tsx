@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
-import { LoginLayout } from "@/features/login/login-layout"
+import { CenteredLayout } from "@/components/centered-layout"
 
 /** A1: the page a login link opens. Only pressing the button uses the
  *  link, so an email scanner that opens it can't use it up. */
@@ -24,7 +24,7 @@ export function LoginLinkPage() {
   })
 
   return (
-    <LoginLayout>
+    <CenteredLayout>
       <Card>
         <CardHeader>
           <CardTitle>Log in to Kompleto</CardTitle>
@@ -48,6 +48,6 @@ export function LoginLinkPage() {
           )}
         </CardContent>
       </Card>
-    </LoginLayout>
+    </CenteredLayout>
   )
 }

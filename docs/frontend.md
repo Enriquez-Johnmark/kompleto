@@ -126,7 +126,7 @@ features/drafts/
 ```
 
 **Import rules:**
-- A feature imports from `components/`, `lib/` and `api/`, never from another feature's files. If two features need it, it moves to `components/` or `lib/`.
+- A feature imports from `components/`, `lib/` and `api/`. From another feature it may import only that feature's `queries.ts` (its hooks and query keys, e.g. refreshing the dashboard after approving a Draft), never its components. A component two features need moves to `components/`.
 - No barrel files (`index.ts` re-exports); import from the file itself.
 - Use the `@/` alias for `web/src/` (`@/components/ui/button`), never long `../../` paths.
 

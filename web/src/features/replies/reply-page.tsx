@@ -1,8 +1,6 @@
-import { useQuery } from "@tanstack/react-query"
 import { ShieldAlertIcon } from "lucide-react"
 import { Link, useParams } from "react-router"
 
-import { api } from "@/api/client"
 import type { ReplyDetail } from "@/api/generated/ReplyDetail"
 import { PageHeader } from "@/components/page-header"
 import { QueryError } from "@/components/query-error"
@@ -10,15 +8,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useReply } from "@/features/replies/queries"
 import { formatDateTime } from "@/lib/dates"
 
 /** G1: one Reply. The Contact's text is untrusted and shown as plain text. */
 export function ReplyPage() {
   const { id = "" } = useParams()
-  const reply = useQuery({
-    queryKey: ["replies", id],
-    queryFn: () => api<ReplyDetail>("GET", `/api/replies/${id}`),
-  })
+  const reply = useReply(id)
   return (
     <>
       {reply.isPending ? <Skeleton className="h-64" /> : null}
