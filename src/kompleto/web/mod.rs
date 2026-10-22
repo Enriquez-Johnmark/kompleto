@@ -192,6 +192,7 @@ pub fn router(state: AppState) -> Router {
         .merge(activity::routes())
         .merge(export::routes())
         .route("/static/kompleto.js", get(script))
+        .route("/health", get(health))
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(middleware::from_fn_with_state(state.clone(), security_headers))
         .layer(TraceLayer::new_for_http())
@@ -222,6 +223,18 @@ async fn security_headers(State(state): State<AppState>, request: Request, next:
         );
     }
     response
+}
+
+/// "ok" while the database answers, for an uptime monitor; the reason for
+/// a failure goes to the log, not to whoever asked.
+async fn health(State(state): State<AppState>) -> Response {
+    match sqlx::query_scalar!("select 1 as \"one!\"").fetch_one(&state.pool).await {
+        Ok(_) => "ok".into_response(),
+        Err(err) => {
+            tracing::error!(%err, "health check: the database didn't answer");
+            (StatusCode::SERVICE_UNAVAILABLE, "unavailable").into_response()
+        }
+    }
 }
 
 /// Kompleto's one script (`static/kompleto.js`), built into the binary.
