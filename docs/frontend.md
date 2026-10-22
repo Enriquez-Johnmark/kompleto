@@ -26,6 +26,10 @@ Installed 2026-10-22 and recorded in `skills-lock.json` (the hash covers each fo
 - removed `allowed-tools`, which pre-approved every `shadcn` command with any arguments, including adding code from any web address;
 - removed the line that ran `npx shadcn@latest info` automatically, unpinned, each time the skill loaded. It now says to run the pinned `pnpm dlx shadcn@4.22.1 … -c web` by hand.
 
+**Adding components while `ui.shadcn.com` is unreachable.** This build environment's network policy blocks `ui.shadcn.com`, which `shadcn init` and `shadcn add` need. Until the host is allowed, components come from a checkout of github.com/shadcn-ui/ui through `web/scripts/vendor-shadcn.mjs`, which does what `shadcn add` does for the Base UI "nova" style: it turns each `cn-*` class into the Tailwind classes `style-nova.css` gives it, icon placeholders into lucide-react icons, and registry imports into our aliases. The components in `web/src/components/ui/` came from shadcn-ui/ui commit `25af02b`. `web/src/styles/shadcn.css` is the shadcn package's `tailwind.css` (version 4.22.1), copied unchanged. `use-mobile.ts` was rewritten to avoid setting state in an effect.
+
+Vendored files (`components/ui/`, `shadcn.css`) and `pnpm-lock.yaml` don't count towards the ~150-line commit size, as `.sqlx/` and `Cargo.lock` don't.
+
 **Rules for the shadcn command line in this project:**
 - always the pinned version in the Stack table below, never `@latest`;
 - only the official shadcn registry; any other registry or web address needs the owner's yes;
