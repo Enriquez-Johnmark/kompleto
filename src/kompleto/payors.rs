@@ -4,9 +4,11 @@
 
 use std::sync::Arc;
 
+use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use super::activity::record_by_firm;
 use super::checklist::{ANOTHER_PAYOR_2307, payor_2307};
 use super::clients::{ClientError, ClientId};
 use super::firms::FirmId;
@@ -81,6 +83,7 @@ impl Payors {
             return Err(ClientError::Invalid(format!("\"{name}\" can't be a Payor's name")));
         }
         let id = PayorId::new();
+        let mut tx = self.pool.begin().await?;
         let added = sqlx::query!(
             "insert into payors (id, firm_id, client_id, name, created_at)
              select $1, $2, $3, $4, $5
@@ -92,11 +95,23 @@ impl Payors {
             name,
             self.clock.now(),
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
         if added.rows_affected() == 1 {
+            let subject = ("client", client.as_uuid());
+            record_by_firm(
+                &mut tx,
+                firm,
+                self.clock.now(),
+                "payor.added",
+                subject,
+                json!({ "payor": name }),
+            )
+            .await?;
+            tx.commit().await?;
             return Ok(id);
         }
+        tx.rollback().await?;
         // Either the Client isn't this Firm's, or the name is listed already,
         // compared as the unique index does.
         let listed = sqlx::query_scalar!(
@@ -117,17 +132,29 @@ impl Payors {
 
     /// Removes a Payor from a Client's list.
     pub async fn remove(&self, firm: FirmId, client: ClientId, payor: PayorId) -> Result<(), ClientError> {
-        let removed = sqlx::query!(
-            "delete from payors where firm_id = $1 and client_id = $2 and id = $3",
+        let mut tx = self.pool.begin().await?;
+        let removed = sqlx::query_scalar!(
+            "delete from payors where firm_id = $1 and client_id = $2 and id = $3 returning name",
             firm.as_uuid(),
             client.as_uuid(),
             payor.as_uuid(),
         )
-        .execute(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?;
-        if removed.rows_affected() == 0 {
+        let Some(name) = removed else {
             return Err(ClientError::NotFound);
-        }
+        };
+        let subject = ("client", client.as_uuid());
+        record_by_firm(
+            &mut tx,
+            firm,
+            self.clock.now(),
+            "payor.removed",
+            subject,
+            json!({ "payor": name }),
+        )
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 }

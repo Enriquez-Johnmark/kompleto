@@ -273,6 +273,7 @@ impl Clients {
             return Err(ClientError::Invalid(format!("no checklist item {key:?}")));
         }
         self.ensure_exists(firm, id).await?;
+        let mut tx = self.pool.begin().await?;
         sqlx::query!(
             "insert into client_removed_items (firm_id, client_id, item_key) values ($1, $2, $3)
              on conflict do nothing",
@@ -280,22 +281,47 @@ impl Clients {
             id.as_uuid(),
             key,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        let subject = ("client", id.as_uuid());
+        let now = self.clock.now();
+        record_by_firm(
+            &mut tx,
+            firm,
+            now,
+            "checklist.item_removed",
+            subject,
+            json!({ "item": key }),
+        )
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 
     /// Asks this Client for a removed default item again.
     pub async fn restore_default_item(&self, firm: FirmId, id: ClientId, key: &str) -> Result<(), ClientError> {
         self.ensure_exists(firm, id).await?;
+        let mut tx = self.pool.begin().await?;
         sqlx::query!(
             "delete from client_removed_items where firm_id = $1 and client_id = $2 and item_key = $3",
             firm.as_uuid(),
             id.as_uuid(),
             key,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        let subject = ("client", id.as_uuid());
+        let now = self.clock.now();
+        record_by_firm(
+            &mut tx,
+            firm,
+            now,
+            "checklist.item_restored",
+            subject,
+            json!({ "item": key }),
+        )
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -312,6 +338,7 @@ impl Clients {
         }
         self.ensure_exists(firm, id).await?;
         let item_id = ExtraItemId::new();
+        let mut tx = self.pool.begin().await?;
         sqlx::query!(
             "insert into client_extra_items (id, firm_id, client_id, label, recurs, created_at)
              values ($1, $2, $3, $4, $5, $6)",
@@ -322,24 +349,49 @@ impl Clients {
             item.recurs.as_str(),
             self.clock.now(),
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        let subject = ("client", id.as_uuid());
+        let details = json!({ "item": label });
+        record_by_firm(
+            &mut tx,
+            firm,
+            self.clock.now(),
+            "checklist.item_added",
+            subject,
+            details,
+        )
+        .await?;
+        tx.commit().await?;
         Ok(item_id)
     }
 
     /// Removes an item added for this Client.
     pub async fn delete_extra_item(&self, firm: FirmId, id: ClientId, item: ExtraItemId) -> Result<(), ClientError> {
-        let deleted = sqlx::query!(
-            "delete from client_extra_items where firm_id = $1 and client_id = $2 and id = $3",
+        let mut tx = self.pool.begin().await?;
+        let deleted = sqlx::query_scalar!(
+            "delete from client_extra_items where firm_id = $1 and client_id = $2 and id = $3 returning label",
             firm.as_uuid(),
             id.as_uuid(),
             item.as_uuid(),
         )
-        .execute(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?;
-        if deleted.rows_affected() == 0 {
+        let Some(label) = deleted else {
             return Err(ClientError::NotFound);
-        }
+        };
+        let subject = ("client", id.as_uuid());
+        let details = json!({ "item": label });
+        record_by_firm(
+            &mut tx,
+            firm,
+            self.clock.now(),
+            "checklist.item_deleted",
+            subject,
+            details,
+        )
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 

@@ -73,3 +73,49 @@ async fn j2_client_changes_are_logged_with_the_firm_as_actor(pool: PgPool) {
     .collect();
     assert_eq!(logged(&pool, santos).await, expected);
 }
+
+#[sqlx::test]
+async fn j2_checklist_and_payor_changes_are_logged(pool: PgPool) {
+    use kompleto::kompleto::checklist::{ExtraItem, Recurs};
+    use kompleto::kompleto::payors::Payors;
+
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let clients = Clients::new(pool.clone(), clock());
+    let id = clients.create(santos, &nena()).await.unwrap();
+    let payors = Payors::new(pool.clone(), clock());
+
+    clients
+        .remove_default_item(santos, id, "bank-statements")
+        .await
+        .unwrap();
+    clients
+        .restore_default_item(santos, id, "bank-statements")
+        .await
+        .unwrap();
+    let lazada = ExtraItem {
+        label: "Lazada payout reports".to_owned(),
+        recurs: Recurs::EveryPeriod,
+    };
+    let item = clients.add_extra_item(santos, id, &lazada).await.unwrap();
+    clients.delete_extra_item(santos, id, item).await.unwrap();
+    let sm = payors.add(santos, id, "SM Supermalls").await.unwrap();
+    payors.remove(santos, id, sm).await.unwrap();
+
+    let actions: Vec<String> = logged(&pool, santos)
+        .await
+        .into_iter()
+        .skip(1)
+        .map(|(_, action)| action)
+        .collect();
+    assert_eq!(
+        actions,
+        [
+            "checklist.item_removed",
+            "checklist.item_restored",
+            "checklist.item_added",
+            "checklist.item_deleted",
+            "payor.added",
+            "payor.removed",
+        ]
+    );
+}

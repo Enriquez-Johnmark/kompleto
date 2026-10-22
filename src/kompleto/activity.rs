@@ -91,6 +91,12 @@ pub fn describe(action: &str) -> &str {
         "client.updated" => "Changed a client's details",
         "client.schedule_changed" => "Changed a client's reminder schedule",
         "client.due_date_set" => "Changed a client's due date",
+        "checklist.item_removed" => "Removed a checklist item",
+        "checklist.item_restored" => "Restored a checklist item",
+        "checklist.item_added" => "Added a checklist item",
+        "checklist.item_deleted" => "Deleted a checklist item",
+        "payor.added" => "Added a Payor",
+        "payor.removed" => "Removed a Payor",
         "file.deleted" => "Deleted an uploaded file",
         other => other,
     }

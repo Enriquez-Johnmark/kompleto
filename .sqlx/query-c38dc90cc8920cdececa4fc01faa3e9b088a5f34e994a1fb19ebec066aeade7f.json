@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from payors where firm_id = $1 and client_id = $2 and id = $3 returning name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payors",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c38dc90cc8920cdececa4fc01faa3e9b088a5f34e994a1fb19ebec066aeade7f"
+}

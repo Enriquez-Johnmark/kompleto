@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from client_extra_items where firm_id = $1 and client_id = $2 and id = $3 returning label",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "client_extra_items",
+            "name": "label"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6192c3ce792f741a12783d05bf0c0f2c6b984123422cc30dad80fc2f49b67b7e"
+}
