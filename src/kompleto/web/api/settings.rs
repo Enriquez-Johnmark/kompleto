@@ -8,7 +8,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use super::{ApiError, ApiFirm};
+use super::{ApiError, ApiFirm, ApiJson};
 use crate::engine::cost_log;
 use crate::kompleto::closing::{self, ClosingError};
 use crate::kompleto::dates::manila_month;
@@ -71,7 +71,7 @@ pub struct SettingsChange {
 async fn save(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Json(change): Json<SettingsChange>,
+    ApiJson(change): ApiJson<SettingsChange>,
 ) -> Result<StatusCode, ApiError> {
     if change.cut_off_offset_days > 30 {
         return Err(ApiError::invalid("The cut-off offset is 0 to 30 days."));
@@ -101,7 +101,7 @@ pub struct Closed {
 async fn close_account(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Json(close): Json<CloseAccount>,
+    ApiJson(close): ApiJson<CloseAccount>,
 ) -> Result<Response, ApiError> {
     let actor = actor(&state, firm).await?;
     match closing::close(&state.pool, &state.clock, firm, &close.confirm, &actor).await {

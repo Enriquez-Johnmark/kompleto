@@ -26,12 +26,14 @@ mod tracker;
 
 use axum::Json;
 use axum::Router;
-use axum::extract::FromRequestParts;
+use axum::extract::rejection::{JsonRejection, PathRejection};
+use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use axum::routing::any;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use super::{AppState, WebError, session_cookie};
 use crate::kompleto::clients::ClientError;
@@ -177,6 +179,50 @@ impl IntoResponse for ApiError {
             ),
         };
         (status, Json(ErrorBody { message, problems })).into_response()
+    }
+}
+
+impl From<JsonRejection> for ApiError {
+    fn from(rejection: JsonRejection) -> Self {
+        Self::Refused {
+            status: rejection.status(),
+            message: "That wasn't understood; check what you typed and try again.".to_owned(),
+            problems: vec![rejection.body_text()],
+        }
+    }
+}
+
+impl From<PathRejection> for ApiError {
+    /// A malformed ID in the address names nothing: "not found" (A2).
+    fn from(_: PathRejection) -> Self {
+        Self::NotFound
+    }
+}
+
+/// A JSON body; one that can't be read is refused as an [`ErrorBody`],
+/// like every other API error.
+#[derive(Debug)]
+pub struct ApiJson<T>(pub T);
+
+impl<T: DeserializeOwned, S: Send + Sync> FromRequest<S> for ApiJson<T> {
+    type Rejection = ApiError;
+
+    async fn from_request(request: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let Json(value) = Json::<T>::from_request(request, state).await?;
+        Ok(Self(value))
+    }
+}
+
+/// Values from the path; a malformed one is "not found" (A2).
+#[derive(Debug)]
+pub struct ApiPath<T>(pub T);
+
+impl<T: DeserializeOwned + Send, S: Send + Sync> FromRequestParts<S> for ApiPath<T> {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let axum::extract::Path(value) = axum::extract::Path::<T>::from_request_parts(parts, state).await?;
+        Ok(Self(value))
     }
 }
 

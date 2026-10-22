@@ -76,3 +76,50 @@ async fn an_api_change_from_another_site_is_refused(pool: PgPool) {
     let me = app.api(Method::GET, "/api/me", Some(&cookie), None).await;
     assert_eq!(me.status, StatusCode::OK, "still logged in");
 }
+
+#[sqlx::test]
+async fn a_body_that_cant_be_read_is_refused_in_the_apis_words(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let client = app
+        .api(
+            Method::POST,
+            "/api/clients",
+            Some(&cookie),
+            Some(json!({"business_name": "Shop", "contact_first_name": "Ana",
+                "email": "a@b.test", "language": "english", "forms": ["2551Q"]})),
+        )
+        .await
+        .json()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let fraction = app
+        .api(
+            Method::PUT,
+            &format!("/api/clients/{client}/schedule"),
+            Some(&cookie),
+            Some(json!({"cut_off_offset_days": null, "reminder_days": [7.5], "paused": false})),
+        )
+        .await;
+
+    assert_eq!(fraction.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        fraction.json()["message"],
+        "That wasn't understood; check what you typed and try again."
+    );
+}
+
+#[sqlx::test]
+async fn a_malformed_id_in_the_address_is_not_found(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+
+    let response = app
+        .api(Method::GET, "/api/clients/not-an-id", Some(&cookie), None)
+        .await;
+
+    assert_eq!(response.status, StatusCode::NOT_FOUND);
+    assert_eq!(response.json()["message"], "Not found.");
+}

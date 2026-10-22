@@ -2,13 +2,13 @@
 //! which starts its 30 days before deletion.
 
 use axum::Router;
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::{Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{MethodRouter, get, post};
 use uuid::Uuid;
 
-use super::{ApiError, ApiFirm};
+use super::{ApiError, ApiFirm, ApiPath};
 use crate::engine::ids::FileId;
 use crate::kompleto::clients::ClientId;
 use crate::kompleto::web::{AppState, ScopedRoute, actor, scoped_router};
@@ -41,7 +41,7 @@ pub(in crate::kompleto::web) fn file_endpoints() -> Vec<(ScopedRoute, MethodRout
 async fn download(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path((id, upload)): Path<(Uuid, Uuid)>,
+    ApiPath((id, upload)): ApiPath<(Uuid, Uuid)>,
 ) -> Result<Response, ApiError> {
     let client = state.clients.get(firm, ClientId::from(id)).await?;
     let file = state
@@ -66,7 +66,7 @@ async fn download(
 async fn received(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path((id, upload)): Path<(Uuid, Uuid)>,
+    ApiPath((id, upload)): ApiPath<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     let by = actor(&state, firm).await?;
     state

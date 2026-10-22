@@ -2,7 +2,7 @@
 //! months' Periods with their Due dates, Cut-off and Owed documents, its
 //! checklist, Payors, Uploads and Replies.
 
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::Method;
 use axum::routing::{MethodRouter, get};
 use axum::{Json, Router};
@@ -12,7 +12,7 @@ use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 use super::clients::language;
-use super::{ApiError, ApiFirm};
+use super::{ApiError, ApiFirm, ApiPath};
 use crate::kompleto::calendar::TaxPeriod;
 use crate::kompleto::checklist::{DEFAULT_ITEMS, Recurs, owed_documents};
 use crate::kompleto::clients::ClientId;
@@ -198,13 +198,21 @@ fn recurs(recurs: Recurs) -> &'static str {
 async fn page(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
 ) -> Result<Json<ClientDetail>, ApiError> {
     let id = ClientId::from(id);
     let client = state.clients.get(firm, id).await?;
-    let overrides = state.clients.due_overrides(firm, id).await?;
-    let edits = state.clients.checklist_edits(firm, id).await?;
-    let firm_offset = state.firms.get(firm).await?.cut_off_offset_days;
+    // The rest are independent: one round trip's wait, not eight.
+    let (overrides, edits, firm_details, extra_items, payor_list, upload_list, reply_list) = tokio::try_join!(
+        async { Ok::<_, ApiError>(state.clients.due_overrides(firm, id).await?) },
+        async { Ok(state.clients.checklist_edits(firm, id).await?) },
+        async { Ok(state.firms.get(firm).await?) },
+        async { Ok(state.clients.extra_items(firm, id).await?) },
+        async { Ok(state.payors.list(firm, id).await?) },
+        async { Ok(state.uploads.for_client(firm, id).await?) },
+        async { Ok(state.replies.for_client(firm, id).await?) },
+    )?;
+    let firm_offset = firm_details.cut_off_offset_days;
     let calendar = ClientCalendar {
         calendar: &state.calendar,
         forms: &client.details.forms,
@@ -247,10 +255,7 @@ async fn page(
             removed: edits.removed.contains(item.key),
         })
         .collect();
-    let extras = state
-        .clients
-        .extra_items(firm, id)
-        .await?
+    let extras = extra_items
         .into_iter()
         .map(|(item_id, item)| ExtraItemView {
             id: item_id.as_uuid(),
@@ -258,20 +263,14 @@ async fn page(
             recurs: recurs(item.recurs).to_owned(),
         })
         .collect();
-    let payors = state
-        .payors
-        .list(firm, id)
-        .await?
+    let payors = payor_list
         .into_iter()
         .map(|payor| PayorView {
             id: payor.id.as_uuid(),
             name: payor.name,
         })
         .collect();
-    let uploads = state
-        .uploads
-        .for_client(firm, id)
-        .await?
+    let uploads = upload_list
         .into_iter()
         .rev()
         .map(|upload| UploadView {
@@ -286,10 +285,7 @@ async fn page(
             delete_by: rfc3339(upload.delete_by),
         })
         .collect();
-    let replies = state
-        .replies
-        .for_client(firm, id)
-        .await?
+    let replies = reply_list
         .into_iter()
         .map(|reply| ReplySummary {
             id: reply.id.as_uuid(),

@@ -1,15 +1,15 @@
 //! Changes made from a Client's page: its reminder schedule (D1), its own
 //! Due dates (B3), the documents asked for (B4) and its Payors (H2).
 
-use axum::extract::{Path, State};
+use axum::Router;
+use axum::extract::State;
 use axum::http::{Method, StatusCode};
 use axum::routing::{MethodRouter, delete, post, put};
-use axum::{Json, Router};
 use serde::Deserialize;
 use time::Date;
 use uuid::Uuid;
 
-use super::{ApiError, ApiFirm};
+use super::{ApiError, ApiFirm, ApiJson, ApiPath};
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::{ExtraItem, Recurs};
 use crate::kompleto::clients::{ClientError, ClientId, ExtraItemId, ScheduleSettings};
@@ -115,8 +115,8 @@ pub struct ScheduleChange {
 async fn set_schedule(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(change): Json<ScheduleChange>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(change): ApiJson<ScheduleChange>,
 ) -> Result<StatusCode, ApiError> {
     let id = ClientId::from(id);
     state.clients.get(firm, id).await?;
@@ -148,8 +148,8 @@ pub struct DueDateChange {
 async fn set_due_date(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(change): Json<DueDateChange>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(change): ApiJson<DueDateChange>,
 ) -> Result<StatusCode, ApiError> {
     let id = ClientId::from(id);
     state.clients.get(firm, id).await?;
@@ -178,8 +178,8 @@ pub struct ItemKey {
 async fn remove_item(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(item): Json<ItemKey>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(item): ApiJson<ItemKey>,
 ) -> Result<StatusCode, ApiError> {
     state
         .clients
@@ -192,8 +192,8 @@ async fn remove_item(
 async fn restore_item(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(item): Json<ItemKey>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(item): ApiJson<ItemKey>,
 ) -> Result<StatusCode, ApiError> {
     state
         .clients
@@ -214,8 +214,8 @@ pub struct NewItem {
 async fn add_item(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(item): Json<NewItem>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(item): ApiJson<NewItem>,
 ) -> Result<StatusCode, ApiError> {
     let id = ClientId::from(id);
     state.clients.get(firm, id).await?;
@@ -235,7 +235,7 @@ async fn add_item(
 async fn delete_item(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path((id, item)): Path<(Uuid, Uuid)>,
+    ApiPath((id, item)): ApiPath<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     state
         .clients
@@ -254,8 +254,8 @@ pub struct NewPayor {
 async fn add_payor(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(payor): Json<NewPayor>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(payor): ApiJson<NewPayor>,
 ) -> Result<StatusCode, ApiError> {
     state
         .payors
@@ -268,7 +268,7 @@ async fn add_payor(
 async fn remove_payor(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path((id, payor)): Path<(Uuid, Uuid)>,
+    ApiPath((id, payor)): ApiPath<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     state
         .payors

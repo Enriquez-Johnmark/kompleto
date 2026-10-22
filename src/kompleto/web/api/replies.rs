@@ -1,7 +1,7 @@
 //! Reading a Reply (G1): what a Reply notice links to. The Contact's text
 //! is data for the app to show as plain text, and only to its own Firm.
 
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::Method;
 use axum::routing::{MethodRouter, get};
 use axum::{Json, Router};
@@ -9,7 +9,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::client_page::{period_label, rfc3339};
-use super::{ApiError, ApiFirm};
+use super::{ApiError, ApiFirm, ApiPath};
 use crate::kompleto::replies::ReplyId;
 use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
 
@@ -58,7 +58,7 @@ pub struct ReplyDetail {
 async fn show(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
 ) -> Result<Json<ReplyDetail>, ApiError> {
     let reply = state.replies.get(firm, ReplyId::from(id)).await?;
     let client = state.clients.get(firm, reply.client).await?;

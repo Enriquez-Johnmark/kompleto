@@ -4,14 +4,14 @@
 //! for Viber" (E3). Approval runs the pre-send checks (D7) and refuses an
 //! expired Draft (D4).
 
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::{Method, StatusCode};
 use axum::routing::{MethodRouter, get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{ApiError, ApiFirm};
+use super::{ApiError, ApiFirm, ApiJson, ApiPath};
 use crate::engine::outbox::{ContentHash, MessageStatus, OutboxError};
 use crate::kompleto::drafting::DraftSource;
 use crate::kompleto::drafts::Reminder;
@@ -140,7 +140,7 @@ async fn reminder(state: &AppState, firm: FirmId, id: Uuid) -> Result<Reminder, 
 async fn show(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
 ) -> Result<Json<DraftView>, ApiError> {
     Ok(Json(reminder(&state, firm, id).await?.into()))
 }
@@ -156,8 +156,8 @@ pub struct Approval {
 async fn approve(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(approval): Json<Approval>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(approval): ApiJson<Approval>,
 ) -> Result<StatusCode, ApiError> {
     let reminder = reminder(&state, firm, id).await?;
     let seen = ContentHash::from_hex(&approval.hash).ok_or_else(damaged)?;
@@ -214,7 +214,7 @@ fn refusal(err: OutboxError) -> ApiError {
 async fn discard(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
+    ApiPath(id): ApiPath<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     let reminder = reminder(&state, firm, id).await?;
     let actor = actor(&state, firm).await?;
@@ -235,8 +235,8 @@ pub struct DraftEdit {
 async fn save_edit(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(edit): Json<DraftEdit>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(edit): ApiJson<DraftEdit>,
 ) -> Result<Json<DraftView>, ApiError> {
     let reminder = reminder(&state, firm, id).await?;
     let mut email = reminder.email.clone();
@@ -295,7 +295,7 @@ pub struct BatchRefusal {
 async fn approve_batch(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Json(batch): Json<BatchApproval>,
+    ApiJson(batch): ApiJson<BatchApproval>,
 ) -> Result<Json<BatchResult>, ApiError> {
     let mut reviewed = Vec::with_capacity(batch.approvals.len());
     for item in batch.approvals {
@@ -315,15 +315,24 @@ async fn approve_batch(
                 .map_err(refusal),
             None => Err(damaged()),
         };
-        match outcome {
-            Ok(()) => result.approved += 1,
-            Err(ApiError::Refused { message, .. }) => result.refused.push(BatchRefusal {
-                id: reminder.id.as_uuid(),
-                client: reminder.client,
-                reason: message,
-            }),
-            Err(other) => return Err(other),
-        }
+        // A failure part-way never hides the approvals before it: each one
+        // is reported, and the rest of the batch still goes ahead.
+        let reason = match outcome {
+            Ok(()) => {
+                result.approved += 1;
+                continue;
+            }
+            Err(ApiError::Refused { message, .. }) => message,
+            Err(ApiError::NotFound) => "This draft no longer exists.".to_owned(),
+            Err(ApiError::NotLoggedIn | ApiError::Internal) => {
+                "Couldn't approve this draft just now; try again.".to_owned()
+            }
+        };
+        result.refused.push(BatchRefusal {
+            id: reminder.id.as_uuid(),
+            client: reminder.client,
+            reason,
+        });
     }
     if result.approved > 0 {
         state.wake_sender.notify_one();

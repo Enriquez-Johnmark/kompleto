@@ -1,14 +1,14 @@
 //! The Client list, adding a Client and editing its details (B1), and the
 //! BIR forms a Client can file.
 
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::{Method, StatusCode};
 use axum::routing::{MethodRouter, get, put};
 use axum::{Json, Router};
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::{ApiError, ApiFirm};
+use super::{ApiError, ApiFirm, ApiJson, ApiPath};
 use crate::kompleto::calendar::BirForm;
 use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, Language, NewClient};
 use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
@@ -103,7 +103,7 @@ fn duplicate(err: ClientError) -> ApiError {
 async fn create(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Json(input): Json<ClientInput>,
+    ApiJson(input): ApiJson<ClientInput>,
 ) -> Result<(StatusCode, Json<Created>), ApiError> {
     let client = parse(&input)?;
     let id = state.clients.create(firm, &client).await.map_err(duplicate)?;
@@ -113,8 +113,8 @@ async fn create(
 async fn update(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    Path(id): Path<Uuid>,
-    Json(input): Json<ClientInput>,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(input): ApiJson<ClientInput>,
 ) -> Result<StatusCode, ApiError> {
     let id = ClientId::from(id);
     // Another Firm's Client is "not found" before any field is checked.

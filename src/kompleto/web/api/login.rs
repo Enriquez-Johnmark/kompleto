@@ -2,14 +2,14 @@
 //! with a "Log in" button; only pressing it posts here and uses the link,
 //! so email link scanners can't use it up.
 
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use serde::Deserialize;
 
-use super::{ApiError, ApiFirm};
+use super::{ApiError, ApiFirm, ApiJson, ApiPath};
 use crate::kompleto::auth::{LoginOutcome, SESSION_LIFETIME};
 use crate::kompleto::web::{AppState, SESSION_COOKIE, session_cookie};
 
@@ -28,7 +28,7 @@ pub struct LoginRequest {
     pub email: String,
 }
 
-async fn request_link(State(state): State<AppState>, Json(request): Json<LoginRequest>) -> StatusCode {
+async fn request_link(State(state): State<AppState>, ApiJson(request): ApiJson<LoginRequest>) -> StatusCode {
     // The lookup and the email happen after the answer, so neither the
     // answer nor how long it takes reveals who has an account (A1).
     let (auth, wake_sender) = (state.auth, state.wake_sender);
@@ -42,7 +42,7 @@ async fn request_link(State(state): State<AppState>, Json(request): Json<LoginRe
     StatusCode::ACCEPTED
 }
 
-async fn use_link(State(state): State<AppState>, Path(token): Path<String>) -> Result<Response, ApiError> {
+async fn use_link(State(state): State<AppState>, ApiPath(token): ApiPath<String>) -> Result<Response, ApiError> {
     let Some(session) = state.auth.log_in(&token).await.map_err(ApiError::internal)? else {
         return Err(ApiError::invalid(
             "This login link has expired or was already used. Ask for a new one.",
