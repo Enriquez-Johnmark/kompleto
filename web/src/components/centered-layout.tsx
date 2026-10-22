@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { Link } from "react-router"
 
 import { Logo } from "@/components/logo"
 
@@ -8,6 +9,17 @@ export function CenteredLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-4">
       <Logo className="text-lg" />
       <div className="w-full max-w-sm">{children}</div>
+      <nav aria-label="Documents" className="flex gap-4 text-sm text-muted-foreground">
+        <Link to="/help" className="hover:text-foreground">
+          Help
+        </Link>
+        <Link to="/privacy" className="hover:text-foreground">
+          Privacy
+        </Link>
+        <Link to="/terms" className="hover:text-foreground">
+          Terms
+        </Link>
+      </nav>
     </div>
   )
 }

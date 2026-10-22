@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query"
 import {
   CalendarDaysIcon,
+  CircleHelpIcon,
   FileCheckIcon,
   HistoryIcon,
   InboxIcon,
@@ -43,6 +44,7 @@ const navigation: NavItem[] = [
   { to: "/calendar", label: "BIR calendar", icon: CalendarDaysIcon },
   { to: "/activity", label: "Activity", icon: HistoryIcon },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
+  { to: "/help", label: "Help", icon: CircleHelpIcon },
 ]
 
 /** The logged-in frame: navigation beside (or, on a phone, above) the page. */
