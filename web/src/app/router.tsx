@@ -19,6 +19,11 @@ export const router = createBrowserRouter([
     }),
   },
   {
+    path: "/closed",
+    HydrateFallback: PageLoading,
+    lazy: async () => ({ Component: (await import("@/features/settings/closed-page")).ClosedPage }),
+  },
+  {
     Component: AppShell,
     HydrateFallback: PageLoading,
     children: [
@@ -86,6 +91,12 @@ export const router = createBrowserRouter([
         path: "activity",
         lazy: async () => ({
           Component: (await import("@/features/activity/activity-page")).ActivityPage,
+        }),
+      },
+      {
+        path: "settings",
+        lazy: async () => ({
+          Component: (await import("@/features/settings/settings-page")).SettingsPage,
         }),
       },
       { path: "*", Component: NotFoundPage },
