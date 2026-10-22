@@ -46,6 +46,38 @@ test("h2 a Payor added on the client page is listed", async ({ page }) => {
   await expect(page.getByRole("alert")).toHaveCount(0)
 })
 
+test("h3 Payors are added from the customers who withheld tax in a sales export", async ({
+  page,
+}) => {
+  const file = join(tmpdir(), `kompleto-sales-${run}.csv`)
+  writeFileSync(
+    file,
+    "Customer,Invoice,Amount,CWT\n" +
+      "Ayala Land,INV-1,50000,1000\n" +
+      "Puregold,INV-2,3000,0\n" +
+      "Meralco,INV-3,6000,120\n"
+  )
+  await page.goto("/clients/new")
+  await page.getByLabel("Business name").fill(`Law Office ${run}`)
+  await page.getByLabel("Contact's first name").fill("Tess")
+  await page.getByLabel("Email").fill("tess@example.test")
+  await page.getByRole("checkbox", { name: /2551Q/ }).click()
+  await page.getByRole("button", { name: "Add client" }).click()
+  await page.getByRole("tab", { name: "Documents" }).click()
+
+  await page.getByRole("button", { name: "From a sales export" }).click()
+  const dialog = page.getByRole("dialog", { name: "Payors from a sales export" })
+  await dialog.locator("input[type=file]").setInputFiles(file)
+  await expect(dialog.getByRole("checkbox", { name: "Ayala Land" })).toBeChecked()
+  await expect(dialog.getByText("Puregold")).toHaveCount(0)
+  await dialog.getByRole("checkbox", { name: "Meralco" }).click()
+  await dialog.getByRole("button", { name: "Add 1 of 2" }).click()
+
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Remove Ayala Land" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Remove Meralco" })).toHaveCount(0)
+})
+
 test("b1 a form with problems shows every reason and adds nothing", async ({ page }) => {
   await page.goto("/clients/new")
   await page.getByRole("button", { name: "Add client" }).click()

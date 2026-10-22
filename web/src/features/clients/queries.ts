@@ -10,6 +10,8 @@ import type { DueDateChange } from "@/api/generated/DueDateChange"
 import type { ItemKey } from "@/api/generated/ItemKey"
 import type { NewItem } from "@/api/generated/NewItem"
 import type { NewPayor } from "@/api/generated/NewPayor"
+import type { NewPayors } from "@/api/generated/NewPayors"
+import type { PayorsAdded } from "@/api/generated/PayorsAdded"
 import type { ScheduleChange } from "@/api/generated/ScheduleChange"
 import { dashboardKeys } from "@/features/dashboard/queries"
 
@@ -70,7 +72,7 @@ export function useClient(id: string) {
 }
 
 /** A change made from a Client's page; it refreshes the page afterwards. */
-function useClientChange<TInput>(request: (input: TInput) => Promise<unknown>) {
+function useClientChange<TInput, TOutput = unknown>(request: (input: TInput) => Promise<TOutput>) {
   const refresh = useRefreshClients()
   return useMutation({ mutationFn: request, onSuccess: refresh })
 }
@@ -110,6 +112,13 @@ export function useDeleteItem(id: string) {
 
 export function useAddPayor(id: string) {
   return useClientChange((payor: NewPayor) => api("POST", `/api/clients/${id}/payors`, payor))
+}
+
+/** H3: the names ticked from a sales export. */
+export function useAddPayors(id: string) {
+  return useClientChange((batch: NewPayors) =>
+    api<PayorsAdded>("POST", `/api/clients/${id}/payors/batch`, batch)
+  )
 }
 
 export function useRemovePayor(id: string) {

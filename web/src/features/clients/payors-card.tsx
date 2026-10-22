@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { PayorImportDialog } from "@/features/clients/payor-import-dialog"
 import { useAddPayor, useRemovePayor } from "@/features/clients/queries"
 
 type PayorsCardProps = { clientId: string; payors: PayorView[] }
@@ -65,6 +66,7 @@ export function PayorsCard({ clientId, payors }: PayorsCardProps) {
             Add
           </Button>
         </form>
+        <PayorImportDialog clientId={clientId} payors={payors} />
         {error ? (
           <Alert variant="destructive">
             <AlertDescription>{error.message}</AlertDescription>
