@@ -68,6 +68,8 @@ If a client's email address doesn't work, the dashboard shows **Email bounced** 
 
 List the businesses that give a client Form 2307 (its **Payors**) on the client's **Documents** tab. The **2307 tracker** then shows, for every client, which Payors' 2307s have arrived and which are still missing.
 
+**From a sales export:** instead of typing the Payors, choose **From a sales export** under Payors and upload one quarter's sales, invoice or account-transactions export (.csv or .xlsx) from Xero, QuickBooks or your own spreadsheet. Kompleto lists the customers on rows that show tax withheld: a withholding or CWT column with an amount, or an account or description that says withholding, CWT, EWT or 2307. Tick the ones to add. If your file is a report of the CWT account alone, with no such column, tick **Every row is withholding** first. Kompleto reads only the customers' names: amounts, TINs and other columns are ignored, and the file isn't kept.
+
 ## BIR calendar
 
 The **BIR calendar** shows the deadlines Kompleto uses. It moves deadlines that fall on weekends and holidays, but the BIR sometimes extends them. You can enter an extended date for a client on its **Deadlines** tab. Always check against the BIR's own announcements.
