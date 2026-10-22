@@ -15,11 +15,13 @@ mod client_page;
 mod clients;
 mod dashboard;
 mod drafts;
+mod export;
 mod files;
 mod import;
 mod login;
 mod me;
 mod replies;
+mod settings;
 mod tracker;
 
 use axum::Json;
@@ -44,9 +46,11 @@ pub(super) fn routes() -> Router<AppState> {
         .merge(clients::routes())
         .merge(dashboard::routes())
         .merge(drafts::routes())
+        .merge(export::routes())
         .merge(files::routes())
         .merge(import::routes())
         .merge(replies::routes())
+        .merge(settings::routes())
         .merge(tracker::routes())
         .merge(login::routes())
         .merge(me::routes())

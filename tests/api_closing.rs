@@ -1,4 +1,4 @@
-//! Seam 3 (M6): closing a Firm's account in-process (I2).
+//! Closing a Firm's account through the API, in-process (I2).
 
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
 
@@ -13,6 +13,17 @@ use kompleto::kompleto::firms::FirmId;
 use kompleto::kompleto::reminders::Scheduler;
 use sqlx::PgPool;
 use time::Duration;
+
+/// An API call owning its path, so closures can return it.
+async fn call(
+    app: &TestApp,
+    method: Method,
+    path: &'static str,
+    cookie: &str,
+    body: serde_json::Value,
+) -> common::web::Response {
+    app.api(method, path, Some(cookie), Some(body)).await
+}
 
 async fn waiting(app: &TestApp, firm: FirmId) -> Vec<String> {
     sqlx::query_scalar(
@@ -57,21 +68,20 @@ async fn i2_closing_an_account_stops_everything_at_once(pool: PgPool) {
         .trim_start_matches(common::web::BASE_URL)
         .to_owned();
 
-    let mistyped = app.post("/settings/close", &cookie, "confirm=Santos").await;
+    let close = |confirm: &str| {
+        let close = serde_json::json!({ "confirm": confirm });
+        call(&app, Method::POST, "/api/settings/close", &cookie, close)
+    };
+    let mistyped = close("Santos").await;
     assert_eq!(mistyped.status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(waiting(&app, santos).await, ["draft"], "nothing changed");
-    let closed = app
-        .post("/settings/close", &cookie, "confirm=+santos+bookkeeping+")
-        .await;
+    let closed = close(" santos bookkeeping ").await;
 
-    assert_eq!(closed.status, StatusCode::OK);
-    assert!(
-        closed.body.contains("Sun 8 Nov 2026"),
-        "deleted 7 days later: {}",
-        closed.body
-    );
-    assert!(
-        closed.body.contains("help@getkompleto.test"),
+    assert_eq!(closed.status, StatusCode::OK, "{}", closed.body);
+    let closed = closed.json();
+    assert_eq!(closed["erase_on"], "2026-11-08", "deleted 7 days later");
+    assert_eq!(
+        closed["support_email"], "help@getkompleto.test",
         "whom to write to undo it"
     );
     assert_eq!(waiting(&app, santos).await, ["cancelled"]);

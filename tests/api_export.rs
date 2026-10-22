@@ -64,7 +64,7 @@ async fn i1_the_firm_downloads_all_its_data_as_one_zip(pool: PgPool) {
     .await
     .unwrap();
 
-    let export = app.get("/settings/export", &cookie).await;
+    let export = app.get("/api/settings/export", &cookie).await;
 
     assert_eq!(export.status, StatusCode::OK);
     assert_eq!(export.headers["content-type"], "application/zip");
@@ -157,7 +157,7 @@ async fn i1_an_export_survives_clients_whose_files_share_a_name_and_a_missing_fi
         &ids[2].to_string(),
     );
 
-    let export = app.get("/settings/export", &cookie).await;
+    let export = app.get("/api/settings/export", &cookie).await;
 
     assert_eq!(export.status, StatusCode::OK);
     let zip = zip::ZipArchive::new(std::io::Cursor::new(export.bytes)).unwrap();

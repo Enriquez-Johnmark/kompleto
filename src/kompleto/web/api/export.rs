@@ -13,13 +13,14 @@ use axum::routing::get;
 use serde_json::json;
 use time::macros::format_description;
 
-use super::{AppState, CurrentFirm, WebError};
+use super::{ApiError, ApiFirm};
 use crate::kompleto::activity::record_by_firm;
 use crate::kompleto::export::write_zip;
 use crate::kompleto::schedule::MANILA;
+use crate::kompleto::web::AppState;
 
 pub(super) fn routes() -> Router<AppState> {
-    Router::new().route("/settings/export", get(export))
+    Router::new().route("/api/settings/export", get(export))
 }
 
 /// A temporary file holding decrypted documents: only Kompleto's user can
@@ -50,28 +51,28 @@ impl Drop for TempFile {
 
 /// The zip is written to a temporary file, not memory, and streamed from
 /// it; the file is removed once open, so nothing is left behind.
-async fn export(State(state): State<AppState>, CurrentFirm(firm): CurrentFirm) -> Result<Response, WebError> {
-    let (temp, file) = TempFile::create().map_err(WebError::internal)?;
+async fn export(State(state): State<AppState>, ApiFirm(firm): ApiFirm) -> Result<Response, ApiError> {
+    let (temp, file) = TempFile::create().map_err(ApiError::internal)?;
     let written = write_zip(&state.pool, &state.clients, &state.uploads, firm, BufWriter::new(file))
         .await
-        .map_err(WebError::internal)?;
+        .map_err(ApiError::internal)?;
     let mut file = written
         .into_inner()
-        .map_err(|err| WebError::internal(err.into_error()))?;
-    file.rewind().map_err(WebError::internal)?;
+        .map_err(|err| ApiError::internal(err.into_error()))?;
+    file.rewind().map_err(ApiError::internal)?;
     let opened = tokio::fs::File::from_std(file);
     drop(temp);
     let now = state.clock.now();
-    let mut tx = state.pool.begin().await.map_err(WebError::internal)?;
+    let mut tx = state.pool.begin().await.map_err(ApiError::internal)?;
     record_by_firm(&mut tx, firm, now, "firm.exported", ("firm", firm.as_uuid()), json!({}))
         .await
-        .map_err(WebError::internal)?;
-    tx.commit().await.map_err(WebError::internal)?;
+        .map_err(ApiError::internal)?;
+    tx.commit().await.map_err(ApiError::internal)?;
     let date = now
         .to_offset(MANILA)
         .date()
         .format(format_description!("[year]-[month]-[day]"))
-        .map_err(WebError::internal)?;
+        .map_err(ApiError::internal)?;
     Ok((
         [
             (header::CONTENT_TYPE, "application/zip".to_owned()),

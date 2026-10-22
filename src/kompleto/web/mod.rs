@@ -8,9 +8,7 @@
 //!   this stops cross-site form posts.
 
 mod api;
-mod export;
 mod hooks;
-mod settings;
 mod spa;
 mod upload;
 
@@ -193,10 +191,8 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(api::routes())
-        .merge(settings::routes())
         .merge(upload::routes())
         .merge(hooks::routes())
-        .merge(export::routes())
         .route("/static/kompleto.js", get(script))
         .route("/health", get(health))
         .fallback(spa::app)
