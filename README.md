@@ -78,7 +78,7 @@ Other commands:
 |---|---|
 | `cargo run -- demo` | Sends one approved email through the outbox into Mailpit |
 | `cargo run -- dev-schedule --date 2026-11-01` | Creates the reminder Drafts due on that date, to try the whole loop before real dates come round |
-| `cargo run -- llm-costs` | AI cost per Firm per month |
+| `cargo run -- llm-costs --month 2026-11` | AI cost per Firm for that month |
 | `cargo run -- gen-key` | Makes a new key for encrypting uploaded files |
 | `cargo run -- demo-firm --email you@example.test --date 2027-01-07` | A demo firm with 15 clients and 45 days of history, replayed through Kompleto's own code; serve with `DEMO_DATE=2027-01-07` to see it as of that day, a few days before the December cut-off |
 
