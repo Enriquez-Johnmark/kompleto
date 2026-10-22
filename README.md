@@ -30,8 +30,8 @@ Kompleto never keeps books, computes tax, files returns or produces BIR-format f
 | **M5** Replies, bounces, dashboard, 2307 tracker | Done |
 | **M6** Export, account closing, activity log, send budget, hardening | Built; going live waits for the domain |
 | **M7** The bookkeeper's pages as a React app | Done |
-| **M8** Demo Firm, virus scanning, help and privacy pages, screenshots, video | **Next** |
-| Go live, then 3–5 free 4-week pilots | After M8, once a bookkeeper says yes |
+| **M8** Demo Firm, virus scanning, help and privacy pages, screenshots, video | Done; the legal pages are drafts for the owner (`docs/legal.md`) |
+| Go live, then 3–5 free 4-week pilots | **Next**, once the domain is bought and a bookkeeper says yes |
 
 All 28 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.
 
