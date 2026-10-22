@@ -3,7 +3,7 @@ import { CircleAlertIcon, DownloadIcon, FileSpreadsheetIcon } from "lucide-react
 import { useState, type ChangeEvent } from "react"
 import { useNavigate } from "react-router"
 
-import { api, apiUpload } from "@/api/client"
+import { api, ApiError, apiUpload } from "@/api/client"
 import type { ImportConfirmation } from "@/api/generated/ImportConfirmation"
 import type { Imported } from "@/api/generated/Imported"
 import type { ImportPreview } from "@/api/generated/ImportPreview"
@@ -184,7 +184,16 @@ function PreviewResult({ preview, isAdding, error, onConfirm }: PreviewResultPro
           ) : null}
           {error ? (
             <Alert variant="destructive">
-              <AlertDescription>{error.message}</AlertDescription>
+              <AlertTitle>{error.message}</AlertTitle>
+              {error instanceof ApiError && error.problems.length > 0 ? (
+                <AlertDescription>
+                  <ul className="flex flex-col gap-1">
+                    {error.problems.map((problem) => (
+                      <li key={problem}>{problem}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              ) : null}
             </Alert>
           ) : null}
           <Button className="self-start" onClick={onConfirm} disabled={count === 0 || isAdding}>

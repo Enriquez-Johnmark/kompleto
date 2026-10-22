@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import { Navigate, NavLink, Outlet, useLocation } from "react-router"
 
-import { api } from "@/api/client"
+import { api, ApiError } from "@/api/client"
 import { useMe } from "@/app/queries"
 import { Logo } from "@/components/logo"
 import {
@@ -48,7 +48,10 @@ const navigation: NavItem[] = [
 /** The logged-in frame: navigation beside (or, on a phone, above) the page. */
 export function AppShell() {
   const me = useMe()
-  if (me.isError) return <Navigate to="/login" replace />
+  // Only an ended session means logging in again; anything else (a deploy, a
+  // dropped connection) is retried while the bookkeeper stays where they are.
+  if (me.error instanceof ApiError && me.error.isNotLoggedIn)
+    return <Navigate to="/login" replace />
   return (
     <SidebarProvider>
       <Sidebar>
