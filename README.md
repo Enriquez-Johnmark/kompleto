@@ -11,6 +11,7 @@ Every month, bookkeepers chase each client for receipts, bank statements, GCash 
 - reminders that **stop** once the client uploads everything or replies;
 - a **2307 tracker** showing which Payors have sent their 2307s and which are still missing, with the Payor list filled from a Xero, QuickBooks or spreadsheet sales export;
 - a **dashboard** of what's missing, nearest cut-off first;
+- **payroll chasing:** timesheets, overtime and leave approvals, and new hires before each payday, and SSS, PhilHealth and Pag-IBIG receipts after each due date; Kompleto never computes pay;
 - **staff logins:** the owner invites up to 5 staff, and the activity log names who did what.
 
 ![The dashboard of a demo firm: what each client still owes, nearest cut-off first](docs/showcase/desktop-1-dashboard.png)
@@ -36,10 +37,10 @@ Kompleto never keeps books, computes tax, files returns or produces BIR-format f
 | **M10** "Request an account" page, approved by the operator | Done |
 | **M11** Client import from Xero and QuickBooks export files | Done |
 | **M12** Payors filled from a sales export (names only) | Done |
-| **M13** Payroll chasing: payroll inputs and remittance receipts | **Next** |
-| Go live, then 3–5 free 4-week pilots | After M13, once the domain is bought and a bookkeeper says yes |
+| **M13** Payroll chasing: payroll inputs and contribution receipts | Done |
+| Go live, then 3–5 free 4-week pilots | Once the domain is bought and a bookkeeper says yes |
 
-All 34 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.
+All 36 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.
 
 ## How it's built
 
