@@ -7,6 +7,7 @@
 //!   match the configured base URL. Together with `SameSite=Lax` cookies
 //!   this stops cross-site form posts.
 
+mod activity;
 mod clients;
 mod dashboard;
 mod drafts;
@@ -187,6 +188,7 @@ pub fn router(state: AppState) -> Router {
         .merge(replies::routes())
         .merge(payors::routes())
         .merge(tracker::routes())
+        .merge(activity::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
