@@ -129,6 +129,16 @@ Implementation notes (M2):
 
 The Engine scopes data by **Tenant** (`GLOSSARY.md`); Kompleto's `FirmId` maps to it.
 
+### M6 implementation notes (2026-10-22)
+
+- **Activity log (J2).** Kompleto's own changes (Clients, checklists, Payors, due dates, the default cut-off, logins, exports, closing) are logged in the same transaction as the change, with the Firm's login address as the actor. Replies are logged by `system:replies`. The Activity page shows 90 days; the export has all of it.
+- **Export (I1).** `GET /settings/export` streams a zip from a temporary file readable only by Kompleto, removed however the request ends. Cells a spreadsheet would run as formulas get a leading `'`. Clashing file names get " (2)"; a file the sweep has just deleted is listed but not included.
+- **Closing (I2).** From `closed_at`: sessions and login links stop, Upload links and reply addresses are dead, the scheduler skips the Firm, and the pre-send check refuses all its mail, retries included. At `erase_after` (7 days) the hourly job deletes its stored files, the engine's rows (`engine::tenants::erase`) and then the Firm's row, which cascades to everything else. `kompleto firm reopen --email` undoes a closing before then.
+- **The audit log's one exception.** It stays append-only, except that a transaction which first sets `engine.erasing_tenant` may delete that one tenant's entries, for I2.
+- **Send budget.** Resend Free: messages with a deadline (Reminders) stop at 90 started in any 24 hours, nearest deadline first; ones without (login links, notices) may use 10 more. A held Reminder whose deadline passes before it starts sending expires instead of going out late. The dashboard says when approved Reminders are held. No budget with Mailpit.
+- **Headers.** Every response carries a Content-Security-Policy allowing only our own script (`static/kompleto.js`, built into the binary), inline styles and same-origin requests, plus `nosniff`, `X-Frame-Options: DENY`, a same-origin referrer policy, and HSTS when served over HTTPS. `GET /health` answers "ok" while the database does.
+- **Existing limits** stand: 5 login links per Firm per hour, 60 files per Upload link, 4 uploads processed at once. Per-IP limits belong at the edge (Cloudflare) when deployed.
+
 ### Firm isolation (2026-10-21)
 
 - Every record belongs to a firm.
@@ -198,6 +208,7 @@ Pinned versions from `docs/research/rust-crates.md`:
 | Added at M2 (2026-10-21) | toml (calendar file), encoding_rs (Windows-1252 CSV), tower (tests), rustix (limits on the Excel child process) |
 | Added at M4 (2026-10-21) | hmac (Upload link signatures) |
 | Added at M5 (2026-10-21) | mail-parser (already listed for inbound mail), base64 (Resend webhook signatures) |
+| Added at M6 (2026-10-22) | zip (moved from test-only, for the export), tokio-util (streams the export from disk); both were already in `Cargo.lock` |
 
 Lookalike crates to avoid: `resend`, `resend-rust`, `mailparser`.
 
