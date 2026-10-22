@@ -2,7 +2,9 @@
 // github.com/shadcn-ui/ui into src/components/ui, doing what `shadcn add`
 // does on ui.shadcn.com, which this project's build environment can't reach:
 //
-// - each `cn-*` class becomes the Tailwind classes style-nova.css gives it;
+// - each `cn-*` class becomes the Tailwind classes style-nova.css gives it,
+//   merged with tailwind-merge so the component's own classes win a
+//   conflict, as shadcn's transform-style-map.ts does;
 // - icon placeholders become lucide-react icons;
 // - registry imports become this project's aliases.
 //
@@ -11,6 +13,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
+import { twMerge } from "tailwind-merge"
 
 const [checkout, ...names] = process.argv.slice(2)
 if (!checkout || names.length === 0) {
@@ -20,13 +23,16 @@ if (!checkout || names.length === 0) {
 const registry = join(checkout, "apps/v4/registry")
 
 // ".cn-name { @apply classes; }" inside ".style-nova { … }".
-const styles = new Map()
+const styleMap = new Map()
 const css = readFileSync(join(registry, "styles/style-nova.css"), "utf8")
 for (const [, name, classes] of css.matchAll(/\.(cn-[a-z0-9-]+)\s*\{\s*@apply\s+([^;]+);\s*\}/g)) {
-  styles.set(name, classes.trim())
+  styleMap.set(name, classes.trim())
 }
 
 const unknown = new Set()
+
+// Markers shadcn keeps for other tools (transform-style-map.ts ALLOWLIST).
+const keep = new Set(["cn-menu-target", "cn-menu-translucent", "cn-logical-sides", "cn-rtl-flip", "cn-font-heading"])
 
 function transform(source) {
   let out = source
@@ -51,21 +57,24 @@ function transform(source) {
     icons.size ? `import { ${[...icons].sort().join(", ")} } from "lucide-react"\n` : ""
   )
 
-  // Style classes, only inside string literals.
+  // Style classes, only inside string literals. Like shadcn, each class is
+  // styled at its first use in a file and only removed after that.
+  const applied = new Set()
   out = out.replace(/"([^"\n]*)"/g, (literal, text) => {
     if (!/\bcn-[a-z0-9-]+/.test(text) || text.startsWith("@/")) return literal
-    const replaced = text
-      .split(/(\s+)/)
-      .map((token) => {
-        if (!/^cn-[a-z0-9-]+$/.test(token)) return token
-        if (styles.has(token)) return styles.get(token)
-        unknown.add(token)
-        return ""
-      })
-      .join("")
-      .replace(/\s+/g, " ")
-      .trim()
-    return `"${replaced}"`
+    const tokens = text.split(/\s+/).filter(Boolean)
+    const styles = []
+    const rest = []
+    for (const token of tokens) {
+      if (!/^cn-[a-z0-9-]+$/.test(token)) rest.push(token)
+      else if (keep.has(token)) rest.push(token)
+      else if (styleMap.has(token)) {
+        if (!applied.has(token)) styles.push(styleMap.get(token))
+        applied.add(token)
+      } else unknown.add(token)
+    }
+    const merged = styles.length ? twMerge(styles.join(" "), rest.join(" ")) : rest.join(" ")
+    return `"${merged}"`
   })
   return out
 }
