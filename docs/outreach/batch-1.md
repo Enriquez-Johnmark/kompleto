@@ -1,6 +1,6 @@
 # Outreach batch 1
 
-Status: drafted 2026-10-22, not yet sent. The owner reviews, edits and sends everything from their own accounts (outreach decision, `docs/decisions.md`). Nothing here costs money.
+Status: drafted 2026-10-22, updated after M8 with the walkthrough video and screenshots; not yet sent. The owner reviews, edits and sends everything from their own accounts (outreach decision, `docs/decisions.md`). Nothing here costs money.
 
 Goal: find 3–5 bookkeepers for a free 4-week pilot. The domain is bought only after the first "yes".
 
@@ -10,7 +10,8 @@ Goal: find 3–5 bookkeepers for a free 4-week pilot. The domain is bought only 
 2. **Post once per group, a few days apart.** Never paste the same text into many groups on the same day; Facebook may flag it as spam.
 3. **Direct messages: at most 15–20 a week**, each with one personal line about that bookkeeper (see "Direct messages").
 4. **Log every post and message** in the table at the end, so we can see which channel works.
-5. **When someone answers, paste their reply to me.** I'll draft your answer; the reply templates below cover the common questions.
+5. **Show, don't just tell.** Attach the 2-minute video (`docs/showcase/walkthrough.mp4`) to Post A, or 2–3 screenshots if a group doesn't allow video: `desktop-1-dashboard.png`, `desktop-3-review-before-approving.png` and `phone-3-client-upload-page.png` (all in `docs/showcase/`). Everything in them is a made-up demo firm. Post B gets no attachment. In direct messages, offer the video instead of attaching it unasked.
+6. **When someone answers, paste their reply to me.** I'll draft your answer; the reply templates below cover the common questions.
 
 ## Where to post
 
@@ -45,6 +46,8 @@ Search Facebook for each name; join and wait for approval before posting. Skip g
 >
 > Naghahanap ako ng 3–5 bookkeepers para sa **libreng 4-week pilot**. Walang bayad at walang card na kailangan. Pagkatapos, ₱1,500/month kung gusto niyong ituloy; kung hindi, okay lang din po.
 >
+> Panoorin po ang 2-minute video sa baba para makita kung paano gumagana. 👇
+>
 > Comment o PM lang po kung interesado kayo. Salamat po! 🙏
 
 ### English
@@ -64,6 +67,8 @@ Search Facebook for each name; join and wait for approval before posting. Skip g
 > It isn't bookkeeping software and it doesn't compute tax. It only does the chasing, so it works alongside whatever you already use.
 >
 > I'm looking for 3–5 bookkeepers for a **free 4-week pilot**. No payment, no card. After that it's ₱1,500/month if you want to keep it; if not, no hard feelings.
+>
+> The 2-minute video below shows how it works. 👇
 >
 > Comment or PM me if you're interested. Thank you!
 
@@ -100,7 +105,7 @@ If someone describes the pain, reply in the comments with thanks and one line, e
 >
 > Tanong lang po: hinahabol niyo pa rin ba ang clients sa Viber para sa resibo at 2307 every month?
 >
-> Gumawa po ako ng Kompleto: may BIR deadline calendar per client, gumagawa ng reminder na kayo ang mag-a-approve, at may upload link para sa phone ng client. Naghahanap po ako ng 3–5 bookkeepers para sa libreng 4-week pilot, walang bayad at walang card.
+> Gumawa po ako ng Kompleto: may BIR deadline calendar per client, gumagawa ng reminder na kayo ang mag-a-approve, at may upload link para sa phone ng client. Naghahanap po ako ng 3–5 bookkeepers para sa libreng 4-week pilot, walang bayad at walang card. May 2-minute video po ako kung gusto niyong makita.
 >
 > Kung hindi po relevant, okay lang. Salamat sa oras niyo!
 
@@ -110,7 +115,7 @@ If someone describes the pain, reply in the comments with thanks and one line, e
 >
 > Quick question: do you still chase clients on Viber for receipts and 2307s every month?
 >
-> I built Kompleto: a BIR deadline calendar for each client, reminder drafts that you approve before they go out, and an upload link clients open on their phone. I'm looking for 3–5 bookkeepers for a free 4-week pilot, with no payment and no card.
+> I built Kompleto: a BIR deadline calendar for each client, reminder drafts that you approve before they go out, and an upload link clients open on their phone. I'm looking for 3–5 bookkeepers for a free 4-week pilot, with no payment and no card. I have a 2-minute video if you'd like to see it.
 >
 > If it's not relevant, no worries at all. Thanks for your time!
 
@@ -124,13 +129,13 @@ Adjust to the person's language. For anything not covered here, paste their mess
 > 1. your firm name, as your clients should see it on reminders;
 > 2. the email you'll log in with.
 >
-> I'll send your login link within about a week. Before we start, I'll also send a short privacy notice and data agreement, since your clients' documents pass through Kompleto.
+> I'll send your login link within about a week. With it come our privacy notice, terms and data processing agreement, since your clients' documents pass through Kompleto.
 
-*For the owner:* tell me as soon as you get the first "yes". That is when we buy the domain (≈ ₱650–690), and I draft the privacy paperwork, which must be ready before the first pilot (`docs/product/p1-spec.md`, "Pilots and launch").
+*For the owner:* tell me as soon as you get the first "yes". That is when we buy the domain (≈ ₱650–690) and go live (`docs/deploy.md`). The privacy notice, terms and data processing agreement are already drafted; before the first login link goes out, fill in their bracketed details, designate yourself data protection officer and file the NPC sworn declaration (`docs/legal.md`).
 
 **"How much?"**
 
-> Free for 4 weeks, no card needed. After that, ₱1,500/month via GCash if you want to continue, with no contract. If you stop, you can download all your data and we delete it within 30 days.
+> Free for 4 weeks, no card needed. After that, ₱1,500/month via GCash if you want to continue, with no contract. If you stop, you can download all your data first; everything is deleted 7 days after you close your account.
 
 **"Is it like Built for Bookkeepers / QuickBooks / Xero?"**
 
@@ -138,7 +143,11 @@ Adjust to the person's language. For anything not covered here, paste their mess
 
 **"Is my clients' data safe?"**
 
-> We store only the business name, the contact's first name and email, and the BIR forms they file. No TINs, amounts or addresses. Uploaded files are encrypted, and they're deleted 30 days after you mark them received (never kept longer than 90 days). Every reminder waits for your approval, and the AI never sees your clients' files or tax data.
+> We store only the business name, the contact's first name and email, and the BIR forms they file. No TINs, amounts or addresses. Every uploaded file is scanned for viruses and encrypted, and deleted 30 days after you mark it received (never kept longer than 90 days). Every reminder waits for your approval, and the AI never sees your clients' files or tax data.
+
+**"Can I see it first?"**
+
+> Of course! Here's a 2-minute video of a demo firm, with made-up clients. [attach `walkthrough.mp4`] Kompleto isn't open to the public yet; pilot bookkeepers get their own login.
 
 **"Who are you? Is this legit?"**
 
