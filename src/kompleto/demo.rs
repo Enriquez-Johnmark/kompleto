@@ -415,15 +415,15 @@ async fn first_request_on(
     .await
 }
 
-/// The Contact uploads every Owed document, or the first two, which the
-/// Firm then marks received. Returns how many were uploaded.
-#[expect(clippy::too_many_arguments, reason = "one call site, in the demo's replay")]
 /// A customer whose 2307 a Client without listed Payors uploads.
 fn customer(business_name: &str) -> &'static str {
     const CUSTOMERS: [&str; 3] = ["Puregold Price Club", "Mercury Drug Corp", "Robinsons Supermarket"];
     CUSTOMERS[business_name.len() % CUSTOMERS.len()]
 }
 
+/// The Contact uploads every Owed document, or the first two; `received_by`,
+/// if given, marks them received at once. Returns how many were uploaded.
+#[expect(clippy::too_many_arguments, reason = "one call site, in the demo's replay")]
 async fn upload(
     clients: &Clients,
     uploads: &Uploads,
