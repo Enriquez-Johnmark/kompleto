@@ -92,7 +92,7 @@ async fn b2_a_file_that_cant_be_read_is_refused_whole(pool: PgPool) {
     let app = TestApp::new(pool);
     let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
 
-    let wrong_columns = upload(&app, &cookie, "clients.csv", b"Name,Email\nShop,a@b.test\n").await;
+    let wrong_columns = upload(&app, &cookie, "clients.csv", b"Phone,Notes\n0917,regular\n").await;
     let wrong_type = upload(&app, &cookie, "clients.pdf", b"%PDF-1.7").await;
 
     assert_eq!(wrong_columns.status, StatusCode::UNPROCESSABLE_ENTITY);

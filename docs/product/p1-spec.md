@@ -269,6 +269,12 @@ Kompleto's first version is done when every criterion below passes. Each criteri
 - **K2.** Staff can do the daily work (Clients, Drafts, approving, Uploads, Replies). Only the owner can export the Firm's data, close the account, or invite and remove staff; the API refuses staff.
 - **K3.** The activity log names the person who did each thing.
 
+### Import from Xero and QuickBooks (M11, owner-approved 2026-10-22)
+
+- **B5.** A Xero contact export or a QuickBooks Online customer list (CSV or Excel) imports like Kompleto's own template: business name, contact first name and email come from their columns, the language and BIR forms chosen for the batch fill the rows that have none, every row is previewed with its problems before anything is added, and no other column (a TIN, for instance) is read.
+
+  Evidence for the column names (accessed 2026-10-22): Xero contact files use `ContactName`, `EmailAddress`, `FirstName` and `LastName` (third-party docs: [Moment](https://docs.moment.team/help/moment-by-topic/integrations/file-exports/file-export-accounting-system/xero), [Zynk](https://docs.zynk.com/workflow/documentation/xero/export-contacts.html); confidence M); QuickBooks Online's customer export has `Name` or `Customer` (it differs by region), `Company` and `Email Address` ([Intuit help](https://quickbooks.intuit.com/learn-support/en-us/help-articles/export-customer-data-to-excel/00/262148), vendor docs; confidence M). Xero's official header list: not found. The reader accepts all these spellings, ignoring case, spaces and Xero's leading `*`.
+
 ### Sign-up (M10, owner-approved 2026-10-22)
 
 - **L1.** Anyone can request an account with a firm name and an email, accepting the terms and the data processing agreement. A request creates no Firm and sends no email; the operator approves or declines it from the command line, and approving creates the Firm and emails its owner a welcome login link. The answer to a request is the same whether or not the address already has an account, and decided requests are deleted.

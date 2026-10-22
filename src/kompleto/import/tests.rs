@@ -86,11 +86,11 @@ fn b2_columns_are_found_by_header_in_any_order_and_case() {
 
 #[test]
 fn b2_a_file_without_the_columns_is_refused_whole() {
-    let missing = read_csv(b"Business name,Email\nShop,a@b.test\n");
+    let missing = read_csv(b"Phone,Notes\n0917,regular\n");
 
     assert_eq!(
         missing.unwrap_err(),
-        ImportError::MissingColumns(vec!["Contact first name", "Language", "Forms"])
+        ImportError::MissingColumns(vec!["Business name", "Email"])
     );
     assert_eq!(read_csv(HEADER.as_bytes()).unwrap_err(), ImportError::Empty);
 }
@@ -139,4 +139,76 @@ fn b2_row_numbers_match_the_spreadsheet_with_multi_line_cells_and_mac_line_endin
     assert_eq!(multi_line.iter().map(|r| r.row).collect::<Vec<_>>(), [2, 4]);
     assert_eq!(multi_line[0].input.forms, ["2551Q", "1701Q"]);
     assert_eq!(mac.iter().map(|r| r.row).collect::<Vec<_>>(), [2, 3]);
+}
+
+fn taglish_with(forms: &[&str]) -> BatchDefaults {
+    BatchDefaults {
+        language: "taglish".to_owned(),
+        forms: forms.iter().map(|&form| form.to_owned()).collect(),
+    }
+}
+
+#[test]
+fn b5_a_xero_contacts_export_imports_with_the_batchs_language_and_forms() {
+    let file = "*ContactName,AccountNumber,EmailAddress,FirstName,LastName,TaxNumber\n\
+                Nena's Store,C-001,nena@example.test,Nena,Cruz,123-456-789-000\n\
+                Lito Hardware,C-002,lito@example.test,Lito,Reyes,\n";
+
+    let rows = with_defaults(read_csv(file.as_bytes()).unwrap(), &taglish_with(&["2551Q", "1701Q"]));
+    let preview = preview(&rows, &[]);
+
+    assert!(preview.invalid.is_empty(), "{:?}", preview.invalid);
+    let (_, nena) = &preview.valid[0];
+    assert_eq!(
+        (
+            nena.business_name.as_str(),
+            nena.contact_first_name.as_str(),
+            nena.email.as_str()
+        ),
+        ("Nena's Store", "Nena", "nena@example.test")
+    );
+    assert_eq!(nena.forms, [BirForm::F2551Q, BirForm::F1701Q]);
+    assert!(
+        rows.iter().all(|row| !format!("{:?}", row.input).contains("123-456")),
+        "the TIN column is never read"
+    );
+}
+
+#[test]
+fn b5_a_quickbooks_customer_list_takes_the_company_and_the_persons_first_name() {
+    let file = "Customer,Company,Phone,Email Address\n\
+                Nena Cruz,Nena's Store,0917 000 0000,nena@example.test\n\
+                Lito Reyes,,,lito@example.test\n";
+
+    let rows = with_defaults(read_csv(file.as_bytes()).unwrap(), &taglish_with(&["2550Q"]));
+    let preview = preview(&rows, &[]);
+
+    let named: Vec<_> = preview
+        .valid
+        .iter()
+        .map(|(_, c)| (c.business_name.as_str(), c.contact_first_name.as_str()))
+        .collect();
+    assert_eq!(named, [("Nena's Store", "Nena"), ("Lito Reyes", "Lito")]);
+}
+
+#[test]
+fn b5_without_defaults_a_file_lacking_language_and_forms_shows_why_for_each_row() {
+    let file = "*ContactName,EmailAddress,FirstName\nNena's Store,nena@example.test,Nena\n";
+
+    let rows = with_defaults(read_csv(file.as_bytes()).unwrap(), &BatchDefaults::default());
+    let preview = preview(&rows, &[]);
+
+    let reasons = preview.invalid[0].1.join("; ");
+    assert!(reasons.contains("Forms"), "{reasons}");
+}
+
+#[test]
+fn b5_a_file_values_beat_the_batch_defaults() {
+    let rows = with_defaults(
+        read_csv(&csv("Nena's Store,Nena,nena@example.test,English,2551Q\n")).unwrap(),
+        &taglish_with(&["1601-C"]),
+    );
+
+    assert_eq!(rows[0].input.language, "English");
+    assert_eq!(rows[0].input.forms, ["2551Q"]);
 }

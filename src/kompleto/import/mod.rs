@@ -1,6 +1,7 @@
-//! Importing Clients from a CSV or Excel file (B2). Reading turns the file
-//! into rows; checking sorts them into valid and invalid with reasons.
-//! Nothing is stored until the bookkeeper confirms.
+//! Importing Clients from a CSV or Excel file (B2), including the contact
+//! and customer lists Xero and QuickBooks Online export (B5). Reading turns
+//! the file into rows; checking sorts them into valid and invalid with
+//! reasons. Nothing is stored until the bookkeeper confirms.
 
 pub mod xlsx;
 
@@ -13,8 +14,54 @@ pub const MAX_ROWS: usize = 500;
 /// The largest file accepted, in bytes.
 pub const MAX_BYTES: usize = 2 * 1024 * 1024;
 
-/// The columns an import file must have, as named in the template.
+/// The columns of Kompleto's own template.
 pub const COLUMNS: [&str; 5] = ["Business name", "Contact first name", "Email", "Language", "Forms"];
+
+/// Header names, squashed (lowercase letters and digits only), that hold
+/// each field, best first. Kompleto's template, Xero's contact export
+/// (`*ContactName`, `EmailAddress`, `FirstName`) and QuickBooks Online's
+/// customer list (`Customer` or `Name`, `Company`, `Email`). Any other
+/// column, such as a TIN, is never read.
+const BUSINESS: [&str; 7] = [
+    "businessname",
+    "company",
+    "companyname",
+    "contactname",
+    "customer",
+    "displayname",
+    "name",
+];
+const FIRST_NAME: [&str; 2] = ["contactfirstname", "firstname"];
+/// A person's whole name, whose first word is the contact's first name when
+/// no column gives it, as in a QuickBooks customer list.
+const PERSON: [&str; 3] = ["fullname", "customer", "name"];
+const EMAIL: [&str; 3] = ["email", "emailaddress", "primaryemail"];
+const LANGUAGE: [&str; 1] = ["language"];
+const FORMS: [&str; 2] = ["forms", "birforms"];
+
+/// What fills a row's empty Language and Forms, chosen for the whole file,
+/// e.g. for a Xero or QuickBooks export, which has neither.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BatchDefaults {
+    /// `taglish` or `english`.
+    pub language: String,
+    /// BIR form codes.
+    pub forms: Vec<String>,
+}
+
+/// `rows` with `defaults` in every empty Language and Forms; values in the
+/// file win.
+pub fn with_defaults(mut rows: Vec<ImportRow>, defaults: &BatchDefaults) -> Vec<ImportRow> {
+    for row in &mut rows {
+        if row.input.language.trim().is_empty() {
+            row.input.language.clone_from(&defaults.language);
+        }
+        if row.input.forms.is_empty() {
+            row.input.forms.clone_from(&defaults.forms);
+        }
+    }
+    rows
+}
 
 /// One data row, numbered as in a spreadsheet (the header is row 1).
 #[derive(Debug, Clone)]
@@ -117,32 +164,61 @@ fn rows_from_records(records: Vec<(usize, Vec<String>)>) -> Result<Vec<ImportRow
     let mut records = records.into_iter();
     let header = records.next().map(|(_, cells)| cells).unwrap_or_default();
     let header: Vec<String> = header.iter().map(|name| squash(name)).collect();
-    let mut positions = [0; COLUMNS.len()];
+    // Every column with one of `names`, in the order of `names`.
+    let find = |names: &[&str]| -> Vec<usize> {
+        names
+            .iter()
+            .filter_map(|name| header.iter().position(|found| found == name))
+            .collect()
+    };
+    let (business, first_name, person, email) = (find(&BUSINESS), find(&FIRST_NAME), find(&PERSON), find(&EMAIL));
+    let (language, forms) = (find(&LANGUAGE), find(&FORMS));
     let mut missing = Vec::new();
-    for (position, column) in positions.iter_mut().zip(COLUMNS) {
-        match header.iter().position(|name| *name == squash(column)) {
-            Some(found) => *position = found,
-            None => missing.push(column),
-        }
+    if business.is_empty() {
+        missing.push(COLUMNS[0]);
+    }
+    if email.is_empty() {
+        missing.push(COLUMNS[2]);
     }
     if !missing.is_empty() {
         return Err(ImportError::MissingColumns(missing));
     }
-    let cell = |cells: &[String], column: usize| cells.get(positions[column]).map_or("", |c| c.trim()).to_owned();
     let mut rows = Vec::new();
     for (row, cells) in records.filter(|(_, cells)| cells.iter().any(|c| !c.trim().is_empty())) {
         if rows.len() == MAX_ROWS {
             return Err(ImportError::TooManyRows);
         }
-        let forms = cell(&cells, 4);
+        // The first non-empty cell among `columns`, and which column it was.
+        let first = |columns: &[usize]| -> (Option<usize>, String) {
+            columns
+                .iter()
+                .map(|&column| (column, cells.get(column).map_or("", |c| c.trim())))
+                .find(|(_, value)| !value.is_empty())
+                .map_or((None, String::new()), |(column, value)| {
+                    (Some(column), value.to_owned())
+                })
+        };
+        let (business_column, business_name) = first(&business);
+        let mut contact_first_name = first(&first_name).1;
+        if contact_first_name.is_empty() {
+            // A person's name beside the company name, or, when the business
+            // is listed under the person's name, that name.
+            let others: Vec<usize> = person.iter().copied().filter(|&c| Some(c) != business_column).collect();
+            let mut whole = first(&others).1;
+            if whole.is_empty() && business_column.is_some_and(|c| person.contains(&c)) {
+                whole.clone_from(&business_name);
+            }
+            contact_first_name = whole.split_whitespace().next().unwrap_or("").to_owned();
+        }
         rows.push(ImportRow {
             row,
             input: ClientInput {
-                business_name: cell(&cells, 0),
-                contact_first_name: cell(&cells, 1),
-                email: cell(&cells, 2),
-                language: cell(&cells, 3),
-                forms: forms
+                business_name: business_name.clone(),
+                contact_first_name,
+                email: first(&email).1,
+                language: first(&language).1,
+                forms: first(&forms)
+                    .1
                     .split([',', ';', '/', '\n'])
                     .map(|f| f.trim().to_owned())
                     .filter(|f| !f.is_empty())
