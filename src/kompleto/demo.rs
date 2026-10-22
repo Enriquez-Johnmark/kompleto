@@ -295,6 +295,10 @@ pub async fn seed(
     let bounces = Bounces::new(pool.clone(), shared.clone());
     let scheduler = Scheduler::new(pool.clone(), shared.clone(), links.clone())?;
 
+    // The Firm and its Clients are added on the history's first day, since a
+    // Client is chased only for Periods that end after it was added.
+    let start = as_of - Duration::days(HISTORY_DAYS);
+    clock.advance(start.midnight().assume_offset(MANILA) - clock.now());
     let mut summary = DemoSummary::default();
     let firm = firms.create(name, login_email).await?;
     summary.firm = Some(firm);
@@ -332,7 +336,6 @@ pub async fn seed(
 
     // Replay each day: Drafts at 07:30, the Firm approves at 09:00, and the
     // Contacts act on the first requests sent two days before.
-    let start = as_of - Duration::days(HISTORY_DAYS);
     let morning = Time::from_hms(7, 30, 0).unwrap_or(Time::MIDNIGHT);
     let mut day = start;
     while day <= as_of {

@@ -8,25 +8,26 @@ mod common;
 use std::sync::Arc;
 
 use common::RecordingMailer;
+use kompleto::engine::clock::FixedClock;
 use kompleto::engine::outbox::Sender;
-use kompleto::kompleto::demo::{self, DemoServices};
+use kompleto::kompleto::demo::{self, DemoServices, DemoSummary};
 use sqlx::PgPool;
-use time::macros::date;
+use time::OffsetDateTime;
+use time::macros::{date, datetime};
 
-#[sqlx::test]
-async fn the_demo_firm_has_clients_history_and_drafts_waiting(pool: PgPool) {
-    let clock = common::clock();
+/// Seeds the demo Firm as of 4 January 2027, with the clock starting at `now`.
+async fn seed(pool: &PgPool, now: OffsetDateTime) -> (DemoSummary, RecordingMailer) {
+    let clock = Arc::new(FixedClock::new(now));
     let mailer = RecordingMailer::idempotent();
-    let checks = Arc::new(common::kompleto_checks(&pool, clock.clone()));
+    let checks = Arc::new(common::kompleto_checks(pool, clock.clone()));
     let sender = Sender::new(pool.clone(), mailer.clone(), clock.clone(), checks);
     let services = DemoServices {
         pool: pool.clone(),
         clock: clock.clone(),
-        links: common::upload_links(&pool, clock.clone()),
-        files: common::files(&pool, clock.clone()),
+        links: common::upload_links(pool, clock.clone()),
+        files: common::files(pool, clock.clone()),
         base_url: "http://kompleto.test".to_owned(),
     };
-
     let summary = demo::seed(
         &services,
         "Santos Bookkeeping",
@@ -36,6 +37,12 @@ async fn the_demo_firm_has_clients_history_and_drafts_waiting(pool: PgPool) {
     )
     .await
     .unwrap();
+    (summary, mailer)
+}
+
+#[sqlx::test]
+async fn the_demo_firm_has_clients_history_and_drafts_waiting(pool: PgPool) {
+    let (summary, mailer) = seed(&pool, datetime!(2026-10-21 09:00 UTC)).await;
 
     assert_eq!(summary.clients, 15);
     assert!(summary.sent >= 10, "{summary:?}");
@@ -64,4 +71,13 @@ async fn the_demo_firm_has_clients_history_and_drafts_waiting(pool: PgPool) {
     .unwrap();
     assert_eq!(unchecked_earlier, 0);
     assert!(unchecked_lately >= 1);
+}
+
+#[sqlx::test]
+async fn the_demo_firm_gets_its_history_even_when_made_after_its_date(pool: PgPool) {
+    // As with `DEMO_DATE` set, or a demo date that has passed.
+    let (summary, _) = seed(&pool, datetime!(2027-02-01 09:00 UTC)).await;
+
+    assert!(summary.sent >= 10, "{summary:?}");
+    assert!(summary.uploads >= 10, "{summary:?}");
 }
