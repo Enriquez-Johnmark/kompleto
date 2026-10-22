@@ -72,9 +72,9 @@ async fn k1_staff_can_be_removed_but_the_owner_cant(pool: PgPool) {
         .unwrap();
     let owner = members.list(santos).await.unwrap()[0].id;
 
-    let from_other_firm = members.remove_staff(reyes, ana, "rey@reyes.test").await;
+    let from_other_firm = members.remove_staff(reyes, ana.id, "rey@reyes.test").await;
     let the_owner = members.remove_staff(santos, owner, "bea@santos.test").await;
-    members.remove_staff(santos, ana, "bea@santos.test").await.unwrap();
+    members.remove_staff(santos, ana.id, "bea@santos.test").await.unwrap();
 
     assert!(
         matches!(from_other_firm, Err(MemberError::NotFound)),

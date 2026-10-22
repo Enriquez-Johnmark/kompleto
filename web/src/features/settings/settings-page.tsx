@@ -31,9 +31,10 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" />
-      {settings.isPending ? <Skeleton className="h-96" /> : null}
+      {settings.isPending || me.isPending ? <Skeleton className="h-96" /> : null}
       {settings.isError ? <QueryError error={settings.error} /> : null}
-      {settings.data ? (
+      {me.isError ? <QueryError error={me.error} /> : null}
+      {settings.data && me.data ? (
         <div className="grid max-w-3xl gap-4">
           <FirmCard settings={settings.data} />
           <CutOffCard
@@ -65,7 +66,7 @@ function FirmCard({ settings }: { settings: Settings }) {
       <CardHeader>
         <CardTitle>{settings.firm_name}</CardTitle>
         <CardDescription>
-          Logs in as {settings.login_email}. Clients see your firm's name as the sender.
+          Owner: {settings.login_email}. Clients see your firm's name as the sender.
         </CardDescription>
       </CardHeader>
       <CardContent className="text-sm">

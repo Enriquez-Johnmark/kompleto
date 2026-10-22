@@ -218,3 +218,28 @@ async fn k3_changes_to_clients_payors_and_settings_name_the_person(pool: PgPool)
     assert_eq!(actors.len(), 3, "{actors:?}");
     assert!(actors.iter().all(|(_, actor)| actor == "joy@santos.test"), "{actors:?}");
 }
+
+#[sqlx::test]
+async fn k1_the_owner_is_told_when_an_invitation_couldnt_be_emailed(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, owner) = app.logged_in_firm("Santos Bookkeeping").await;
+    let invite = || {
+        app.api(
+            Method::POST,
+            "/api/staff",
+            Some(&owner),
+            Some(json!({ "email": "joy@example.test" })),
+        )
+    };
+
+    let mut answers = Vec::new();
+    for _ in 0..6 {
+        let invited = invite().await.json();
+        answers.push(invited["email_sent"].as_bool().unwrap());
+        let id = invited["member"]["id"].as_str().unwrap().to_owned();
+        app.api(Method::DELETE, &format!("/api/staff/{id}"), Some(&owner), None)
+            .await;
+    }
+
+    assert_eq!(answers, [true, true, true, true, true, false], "the hourly limit");
+}

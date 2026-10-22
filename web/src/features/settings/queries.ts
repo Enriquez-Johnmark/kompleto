@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@/api/client"
 import type { Invite } from "@/api/generated/Invite"
-import type { MemberView } from "@/api/generated/MemberView"
+import type { Invited } from "@/api/generated/Invited"
 import type { StaffList } from "@/api/generated/StaffList"
 
 export const staffKeys = {
@@ -20,7 +20,7 @@ export function useStaff() {
 export function useInviteStaff() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (invite: Invite) => api<MemberView>("POST", "/api/staff", invite),
+    mutationFn: (invite: Invite) => api<Invited>("POST", "/api/staff", invite),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: staffKeys.list() }),
   })
 }

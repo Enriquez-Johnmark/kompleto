@@ -38,9 +38,17 @@ export function StaffCard() {
     invite.mutate(
       { email },
       {
-        onSuccess: (added) => {
+        onSuccess: ({ member, email_sent }) => {
           setEmail("")
-          toast.add({ title: `Invitation sent to ${added.email}`, type: "success" })
+          toast.add(
+            email_sent
+              ? { title: `Invitation sent to ${member.email}`, type: "success" }
+              : {
+                  title: `${member.email} was added, but the invitation couldn't be emailed`,
+                  description: "Ask them to log in from Kompleto's login page with their email.",
+                  type: "warning",
+                }
+          )
         },
       }
     )
@@ -132,7 +140,16 @@ function MemberRow({ member }: { member: MemberView }) {
               <AlertDialogCancel>Keep them</AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
-                onClick={() => remove.mutate(member.id)}
+                onClick={() =>
+                  remove.mutate(member.id, {
+                    onError: (error) =>
+                      toast.add({
+                        title: `${member.email} wasn't removed`,
+                        description: error.message,
+                        type: "error",
+                      }),
+                  })
+                }
                 disabled={remove.isPending}
               >
                 Remove

@@ -30,6 +30,14 @@ pub enum Role {
 }
 
 impl Role {
+    /// `owner` or `staff`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Owner => "owner",
+            Self::Staff => "staff",
+        }
+    }
+
     pub(crate) fn parse(text: &str) -> Self {
         if text == "owner" { Self::Owner } else { Self::Staff }
     }
@@ -109,9 +117,9 @@ impl Members {
 
     /// Adds `email` to `firm`'s staff; `by` is the owner's address, for the
     /// activity log.
-    pub async fn add_staff(&self, firm: FirmId, email: &str, by: &str) -> Result<MemberId, MemberError> {
+    pub async fn add_staff(&self, firm: FirmId, email: &str, by: &str) -> Result<Member, MemberError> {
         let email = email.trim();
-        if email.len() > 254 || !email.contains('@') || email.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        if !is_email_address(email) {
             return Err(MemberError::Invalid(format!("{email:?} is not an email address")));
         }
         let now = self.clock.now();
@@ -158,7 +166,12 @@ impl Members {
         )
         .await?;
         tx.commit().await?;
-        Ok(id)
+        Ok(Member {
+            id,
+            email: email.to_owned(),
+            role: Role::Staff,
+            added_at: now,
+        })
     }
 
     /// Removes a staff member from `firm`; their sessions and login links
@@ -196,4 +209,9 @@ impl Members {
         tx.commit().await?;
         Ok(())
     }
+}
+
+/// Whether `email` looks like an address a login link can go to.
+pub(crate) fn is_email_address(email: &str) -> bool {
+    email.len() <= 254 && email.contains('@') && !email.chars().any(|c| c.is_whitespace() || c.is_control())
 }

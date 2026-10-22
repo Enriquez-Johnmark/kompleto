@@ -173,7 +173,7 @@ async fn k1_removing_a_member_ends_their_sessions_and_links(pool: PgPool) {
     auth.request_link("joy@santos.test").await.unwrap();
     let session = auth.log_in(&latest_token(&pool).await).await.unwrap().unwrap();
 
-    members.remove_staff(firm, joy, "ana@santos.test").await.unwrap();
+    members.remove_staff(firm, joy.id, "ana@santos.test").await.unwrap();
 
     assert!(auth.session(&session).await.unwrap().is_none());
     assert_eq!(auth.log_in(&unused).await.unwrap(), None);
@@ -193,7 +193,7 @@ async fn k1_removing_and_inviting_again_doesnt_reset_the_hourly_limit(pool: PgPo
         if auth.invite("joy@example.test", "ana@santos.test").await.unwrap() == LoginOutcome::Sent {
             sent += 1;
         }
-        members.remove_staff(firm, joy, "ana@santos.test").await.unwrap();
+        members.remove_staff(firm, joy.id, "ana@santos.test").await.unwrap();
     }
 
     assert_eq!(sent, 5, "at most five emails an hour to one address");

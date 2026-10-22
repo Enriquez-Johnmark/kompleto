@@ -6,7 +6,7 @@ use std::sync::Arc;
 use sqlx::PgPool;
 
 use super::activity::record_as;
-use super::members::MemberId;
+use super::members::{MemberId, is_email_address};
 use crate::engine::clock::Clock;
 use crate::engine::ids::TenantId;
 use crate::engine::outbox::links;
@@ -86,7 +86,7 @@ impl Firms {
                 "{name:?} looks like a web address; use the business name"
             )));
         }
-        if !login_email.contains('@') || login_email.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        if !is_email_address(login_email) {
             return Err(FirmError::Invalid(format!("{login_email:?} is not an email address")));
         }
         let id = FirmId::new();

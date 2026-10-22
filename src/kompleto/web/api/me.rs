@@ -6,7 +6,6 @@ use axum::{Json, Router};
 use serde::Serialize;
 
 use super::{ApiError, ApiMember};
-use crate::kompleto::members::Role;
 use crate::kompleto::web::AppState;
 
 pub(super) fn routes() -> Router<AppState> {
@@ -30,10 +29,6 @@ async fn me(State(state): State<AppState>, ApiMember(member): ApiMember) -> Resu
     Ok(Json(Me {
         firm_name: firm.name,
         email: member.email,
-        role: match member.role {
-            Role::Owner => "owner",
-            Role::Staff => "staff",
-        }
-        .to_owned(),
+        role: member.role.as_str().to_owned(),
     }))
 }

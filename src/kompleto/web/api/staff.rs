@@ -10,7 +10,8 @@ use uuid::Uuid;
 
 use super::client_page::rfc3339;
 use super::{ApiError, ApiJson, ApiOwner, ApiPath};
-use crate::kompleto::members::{MAX_STAFF, Member, MemberError, Role};
+use crate::kompleto::auth::LoginOutcome;
+use crate::kompleto::members::{MAX_STAFF, Member, MemberError};
 use crate::kompleto::web::AppState;
 
 pub(super) fn routes() -> Router<AppState> {
@@ -48,14 +49,21 @@ impl From<Member> for MemberView {
         Self {
             id: member.id.to_string(),
             email: member.email,
-            role: match member.role {
-                Role::Owner => "owner",
-                Role::Staff => "staff",
-            }
-            .to_owned(),
+            role: member.role.as_str().to_owned(),
             added_at: rfc3339(member.added_at),
         }
     }
+}
+
+/// A staff member just added.
+#[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct Invited {
+    /// Who was added.
+    pub member: MemberView,
+    /// Whether their invitation with a login link was emailed; if not, they
+    /// can ask for a link on the login page.
+    pub email_sent: bool,
 }
 
 /// A new staff member's address.
@@ -96,22 +104,25 @@ async fn invite(
     State(state): State<AppState>,
     ApiOwner(owner): ApiOwner,
     ApiJson(invite): ApiJson<Invite>,
-) -> Result<(StatusCode, Json<MemberView>), ApiError> {
-    let id = state.members.add_staff(owner.firm, &invite.email, &owner.email).await?;
-    let added = state
-        .members
-        .list(owner.firm)
-        .await?
-        .into_iter()
-        .find(|member| member.id == id)
-        .ok_or(ApiError::NotFound)?;
+) -> Result<(StatusCode, Json<Invited>), ApiError> {
+    let added = state.members.add_staff(owner.firm, &invite.email, &owner.email).await?;
     // They're added either way; without the email they can still ask for
-    // a link on the login page.
-    if let Err(err) = state.auth.invite(&added.email, &owner.email).await {
-        tracing::error!(firm = %owner.firm, %err, "emailing a new staff member failed");
-    }
+    // a link on the login page, and the owner is told.
+    let email_sent = match state.auth.invite(&added.email, &owner.email).await {
+        Ok(outcome) => outcome == LoginOutcome::Sent,
+        Err(err) => {
+            tracing::error!(firm = %owner.firm, %err, "emailing a new staff member failed");
+            false
+        }
+    };
     state.wake_sender.notify_one();
-    Ok((StatusCode::CREATED, Json(added.into())))
+    Ok((
+        StatusCode::CREATED,
+        Json(Invited {
+            member: added.into(),
+            email_sent,
+        }),
+    ))
 }
 
 async fn remove(
