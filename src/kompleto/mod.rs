@@ -18,6 +18,7 @@ pub mod firms;
 pub mod import;
 pub mod members;
 pub mod payors;
+pub mod payroll;
 pub mod periods;
 pub mod presend;
 pub mod reminders;

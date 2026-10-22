@@ -417,7 +417,7 @@ fn month_number(n: u8) -> Month {
 }
 
 /// Day `day` of a month, or the month's last day if `day` is past it.
-fn day_in_month(year: i32, month: Month, day: u8) -> Date {
+pub(crate) fn day_in_month(year: i32, month: Month, day: u8) -> Date {
     let day = day.clamp(1, month.length(year));
     Date::from_calendar_date(year, month, day).unwrap_or(Date::MIN)
 }
