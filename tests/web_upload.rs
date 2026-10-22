@@ -184,10 +184,21 @@ async fn f3_the_firm_downloads_an_upload_as_an_attachment_with_a_generated_name(
     let (client, link) = nena_link_of(&app, santos).await;
     let upload = upload_photo(&app, &link).await;
 
-    let page = app.get(&format!("/clients/{client}"), &cookie).await;
-    let file = app.get(&format!("/clients/{client}/uploads/{upload}"), &cookie).await;
+    let page = app
+        .api(
+            axum::http::Method::GET,
+            &format!("/api/clients/{client}"),
+            Some(&cookie),
+            None,
+        )
+        .await
+        .json();
+    let file = app
+        .get(&format!("/api/clients/{client}/uploads/{upload}/file"), &cookie)
+        .await;
 
-    assert!(page.body.contains("Mark received"), "{}", page.body);
+    assert_eq!(page["uploads"][0]["id"], upload.to_string());
+    assert_eq!(page["uploads"][0]["received_at"], serde_json::Value::Null);
     assert_eq!(file.status, StatusCode::OK);
     assert_eq!(file.bytes, JPEG, "decrypted as sent");
     assert_eq!(file.headers["content-type"], "image/jpeg");
@@ -208,19 +219,34 @@ async fn f3_an_upload_marked_received_is_deleted_30_days_later(pool: PgPool) {
     let upload = upload_photo(&app, &link).await;
 
     let marked = app
-        .post(&format!("/clients/{client}/uploads/{upload}/received"), &cookie, "")
+        .api(
+            axum::http::Method::POST,
+            &format!("/api/clients/{client}/uploads/{upload}/received"),
+            Some(&cookie),
+            None,
+        )
         .await;
 
-    assert_eq!(marked.status, StatusCode::SEE_OTHER);
+    assert_eq!(marked.status, StatusCode::NO_CONTENT);
     app.clock.advance(time::Duration::days(30) - time::Duration::minutes(1));
     assert_eq!(app.files.sweep().await.unwrap(), 0);
     app.clock.advance(time::Duration::minutes(1));
     assert_eq!(app.files.sweep().await.unwrap(), 1);
     let cookie = app.log_in("santos.bookkeeping@firm.test").await; // the old session has ended
-    let gone = app.get(&format!("/clients/{client}/uploads/{upload}"), &cookie).await;
+    let gone = app
+        .get(&format!("/api/clients/{client}/uploads/{upload}/file"), &cookie)
+        .await;
     assert_eq!(gone.status, StatusCode::NOT_FOUND);
-    let page = app.get(&format!("/clients/{client}"), &cookie).await;
-    assert!(page.body.contains("Deleted"), "{}", page.body);
+    let page = app
+        .api(
+            axum::http::Method::GET,
+            &format!("/api/clients/{client}"),
+            Some(&cookie),
+            None,
+        )
+        .await
+        .json();
+    assert_eq!(page["uploads"][0]["deleted"], true);
     let actor: String = sqlx::query_scalar("select actor from audit_events where action = 'upload.received'")
         .fetch_one(&app.pool)
         .await
@@ -241,7 +267,9 @@ async fn f3_an_upload_never_marked_received_is_deleted_after_90_days(pool: PgPoo
     assert_eq!(app.files.sweep().await.unwrap(), 1);
 
     let cookie = app.log_in("santos.bookkeeping@firm.test").await; // the old session has ended
-    let gone = app.get(&format!("/clients/{client}/uploads/{upload}"), &cookie).await;
+    let gone = app
+        .get(&format!("/api/clients/{client}/uploads/{upload}/file"), &cookie)
+        .await;
     assert_eq!(gone.status, StatusCode::NOT_FOUND);
 }
 

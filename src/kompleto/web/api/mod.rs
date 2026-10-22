@@ -13,8 +13,10 @@ mod client_page;
 mod clients;
 mod dashboard;
 mod drafts;
+mod files;
 mod login;
 mod me;
+mod replies;
 
 use axum::Json;
 use axum::Router;
@@ -36,6 +38,8 @@ pub(super) fn routes() -> Router<AppState> {
         .merge(clients::routes())
         .merge(dashboard::routes())
         .merge(drafts::routes())
+        .merge(files::routes())
+        .merge(replies::routes())
         .merge(login::routes())
         .merge(me::routes())
         .route("/api/{*rest}", any(not_found))
@@ -48,6 +52,8 @@ pub(super) fn scoped_endpoints() -> Vec<(super::ScopedRoute, axum::routing::Meth
         .chain(clients::client_endpoints())
         .chain(client_page::page_endpoints())
         .chain(client_changes::change_endpoints())
+        .chain(files::file_endpoints())
+        .chain(replies::reply_endpoints())
         .collect()
 }
 

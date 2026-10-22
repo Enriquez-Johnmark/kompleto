@@ -64,7 +64,15 @@ async fn an_api_change_from_another_site_is_refused(pool: PgPool) {
         .body(axum::body::Body::from("{}"))
         .unwrap();
 
-    let response = app.send(request).await;
+    let no_origin = axum::http::Request::builder()
+        .method(Method::POST)
+        .uri("/api/logout")
+        .header(header::COOKIE, &cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
 
-    assert_eq!(response.status, StatusCode::FORBIDDEN);
+    assert_eq!(app.send(request).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(app.send(no_origin).await.status, StatusCode::FORBIDDEN);
+    let me = app.api(Method::GET, "/api/me", Some(&cookie), None).await;
+    assert_eq!(me.status, StatusCode::OK, "still logged in");
 }

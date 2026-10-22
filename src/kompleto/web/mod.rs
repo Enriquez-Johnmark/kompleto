@@ -9,18 +9,13 @@
 
 mod activity;
 mod api;
-mod clients;
 mod export;
 mod hooks;
 mod import;
-mod login;
-mod payors;
-mod replies;
 mod settings;
 mod spa;
 mod tracker;
 mod upload;
-mod uploads;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -201,15 +196,10 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(api::routes())
-        .merge(login::routes())
-        .merge(clients::routes())
         .merge(import::routes())
         .merge(settings::routes())
         .merge(upload::routes())
-        .merge(uploads::routes())
         .merge(hooks::routes())
-        .merge(replies::routes())
-        .merge(payors::routes())
         .merge(tracker::routes())
         .merge(activity::routes())
         .merge(export::routes())
@@ -303,14 +293,7 @@ pub struct ScopedRoute {
 
 /// Every page about one of a Firm's records.
 pub fn scoped_routes() -> Vec<ScopedRoute> {
-    clients::client_pages()
-        .into_iter()
-        .chain(uploads::upload_pages())
-        .chain(replies::reply_pages())
-        .chain(payors::payor_pages())
-        .chain(api::scoped_endpoints())
-        .map(|(route, _)| route)
-        .collect()
+    api::scoped_endpoints().into_iter().map(|(route, _)| route).collect()
 }
 
 /// A router for `pages`, merging methods that share a path.

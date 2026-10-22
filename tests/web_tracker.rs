@@ -59,14 +59,14 @@ async fn h2_the_tracker_page_shows_the_last_quarter_and_adds_an_unexpected_payor
         assert!(page.body.contains(expected), "missing {expected:?} in {}", page.body);
     }
     let added = app
-        .post(
-            &format!("/clients/{client}/payors"),
-            &cookie,
-            "name=Robinsons+Land&quarter=2026-Q3",
+        .api(
+            axum::http::Method::POST,
+            &format!("/api/clients/{client}/payors"),
+            Some(&cookie),
+            Some(serde_json::json!({"name": "Robinsons Land"})),
         )
         .await;
-    assert_eq!(added.status, StatusCode::SEE_OTHER);
-    assert_eq!(added.location(), "/tracker?quarter=2026-Q3");
+    assert_eq!(added.status, StatusCode::CREATED);
     let page = app.get("/tracker?quarter=2026-Q3", &cookie).await;
     assert!(!page.body.contains("unexpected"), "listed now: {}", page.body);
     assert!(page.body.contains("uploaded"), "{}", page.body);

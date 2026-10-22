@@ -85,8 +85,13 @@ async fn i2_closing_an_account_stops_everything_at_once(pool: PgPool) {
         .fetch_one(&app.pool)
         .await
         .unwrap();
-    app.request(Method::POST, "/login", None, Some("email=santos.bookkeeping@firm.test"))
-        .await;
+    app.api(
+        Method::POST,
+        "/api/login",
+        None,
+        Some(serde_json::json!({"email": "santos.bookkeeping@firm.test"})),
+    )
+    .await;
     let after: i64 = sqlx::query_scalar("select count(*) from login_tokens")
         .fetch_one(&app.pool)
         .await
@@ -110,8 +115,13 @@ async fn i2_closing_an_account_stops_everything_at_once(pool: PgPool) {
 async fn i2_no_session_or_login_link_works_for_a_closed_account(pool: PgPool) {
     let app = TestApp::new(pool);
     let (santos, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
-    app.request(Method::POST, "/login", None, Some("email=santos.bookkeeping@firm.test"))
-        .await;
+    app.api(
+        Method::POST,
+        "/api/login",
+        None,
+        Some(serde_json::json!({"email": "santos.bookkeeping@firm.test"})),
+    )
+    .await;
     let token = app.login_token_for("santos.bookkeeping@firm.test").await;
     // Closed in the same moment the link was made, so neither was deleted.
     sqlx::query("update firms set closed_at = now(), erase_after = now() + interval '7 days' where id = $1")
@@ -125,6 +135,6 @@ async fn i2_no_session_or_login_link_works_for_a_closed_account(pool: PgPool) {
         StatusCode::UNAUTHORIZED,
         "session refused"
     );
-    let login = app.request(Method::POST, &format!("/login/{token}"), None, None).await;
+    let login = app.api(Method::POST, &format!("/api/login/{token}"), None, None).await;
     assert!(login.session_cookie().is_none(), "no new session");
 }

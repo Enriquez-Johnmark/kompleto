@@ -216,10 +216,15 @@ impl TestApp {
             .fetch_one(&self.pool)
             .await
             .unwrap();
-        self.request(Method::POST, "/login", None, Some(&format!("email={email}")))
-            .await;
+        self.api(
+            Method::POST,
+            "/api/login",
+            None,
+            Some(serde_json::json!({ "email": email })),
+        )
+        .await;
         let token = self.login_token_after(email, earlier).await;
-        let response = self.request(Method::POST, &format!("/login/{token}"), None, None).await;
+        let response = self.api(Method::POST, &format!("/api/login/{token}"), None, None).await;
         response.session_cookie().unwrap()
     }
 

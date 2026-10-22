@@ -118,7 +118,7 @@ async fn g1_unsigned_or_wrongly_signed_mail_is_refused_and_nothing_kept(pool: Pg
 }
 
 #[sqlx::test]
-async fn g1_the_firm_reads_a_reply_on_its_page_with_the_text_escaped(pool: PgPool) {
+async fn g1_the_firm_reads_a_reply_as_plain_text_data(pool: PgPool) {
     let app = TestApp::new(pool);
     let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
     let santos: uuid::Uuid = sqlx::query_scalar("select id from firms")
@@ -162,14 +162,18 @@ async fn g1_the_firm_reads_a_reply_on_its_page_with_the_text_escaped(pool: PgPoo
         .unwrap()
         .trim_start_matches(common::web::BASE_URL);
 
-    let page = app.get(link, &cookie).await;
+    // The link opens the app's page, which reads the Reply from the API.
+    let reply = app
+        .api(axum::http::Method::GET, &format!("/api{link}"), Some(&cookie), None)
+        .await;
 
-    assert_eq!(page.status, StatusCode::OK);
-    assert!(page.body.contains("Ipapadala ko po bukas"), "{}", page.body);
+    assert_eq!(reply.status, StatusCode::OK, "{}", reply.body);
+    assert_eq!(reply.headers["content-type"], "application/json", "data, never a page");
+    let text = reply.json()["text"].as_str().unwrap().to_owned();
+    assert!(text.contains("Ipapadala ko po bukas"), "{text}");
     assert!(
-        !page.body.contains("<script>alert"),
-        "the text is escaped: {}",
-        page.body
+        text.contains("<script>alert(1)</script>"),
+        "kept as typed, for the app to show as text"
     );
-    assert!(page.body.contains("script&#62;alert"), "{}", page.body);
+    assert_eq!(reply.json()["business_name"], "Nena's Sari-Sari Store");
 }

@@ -3,52 +3,46 @@
 
 use axum::Router;
 use axum::extract::{Path, State};
-use axum::http::{Method, header};
-use axum::response::{IntoResponse, Redirect, Response};
+use axum::http::{Method, StatusCode, header};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{MethodRouter, get, post};
 use uuid::Uuid;
 
-use super::{AppState, CurrentFirm, ScopedRoute, WebError, actor};
+use super::{ApiError, ApiFirm};
 use crate::engine::ids::FileId;
 use crate::kompleto::clients::ClientId;
-use crate::kompleto::uploads::UploadError;
+use crate::kompleto::web::{AppState, ScopedRoute, actor, scoped_router};
 
 pub(super) fn routes() -> Router<AppState> {
-    super::scoped_router(upload_pages())
+    scoped_router(file_endpoints())
 }
 
-/// Every page about one Upload (A2).
-pub(super) fn upload_pages() -> Vec<(ScopedRoute, MethodRouter<AppState>)> {
-    let page = |method, path| ScopedRoute {
+/// Every endpoint about one Upload (A2).
+pub(in crate::kompleto::web) fn file_endpoints() -> Vec<(ScopedRoute, MethodRouter<AppState>)> {
+    let endpoint = |method, path| ScopedRoute {
         method,
         path,
         sample_form: "",
     };
     vec![
-        (page(Method::GET, "/clients/{id}/uploads/{upload}"), get(download)),
         (
-            page(Method::POST, "/clients/{id}/uploads/{upload}/received"),
+            endpoint(Method::GET, "/api/clients/{id}/uploads/{upload}/file"),
+            get(download),
+        ),
+        (
+            endpoint(Method::POST, "/api/clients/{id}/uploads/{upload}/received"),
             post(received),
         ),
     ]
-}
-
-impl From<UploadError> for WebError {
-    fn from(err: UploadError) -> Self {
-        match err {
-            UploadError::NotFound => Self::NotFound,
-            other => Self::internal(other),
-        }
-    }
 }
 
 /// The file, as an attachment with a generated name, so nothing a Contact
 /// sent is ever shown in the browser or named by them.
 async fn download(
     State(state): State<AppState>,
-    CurrentFirm(firm): CurrentFirm,
+    ApiFirm(firm): ApiFirm,
     Path((id, upload)): Path<(Uuid, Uuid)>,
-) -> Result<Response, WebError> {
+) -> Result<Response, ApiError> {
     let client = state.clients.get(firm, ClientId::from(id)).await?;
     let file = state
         .uploads
@@ -71,11 +65,13 @@ async fn download(
 
 async fn received(
     State(state): State<AppState>,
-    CurrentFirm(firm): CurrentFirm,
+    ApiFirm(firm): ApiFirm,
     Path((id, upload)): Path<(Uuid, Uuid)>,
-) -> Result<Response, WebError> {
-    let id = ClientId::from(id);
+) -> Result<StatusCode, ApiError> {
     let by = actor(&state, firm).await?;
-    state.uploads.mark_received(firm, id, FileId::from(upload), &by).await?;
-    Ok(Redirect::to(&format!("/clients/{id}#uploads")).into_response())
+    state
+        .uploads
+        .mark_received(firm, ClientId::from(id), FileId::from(upload), &by)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
