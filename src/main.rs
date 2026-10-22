@@ -5,7 +5,10 @@
 //! kompleto migrate        apply database migrations
 //! kompleto outbox-drain   send what's due once, then exit
 //! kompleto firm add --name NAME --email EMAIL
-//!                         create a Firm (there is no sign-up page)
+//!                         create a Firm without a request
+//! kompleto requests [approve ID | decline ID]
+//!                         list account requests from the sign-up page, or
+//!                         open or turn one down (L1)
 //! kompleto llm-costs --month YYYY-MM
 //!                         every Firm's AI cost for a month (J1)
 //! kompleto gen-key        print a new FILE_MASTER_KEY
@@ -31,6 +34,7 @@ use kompleto::engine::ids::TenantId;
 use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{NoExtraChecks, Outbox, Sender};
 use kompleto::engine::scan::Clamd;
+use kompleto::kompleto::auth::Auth;
 use kompleto::kompleto::calendar::Calendar;
 use kompleto::kompleto::closing;
 use kompleto::kompleto::demo::{self, DemoServices};
@@ -40,6 +44,7 @@ use kompleto::kompleto::presend::KompletoChecks;
 use kompleto::kompleto::reminders::Scheduler;
 use kompleto::kompleto::replies;
 use kompleto::kompleto::schedule::MANILA;
+use kompleto::kompleto::signups::{RequestId, Signups};
 use kompleto::kompleto::upload_links::UploadLinks;
 use kompleto::kompleto::web::{AppState, router};
 use sqlx::PgPool;
@@ -127,13 +132,14 @@ async fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Some("firm") => add_firm(pool, clock).await,
+        Some("requests") => requests(&config, pool, clock).await,
         Some("llm-costs") => llm_costs(pool, clock).await,
         Some("demo") => demo(&config, pool, clock).await,
         Some("dev-schedule") => dev_schedule(&config, pool).await,
         Some("demo-firm") => demo_firm(&config, pool, clock).await,
         other => {
             bail!(
-                "unknown command {other:?}; use serve, migrate, outbox-drain, firm add, firm reopen, llm-costs, gen-key, \
+                "unknown command {other:?}; use serve, migrate, outbox-drain, firm add, firm reopen, requests, llm-costs, gen-key, \
                  demo, dev-schedule or demo-firm"
             )
         }
@@ -287,6 +293,61 @@ async fn add_firm(pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
     migrate(&pool).await?;
     let id = Firms::new(pool, clock).create(name, email).await?;
     tracing::info!(%id, "firm created; they can now log in at /login with {email}");
+    Ok(())
+}
+
+/// `kompleto requests`: the account requests waiting; `requests approve ID`
+/// opens the Firm and emails its owner a welcome login link; `requests
+/// decline ID` deletes the request.
+async fn requests(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    migrate(&pool).await?;
+    let signups = Signups::new(pool.clone(), clock.clone());
+    let id = |text: &str| -> anyhow::Result<RequestId> {
+        let id = uuid::Uuid::parse_str(text).context("ID is a request ID from `kompleto requests`")?;
+        Ok(RequestId::from(id))
+    };
+    match (args.first().map(String::as_str), args.get(1)) {
+        (None, _) => {
+            let pending = signups.pending().await?;
+            if pending.is_empty() {
+                println!("No account requests are waiting.");
+            }
+            for request in pending {
+                let day = request.requested_at.to_offset(MANILA).date();
+                println!("{}  {day}  {}  <{}>", request.id, request.firm_name, request.email);
+            }
+        }
+        (Some("approve"), Some(text)) => {
+            let id = id(text)?;
+            let request = signups
+                .pending()
+                .await?
+                .into_iter()
+                .find(|request| request.id == id)
+                .context("no such request")?;
+            let firm = signups.approve(id).await?;
+            let links = UploadLinks::new(
+                pool.clone(),
+                clock.clone(),
+                &config.master_key()?,
+                &config.public_base_url,
+            );
+            let checks = KompletoChecks::new(pool.clone(), clock.clone(), &config.public_base_url, links);
+            Auth::new(pool, clock, &config.public_base_url, checks)
+                .welcome(&request.email)
+                .await?;
+            println!(
+                "Opened {} ({firm}); a welcome login link to {} goes out with the server's next send.",
+                request.firm_name, request.email
+            );
+        }
+        (Some("decline"), Some(text)) => {
+            signups.decline(id(text)?).await?;
+            println!("Request deleted.");
+        }
+        _ => bail!("usage: kompleto requests [approve ID | decline ID]"),
+    }
     Ok(())
 }
 

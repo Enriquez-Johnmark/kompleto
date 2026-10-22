@@ -16,6 +16,7 @@ async fn kompleto(pool: &PgPool, args: &[&str]) -> Output {
         .env("DATABASE_URL", common::database_url(pool).await)
         .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
         .env("RUST_LOG", "warn")
+        .env("FILE_MASTER_KEY", "ab".repeat(32))
         // Empty, so a developer's .env can't fill them in.
         .env("CLAMD_ADDR", "")
         .env("DEMO_DATE", "");
@@ -195,4 +196,50 @@ async fn f1_the_live_server_wont_start_without_a_virus_scanner(pool: PgPool) {
 
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("CLAMD_ADDR must be set"));
+}
+
+#[sqlx::test]
+async fn l1_the_operator_lists_approves_and_declines_requests(pool: PgPool) {
+    use kompleto::kompleto::signups::Signups;
+
+    let signups = Signups::new(pool.clone(), common::clock());
+    signups
+        .request("Cruz Bookkeeping", "mia@cruz.test", true)
+        .await
+        .unwrap();
+    signups.request("Spam Inc", "spam@spam.test", true).await.unwrap();
+    let pending = signups.pending().await.unwrap();
+
+    let listed = kompleto(&pool, &["requests"]).await;
+    let approved = kompleto(&pool, &["requests", "approve", &pending[0].id.to_string()]).await;
+    let declined = kompleto(&pool, &["requests", "decline", &pending[1].id.to_string()]).await;
+
+    let listed = String::from_utf8_lossy(&listed.stdout);
+    assert!(
+        listed.contains("Cruz Bookkeeping") && listed.contains("mia@cruz.test"),
+        "{listed}"
+    );
+    assert!(
+        approved.status.success(),
+        "{}",
+        String::from_utf8_lossy(&approved.stderr)
+    );
+    assert!(
+        declined.status.success(),
+        "{}",
+        String::from_utf8_lossy(&declined.stderr)
+    );
+    assert!(signups.pending().await.unwrap().is_empty());
+    let (status, subject): (String, String) =
+        sqlx::query_as("select status, subject from outbox_messages where to_address = 'mia@cruz.test'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(subject, "Your Kompleto account is ready");
+    assert_eq!(status, "approved", "on its way with the server's next send");
+    let firms: i64 = sqlx::query_scalar("select count(*) from firms")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(firms, 1, "only the approved one");
 }

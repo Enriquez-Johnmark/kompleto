@@ -47,6 +47,17 @@ pub enum LoginOutcome {
     NotSent,
 }
 
+/// Why a login link is emailed.
+#[derive(Debug, Clone, Copy)]
+enum LinkKind<'a> {
+    /// The person asked for one.
+    Login,
+    /// The owner added them as staff.
+    Invitation { invited_by: &'a str },
+    /// The operator approved their account request.
+    Welcome,
+}
+
 /// Who a live session belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
@@ -102,16 +113,22 @@ impl Auth {
     /// Emails a login link to `email` if it's the address of a member of an
     /// open Firm.
     pub async fn request_link(&self, email: &str) -> Result<LoginOutcome, AuthError> {
-        self.send_link(email, None).await
+        self.send_link(email, LinkKind::Login).await
     }
 
     /// Emails a new staff member at `email` a login link saying that
     /// `invited_by` added them (M9).
     pub async fn invite(&self, email: &str, invited_by: &str) -> Result<LoginOutcome, AuthError> {
-        self.send_link(email, Some(invited_by)).await
+        self.send_link(email, LinkKind::Invitation { invited_by }).await
     }
 
-    async fn send_link(&self, email: &str, invited_by: Option<&str>) -> Result<LoginOutcome, AuthError> {
+    /// Emails the owner of a newly approved Firm (M10) a login link that
+    /// welcomes them.
+    pub async fn welcome(&self, email: &str) -> Result<LoginOutcome, AuthError> {
+        self.send_link(email, LinkKind::Welcome).await
+    }
+
+    async fn send_link(&self, email: &str, kind: LinkKind<'_>) -> Result<LoginOutcome, AuthError> {
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
         let Some(member) = sqlx::query!(
@@ -161,16 +178,23 @@ impl Auth {
         .execute(&mut *tx)
         .await?;
         let link = format!("{}/login/{token}", self.base_url);
-        let (subject, opening) = match invited_by {
-            None => (
+        let (subject, opening) = match kind {
+            LinkKind::Login => (
                 "Your Kompleto login link".to_owned(),
                 format!("Hi,\n\nOpen this link to log in to {} on Kompleto:", member.firm_name),
             ),
-            Some(owner) => (
+            LinkKind::Invitation { invited_by: owner } => (
                 format!("You've been added to {} on Kompleto", member.firm_name),
                 format!(
                     "Hi,\n\n{owner} added you to {} on Kompleto, which chases clients for their \
                      BIR documents. Open this link to log in:",
+                    member.firm_name
+                ),
+            ),
+            LinkKind::Welcome => (
+                "Your Kompleto account is ready".to_owned(),
+                format!(
+                    "Hi,\n\nWelcome to Kompleto! The account for {} is ready. Open this link to log in:",
                     member.firm_name
                 ),
             ),
