@@ -2,6 +2,8 @@
 //! then confirm. The confirmed rows come back from the app, so they're
 //! checked again before anything is added, and added in one transaction.
 
+use axum::body::Bytes;
+use axum::extract::multipart::MultipartError;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
 use axum::http::{StatusCode, header};
 use axum::response::IntoResponse;
@@ -12,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use super::{ApiError, ApiFirm, ApiJson, ApiMember};
 use crate::kompleto::clients::{ClientError, ClientInput, NewClient};
 use crate::kompleto::firms::FirmId;
-use crate::kompleto::import::{self, BatchDefaults, COLUMNS, ImportError, ImportRow, MAX_BYTES, MAX_ROWS};
+use crate::kompleto::import::{self, BatchDefaults, COLUMNS, ImportError, ImportRow, MAX_BYTES, MAX_ROWS, numbered};
 use crate::kompleto::web::AppState;
 
 pub(super) fn routes() -> Router<AppState> {
@@ -56,7 +58,53 @@ pub struct InvalidRow {
     pub reasons: Vec<String>,
 }
 
-fn refused(reason: impl ToString) -> ApiError {
+/// An uploaded spreadsheet with the form's other fields.
+pub(super) struct Upload {
+    /// The file's name, lowercased.
+    name: String,
+    bytes: Bytes,
+    /// Every other field, in order.
+    pub(super) fields: Vec<(String, String)>,
+}
+
+impl Upload {
+    /// Reads the whole form; a broken or oversized one is refused.
+    pub(super) async fn read(mut multipart: Multipart) -> Result<Self, ApiError> {
+        let broken = |err: MultipartError| {
+            if err.status() == StatusCode::PAYLOAD_TOO_LARGE {
+                refused(ImportError::TooLarge)
+            } else {
+                refused("The upload didn't arrive whole; try again.")
+            }
+        };
+        let (mut file, mut fields) = (None, Vec::new());
+        while let Some(field) = multipart.next_field().await.map_err(broken)? {
+            let name = field.name().unwrap_or("").to_owned();
+            if name == "file" {
+                let file_name = field.file_name().unwrap_or("").to_ascii_lowercase();
+                file = Some((file_name, field.bytes().await.map_err(broken)?));
+            } else {
+                fields.push((name, field.text().await.map_err(broken)?));
+            }
+        }
+        let (name, bytes) = file.ok_or_else(|| refused("Choose a file to upload."))?;
+        Ok(Self { name, bytes, fields })
+    }
+
+    /// The file's records, header first, each with its row number.
+    pub(super) async fn records(&self, state: &AppState) -> Result<Vec<(usize, Vec<String>)>, ApiError> {
+        let records = if self.name.ends_with(".csv") {
+            import::csv_records(&self.bytes)
+        } else if self.name.ends_with(".xlsx") {
+            state.xlsx.cells(&self.bytes).await.map(numbered)
+        } else {
+            return Err(refused("Upload a .csv or .xlsx file."));
+        };
+        records.map_err(refused)
+    }
+}
+
+pub(super) fn refused(reason: impl ToString) -> ApiError {
     ApiError::invalid(reason.to_string())
 }
 
@@ -67,44 +115,22 @@ fn row_number(row: usize) -> u32 {
 async fn check_upload(
     State(state): State<AppState>,
     ApiFirm(firm): ApiFirm,
-    mut multipart: Multipart,
+    multipart: Multipart,
 ) -> Result<Json<ImportPreview>, ApiError> {
-    let mut file = None;
+    let upload = Upload::read(multipart).await?;
     // For files without Language or Forms columns, such as Xero's and
     // QuickBooks' exports, when the bookkeeper chose them (B5).
     let mut defaults: Option<BatchDefaults> = None;
-    while let Ok(Some(field)) = multipart.next_field().await {
-        match field.name() {
-            Some("file") => {
-                let name = field.file_name().unwrap_or("").to_ascii_lowercase();
-                let bytes = field.bytes().await.map_err(|_| refused(ImportError::TooLarge))?;
-                file = Some((name, bytes));
-            }
-            Some(name @ ("default_language" | "default_forms")) => {
-                let name = name.to_owned();
-                let value = field
-                    .text()
-                    .await
-                    .map_err(|_| refused("The import didn't arrive whole; try again."))?;
-                let defaults = defaults.get_or_insert_default();
-                if name == "default_language" {
-                    defaults.language = value;
-                } else {
-                    defaults.forms.push(value);
-                }
-            }
+    for (name, value) in &upload.fields {
+        match name.as_str() {
+            "default_language" => defaults.get_or_insert_default().language.clone_from(value),
+            "default_forms" => defaults.get_or_insert_default().forms.push(value.clone()),
             _ => {}
         }
     }
-    let (name, bytes) = file.ok_or_else(|| refused("Choose a file to upload."))?;
-    let rows = if name.ends_with(".csv") {
-        import::read_csv(&bytes)
-    } else if name.ends_with(".xlsx") {
-        state.xlsx.read(&bytes).await
-    } else {
-        return Err(refused("Upload a .csv or .xlsx file."));
-    };
-    let rows = rows.and_then(|sheet| sheet.rows(defaults.as_ref())).map_err(refused)?;
+    let rows = import::rows_from_records(upload.records(&state).await?)
+        .and_then(|sheet| sheet.rows(defaults.as_ref()))
+        .map_err(refused)?;
     Ok(Json(preview(&state, firm, rows).await?))
 }
 

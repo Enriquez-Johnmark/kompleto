@@ -18,12 +18,13 @@ const SALES: &str = "Customer,Invoice,Amount,CWT,TIN\n\
                      Puregold,INV-2,\"5,000.00\",0.00,\n\
                      SM Prime,INV-3,\"8,000.00\",160.00,\n";
 
-async fn preview(app: &TestApp, cookie: &str, filename: &str, bytes: &[u8], every_row: bool) -> Response {
+/// Uploads `bytes`, with the "every row" field's value if any.
+async fn preview(app: &TestApp, cookie: &str, filename: &str, bytes: &[u8], every_row: Option<&str>) -> Response {
     let boundary = "kompleto-test-boundary";
     let mut body = String::new();
-    if every_row {
+    if let Some(value) = every_row {
         body.push_str(&format!(
-            "--{boundary}\r\nContent-Disposition: form-data; name=\"every_row\"\r\n\r\ntrue\r\n"
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"every_row\"\r\n\r\n{value}\r\n"
         ));
     }
     let mut body = format!(
@@ -56,7 +57,7 @@ async fn h3_a_sales_export_gives_the_names_and_only_the_ticked_ones_become_payor
     let payors = Payors::new(pool.clone(), app.clock.clone());
     payors.add(firm, client, "Jollibee Foods").await.unwrap();
 
-    let names = preview(&app, &cookie, "sales.csv", SALES.as_bytes(), false).await;
+    let names = preview(&app, &cookie, "sales.csv", SALES.as_bytes(), None).await;
 
     assert_eq!(names.status, StatusCode::OK, "{}", names.body);
     assert_eq!(names.json(), json!({ "names": ["Jollibee Foods", "SM Prime"] }));
@@ -93,8 +94,8 @@ async fn h3_a_report_of_the_withholding_account_takes_every_row_when_asked(pool:
     let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
     let report = "Transaction Detail by Account\n\nDate,Name,Amount\n07/15/2026,Jollibee Foods,200.00\n";
 
-    let refused = preview(&app, &cookie, "cwt.csv", report.as_bytes(), false).await;
-    let names = preview(&app, &cookie, "cwt.csv", report.as_bytes(), true).await;
+    let refused = preview(&app, &cookie, "cwt.csv", report.as_bytes(), Some("false")).await;
+    let names = preview(&app, &cookie, "cwt.csv", report.as_bytes(), Some("true")).await;
 
     assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", refused.body);
     assert!(refused.body.contains("header row"), "{}", refused.body);

@@ -197,7 +197,7 @@ pub fn numbered(cells: Vec<Vec<String>>) -> Vec<(usize, Vec<String>)> {
 }
 
 /// Rows numbered as the bookkeeper sees them, header first.
-fn rows_from_records(records: Vec<(usize, Vec<String>)>) -> Result<Sheet, ImportError> {
+pub fn rows_from_records(records: Vec<(usize, Vec<String>)>) -> Result<Sheet, ImportError> {
     let mut records = records.into_iter();
     let header = records.next().map(|(_, cells)| cells).unwrap_or_default();
     let header: Vec<String> = header.iter().map(|name| squash(name)).collect();
