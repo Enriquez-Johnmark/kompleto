@@ -1,6 +1,6 @@
-//! Seam 5: every page about one Client answers "not found" to another Firm
-//! (A2). The router is built from the same list, so a new page can't skip
-//! this check.
+//! Seam 5: every page and API endpoint about one of a Firm's records
+//! answers "not found" to another Firm (A2). The router is built from the
+//! same list, so a new endpoint can't skip this check.
 
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
 
@@ -102,9 +102,22 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
             .replace("{payor}", &payor.to_string());
         let hash = outbox.get(santos, draft.into()).await.unwrap().content_hash().to_hex();
         let sample = route.sample_form.replace("{hash}", &hash);
-        let form = (route.method == Method::POST).then_some(sample.as_str());
+        let api = uri.starts_with("/api/");
+        let send = |cookie: String| {
+            let (uri, sample, method) = (uri.clone(), sample.clone(), route.method.clone());
+            let app = &app;
+            async move {
+                if api {
+                    let json = (!sample.is_empty()).then(|| serde_json::from_str(&sample).unwrap());
+                    app.api(method, &uri, Some(&cookie), json).await
+                } else {
+                    let form = (method != Method::GET).then_some(sample.as_str());
+                    app.request(method, &uri, Some(&cookie), form).await
+                }
+            }
+        };
 
-        let foreign = app.request(route.method.clone(), &uri, Some(&reyes_cookie), form).await;
+        let foreign = send(reyes_cookie.clone()).await;
         assert_eq!(
             foreign.status,
             StatusCode::NOT_FOUND,
@@ -112,9 +125,7 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
             route.method
         );
 
-        let own = app
-            .request(route.method.clone(), &uri, Some(&santos_cookie), form)
-            .await;
+        let own = send(santos_cookie.clone()).await;
         // A conflict or a refusal means the page ran but an earlier page
         // already changed the Draft (discarded it, or edited out its link).
         assert!(

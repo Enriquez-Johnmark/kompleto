@@ -10,7 +10,6 @@
 mod activity;
 mod api;
 mod clients;
-mod drafts;
 mod export;
 mod hooks;
 mod import;
@@ -204,7 +203,6 @@ pub fn router(state: AppState) -> Router {
         .merge(api::routes())
         .merge(login::routes())
         .merge(clients::routes())
-        .merge(drafts::routes())
         .merge(import::routes())
         .merge(settings::routes())
         .merge(upload::routes())
@@ -292,14 +290,14 @@ async fn same_origin_posts(State(state): State<AppState>, request: Request, next
 /// (A2).
 #[derive(Debug, Clone)]
 pub struct ScopedRoute {
-    /// GET or POST.
+    /// GET, POST or PUT.
     pub method: Method,
     /// The path: `{id}` is a Client, `{item}` one of its extra checklist
     /// items, `{draft}` a reminder Draft, `{upload}` one of its Uploads,
     /// `{reply}` one of its Replies, `{payor}` one of its Payors.
     pub path: &'static str,
-    /// A form body the page accepts, for tests; `{hash}` stands for the
-    /// Draft's content hash.
+    /// A body the page accepts, for tests: a form, or JSON for `/api/`
+    /// paths; `{hash}` stands for the Draft's content hash.
     pub sample_form: &'static str,
 }
 
@@ -307,10 +305,10 @@ pub struct ScopedRoute {
 pub fn scoped_routes() -> Vec<ScopedRoute> {
     clients::client_pages()
         .into_iter()
-        .chain(drafts::draft_pages())
         .chain(uploads::upload_pages())
         .chain(replies::reply_pages())
         .chain(payors::payor_pages())
+        .chain(api::scoped_endpoints())
         .map(|(route, _)| route)
         .collect()
 }

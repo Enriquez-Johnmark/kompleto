@@ -9,6 +9,7 @@
 //! - Errors are JSON ([`ErrorBody`]) without internal details.
 
 mod dashboard;
+mod drafts;
 mod login;
 mod me;
 
@@ -28,9 +29,15 @@ use crate::kompleto::firms::{FirmError, FirmId};
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .merge(dashboard::routes())
+        .merge(drafts::routes())
         .merge(login::routes())
         .merge(me::routes())
         .route("/api/{*rest}", any(not_found))
+}
+
+/// Every endpoint about one of a Firm's records (A2).
+pub(super) fn scoped_endpoints() -> Vec<(super::ScopedRoute, axum::routing::MethodRouter<AppState>)> {
+    drafts::draft_endpoints()
 }
 
 async fn not_found() -> ApiError {

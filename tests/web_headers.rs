@@ -16,7 +16,7 @@ async fn every_page_carries_the_security_headers(pool: PgPool) {
 
     for page in [
         app.request(Method::GET, "/login", None, None).await,
-        app.get("/drafts", &cookie).await,
+        app.api(Method::GET, "/api/drafts", Some(&cookie), None).await,
     ] {
         let csp = page.headers["content-security-policy"].to_str().unwrap();
         for directive in [
