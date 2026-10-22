@@ -15,7 +15,7 @@ Each gate needs the owner's explicit "yes"; an approval for one phase never carr
 | 7. Rust architecture (engine vs product split) | done (`docs/architecture.md`) |
 | 8. Project rules, glossary & ADRs | done (`GLOSSARY.md`, `docs/adr/`, rules below) |
 | 9. Implementation readiness gate | done (2026-10-21) |
-| 10+. Build engine + P1 (Rust backend; server-rendered pages first, React later) | **in progress**: M1–M5 done; M6 built, deployment waits for the domain |
+| 10+. Build engine + P1 (Rust backend and API; React for the bookkeeper's pages) | **in progress**: M1–M5 done; M6 built, deployment waits for the domain; M7 (React app) and M8 (showcase) next |
 
 **No application code exists or gets written until the Phase 9 gate passes.** Research, docs and throwaway prototypes that answer a specific question are in scope; prototypes live in `prototypes/<question>/` and are deleted once their answer is recorded.
 
@@ -31,6 +31,7 @@ Record every approved decision, dated, in `docs/decisions.md`, and update the su
 - **P1 first version:** scope, channels, files, AI and web stack are decided round by round in `docs/product/p1-spec.md`. That file is the single source for spec decisions.
 - **Engine:** our own design, borrowing Harvey's ideas but copying none of its code. Built inside P1, with engine and product modules kept separate.
 - **Build first:** build the whole product, core loop first; the owner chooses when to demo.
+- **Showcase before pilots (2026-10-22):** Kompleto is finished before any bookkeeper sees it: the bookkeeper's pages become a React app (M7), then a demo Firm, ClamAV scanning, help and privacy pages, screenshots and a walkthrough video (M8). Large later features wait for pilot feedback.
 - **Go-to-market:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.
 - **Budget:** ₱0 until pilots; the first spend is the domain, just before pilots. Pilots run on free hosting (Oracle Always Free, or the owner's Mac behind Cloudflare Tunnel) and Resend Free; paid hosting starts with the first payment. No customer data goes to free LLM tiers that train on inputs, and the app never runs on a Claude subscription (API key only).
 - **Owner constraints:** no network, no interviews or sales calls, no paid ads. Written, asynchronous contact is fine.
@@ -46,6 +47,12 @@ Research claims carry a source (URL, publisher, date, accessed date), an evidenc
 - Agent safety lives in code, not prompts. Approval gates, tool permissions, idempotent external sends and bounded loops are enforced by the application. Model output and inbound content are untrusted data.
 - Report test results only from commands actually run.
 - Use the project's words from `GLOSSARY.md` in code, docs and messages (Firm, Client, Contact, Payor, Owed document, Cut-off…).
+
+## React (from M7)
+
+- Read the `vercel-react-best-practices`, `vercel-composition-patterns` and `shadcn` skills (`.claude/skills/`) before writing or reviewing React, and follow `docs/frontend.md` (principles, conventions, folder layout). Where they disagree, `docs/frontend.md` wins.
+- The React app only shows data and asks the Rust API to act. Every rule that protects an acceptance criterion stays in Rust (`docs/adr/0005-react-app-served-by-the-rust-binary.md`).
+- Third-party skills are read in full before they're added, recorded in `skills-lock.json` and `docs/frontend.md` with source, commit and licence, and may not run unpinned commands.
 
 ## Kompleto code rules
 
