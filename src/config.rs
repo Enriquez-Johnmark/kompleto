@@ -10,6 +10,7 @@ use secrecy::SecretString;
 use crate::engine::files::MasterKey;
 use crate::engine::llm::AnthropicClient;
 use crate::engine::mail::{ConfiguredMailer, MailpitMailer, ResendMailer};
+use crate::engine::outbox::SendBudget;
 
 /// Configuration errors.
 #[derive(Debug, thiserror::Error)]
@@ -167,6 +168,15 @@ impl Config {
             name: "FILE_MASTER_KEY",
             reason: err.to_string(),
         })
+    }
+
+    /// The daily send budget for the configured provider: Resend Free's
+    /// cap, or none for Mailpit, which delivers nowhere.
+    pub fn send_budget(&self) -> Option<SendBudget> {
+        match self.mail {
+            MailConfig::Mailpit { .. } => None,
+            MailConfig::Resend { .. } => Some(SendBudget::RESEND_FREE),
+        }
     }
 
     /// Builds the configured mailer.

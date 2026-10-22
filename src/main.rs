@@ -108,9 +108,11 @@ async fn run() -> anyhow::Result<()> {
                 &config.public_base_url,
                 links,
             ));
-            let report = Sender::new(pool, config.mailer()?, clock, checks)
-                .drain_once(DRAIN_BATCH)
-                .await?;
+            let mut sender = Sender::new(pool, config.mailer()?, clock, checks);
+            if let Some(budget) = config.send_budget() {
+                sender = sender.with_budget(budget);
+            }
+            let report = sender.drain_once(DRAIN_BATCH).await?;
             tracing::info!(?report, "outbox drained");
             Ok(())
         }
@@ -203,7 +205,10 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         &config.public_base_url,
         links,
     ));
-    let sender = Sender::new(pool, config.mailer()?, clock, checks);
+    let mut sender = Sender::new(pool, config.mailer()?, clock, checks);
+    if let Some(budget) = config.send_budget() {
+        sender = sender.with_budget(budget);
+    }
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(DRAIN_EVERY);
         loop {
