@@ -10,6 +10,9 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+        // Kompleto: something needs attention but nothing failed.
+        warning:
+          "border-warning/40 bg-warning/10 text-foreground *:data-[slot=alert-description]:text-foreground/80 *:[svg]:text-warning",
       },
     },
     defaultVariants: {
