@@ -1,0 +1,12 @@
+# Cloudflare Tunnel: publishes Kompleto at https://app.getkompleto.com with
+# no open ports on the server or the Mac. Kompleto itself listens only on
+# 127.0.0.1:3000 (BIND_ADDR). Copy to ~/.cloudflared/config.yml (Mac) or
+# /etc/cloudflared/config.yml (server) after `cloudflared tunnel create
+# kompleto`; see docs/deploy.md.
+tunnel: kompleto
+credentials-file: /etc/cloudflared/kompleto.json   # ~/.cloudflared/<id>.json on the Mac
+
+ingress:
+  - hostname: app.getkompleto.com
+    service: http://127.0.0.1:3000
+  - service: http_status:404

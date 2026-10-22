@@ -1,0 +1,14 @@
+# Runs deploy/backup.sh once; kompleto-backup.timer starts it nightly.
+[Unit]
+Description=Kompleto encrypted backup to Google Drive
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=kompleto
+Group=kompleto
+EnvironmentFile=/etc/kompleto/kompleto.env
+EnvironmentFile=/etc/kompleto/backup.env
+ExecStart=/opt/kompleto/backup.sh
+PrivateTmp=true
+UMask=0077

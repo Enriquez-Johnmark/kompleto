@@ -1,0 +1,36 @@
+# systemd unit for the Oracle Cloud server (Ubuntu). Install:
+#   sudo cp deploy/linux/kompleto.service /etc/systemd/system/
+#   sudo systemctl enable --now kompleto
+# It runs as the unprivileged `kompleto` user and can write only to its own
+# folder; settings come from /etc/kompleto/kompleto.env (mode 600).
+[Unit]
+Description=Kompleto
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+User=kompleto
+Group=kompleto
+WorkingDirectory=/var/lib/kompleto
+EnvironmentFile=/etc/kompleto/kompleto.env
+ExecStart=/opt/kompleto/kompleto serve
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/var/lib/kompleto
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

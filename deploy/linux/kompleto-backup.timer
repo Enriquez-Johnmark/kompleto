@@ -1,0 +1,10 @@
+# Nightly at 02:17 Manila time (18:17 UTC); a missed run happens at boot.
+[Unit]
+Description=Nightly Kompleto backup
+
+[Timer]
+OnCalendar=*-*-* 18:17:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
