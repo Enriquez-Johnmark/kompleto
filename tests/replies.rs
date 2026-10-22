@@ -6,7 +6,7 @@ mod common;
 
 use std::sync::Arc;
 
-use common::clamd::{Behaviour, FakeClamd};
+use common::clamd::{Behaviour, FakeClamd, nobody_listening};
 use common::{clock, firm, nena};
 use kompleto::engine::clock::FixedClock;
 use kompleto::engine::inbound::parse;
@@ -15,7 +15,7 @@ use kompleto::kompleto::calendar::BirForm;
 use kompleto::kompleto::clients::{Clients, NewClient};
 use kompleto::kompleto::firms::FirmId;
 use kompleto::kompleto::reminders::Scheduler;
-use kompleto::kompleto::replies::{Received, Replies};
+use kompleto::kompleto::replies::{Received, Replies, ReplyError};
 use kompleto::kompleto::uploads::{Label, Uploads};
 use sqlx::PgPool;
 use time::Duration;
@@ -301,6 +301,29 @@ async fn g1_an_attachment_with_a_virus_is_not_kept(pool: PgPool) {
         1,
         "only the photo is scanned; the program was refused before"
     );
+}
+
+#[sqlx::test]
+async fn g1_a_reply_with_attachments_waits_while_they_cant_be_scanned(pool: PgPool) {
+    let (santos, clock, reply_to) = reminded(&pool).await;
+    let email = parse(&common::inbound("with_attachments", &reply_to)).unwrap();
+    let down = replies_scanned_by(&pool, clock.clone(), Some(Clamd::new(nobody_listening().await)));
+    let clamd = FakeClamd::start(Behaviour::Scans).await;
+    let up = replies_scanned_by(&pool, clock, Some(Clamd::new(clamd.addr())));
+
+    // Refused whole, so the provider delivers it again later.
+    let refused = down.receive(&email).await;
+    let kept: i64 = sqlx::query_scalar("select count(*) from replies")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let Received::Human(id) = up.receive(&email).await.unwrap() else {
+        panic!("not a human reply");
+    };
+
+    assert!(matches!(refused, Err(ReplyError::NotScanned)), "{refused:?}");
+    assert_eq!(kept, 0);
+    assert_eq!(up.get(santos, id).await.unwrap().attachments, 1);
 }
 
 #[sqlx::test]

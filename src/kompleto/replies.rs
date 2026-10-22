@@ -52,6 +52,10 @@ pub enum ReplyError {
     /// The notice's Firm or Client couldn't be read.
     #[error("reply notice: {0}")]
     Notice(String),
+    /// The attachments can't be scanned for viruses now; the provider
+    /// delivers the email again later.
+    #[error("attachments can't be scanned for viruses now")]
+    NotScanned,
 }
 
 /// What became of an inbound email.
@@ -155,6 +159,14 @@ impl Replies {
             tracing::info!(sender_domain = domain, "inbound email matched no client; nothing kept");
             return Ok(Received::Unmatched);
         };
+        // Attachments are taken in only once, so none is dropped unscanned.
+        if signed
+            && !email.attachments.is_empty()
+            && let Some(uploads) = &self.uploads
+            && uploads.scanner_answers().await.is_err()
+        {
+            return Err(ReplyError::NotScanned);
+        }
         let new = ReplyId::new();
         let mut tx = self.pool.begin().await?;
         let inserted = sqlx::query_scalar!(
