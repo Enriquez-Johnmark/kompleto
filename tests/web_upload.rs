@@ -79,6 +79,11 @@ async fn f1_the_upload_page_opens_without_login_and_lists_what_is_owed(pool: PgP
         assert!(page.body.contains(&item.replace('\'', "&#39;")), "missing {item:?}");
     }
     assert!(page.body.contains("Wala pa"));
+    assert!(
+        page.body
+            .contains(r#"<a href="/privacy">Paano namin iniingatan ang files ninyo</a>"#),
+        "the privacy notice, in the Client's language"
+    );
     assert!(page.body.contains(r#"name="viewport""#), "made for phones");
     assert_eq!(page.headers["x-robots-tag"], "noindex, nofollow");
     // Not no-referrer: browsers would then send `Origin: null` with the

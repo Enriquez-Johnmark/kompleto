@@ -66,6 +66,7 @@ struct Words {
     button: &'static str,
     sending: &'static str,
     sent: &'static str,
+    privacy: &'static str,
 }
 
 const TAGLISH: Words = Words {
@@ -81,6 +82,7 @@ const TAGLISH: Words = Words {
     button: "I-upload",
     sending: "Ina-upload…",
     sent: "Salamat po! Natanggap na namin ang file ninyo.",
+    privacy: "Paano namin iniingatan ang files ninyo",
 };
 
 const ENGLISH: Words = Words {
@@ -96,6 +98,7 @@ const ENGLISH: Words = Words {
     button: "Upload",
     sending: "Uploading…",
     sent: "Thank you! We've received your file.",
+    privacy: "How your files are kept safe",
 };
 
 fn words(language: Language) -> &'static Words {

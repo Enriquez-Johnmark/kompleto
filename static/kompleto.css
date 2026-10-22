@@ -61,3 +61,4 @@ button:disabled { opacity: .6; }
 .error { color: var(--error); background: var(--error-bg); }
 .sent { color: var(--done); background: var(--done-bg); }
 .footer { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 1.5rem; }
+.footer a { color: inherit; }
