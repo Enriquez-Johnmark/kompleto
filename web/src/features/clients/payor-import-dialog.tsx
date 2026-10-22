@@ -39,6 +39,9 @@ export function PayorImportDialog({ clientId, payors }: PayorImportDialogProps) 
   const listed = new Set(payors.map((payor) => payor.name.toLowerCase()))
   const names = read.data?.names ?? []
   const fresh = names.filter((name) => !listed.has(name.toLowerCase()))
+  // Only names on screen and not yet listed: a list thrown away, or names
+  // added a moment ago, are never sent.
+  const selected = fresh.filter((name) => ticked.includes(name))
   const error = read.error ?? add.error
 
   function handleOpenChange(open: boolean) {
@@ -66,7 +69,7 @@ export function PayorImportDialog({ clientId, payors }: PayorImportDialogProps) 
 
   function handleAdd() {
     add.mutate(
-      { names: ticked },
+      { names: selected },
       {
         onSuccess: ({ added, refused }) => {
           toast.add({ title: `${added} Payor${added === 1 ? "" : "s"} added`, type: "success" })
@@ -152,8 +155,8 @@ export function PayorImportDialog({ clientId, payors }: PayorImportDialogProps) 
         ) : null}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button onClick={handleAdd} disabled={add.isPending || ticked.length === 0}>
-            Add {ticked.length} of {fresh.length}
+          <Button onClick={handleAdd} disabled={add.isPending || selected.length === 0}>
+            Add {selected.length} of {fresh.length}
           </Button>
         </DialogFooter>
       </DialogContent>
