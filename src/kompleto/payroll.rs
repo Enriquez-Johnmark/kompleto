@@ -207,11 +207,11 @@ impl PayrollKey {
         Some(Self::Receipts(year.parse().ok()?, month))
     }
 
-    /// How people see it: "the 15 Oct 2026 payroll" style, without "the".
+    /// How people see it, e.g. "payroll on Thu 15 Oct 2026".
     pub fn label(self) -> String {
         match self {
-            Self::Inputs(payday) => format!("payroll of {}", show_date(payday)),
-            Self::Receipts(year, month) => format!("{month} {year} SSS, PhilHealth and Pag-IBIG"),
+            Self::Inputs(payday) => format!("payroll on {}", show_date(payday)),
+            Self::Receipts(year, month) => format!("{month} {year} SSS, PhilHealth and Pag-IBIG contributions"),
         }
     }
 
@@ -337,11 +337,11 @@ mod tests {
         assert_eq!(PayrollKey::parse("remit-2026-13"), None);
         assert_eq!(
             PayrollKey::Inputs(date!(2026 - 10 - 15)).label(),
-            "payroll of Thu 15 Oct 2026"
+            "payroll on Thu 15 Oct 2026"
         );
         assert_eq!(
             PayrollKey::Receipts(2026, Month::September).label(),
-            "September 2026 SSS, PhilHealth and Pag-IBIG"
+            "September 2026 SSS, PhilHealth and Pag-IBIG contributions"
         );
     }
 }

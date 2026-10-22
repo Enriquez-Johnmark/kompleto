@@ -48,6 +48,17 @@ impl Tone {
     }
 }
 
+/// What a Period's documents are needed for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Purpose {
+    /// The Client's BIR filings for the Period.
+    BirFilings,
+    /// A payday's payroll (P1).
+    Payroll,
+    /// Proof of a month's SSS, PhilHealth and Pag-IBIG payments (P2).
+    Contributions,
+}
+
 /// Everything a Draft is written from. Its fields are exactly those ADR 0003
 /// lets the model see (plus the firm name, which only the template uses).
 #[derive(Debug, Clone)]
@@ -60,6 +71,8 @@ pub struct DraftBrief {
     pub owed: Vec<String>,
     /// What the documents are for, e.g. "Q3 2026".
     pub period: String,
+    /// Why they're needed, for the template's wording.
+    pub purpose: Purpose,
     /// When they're wanted.
     pub cut_off: Date,
     /// The Client's reminder language.
@@ -300,22 +313,40 @@ pub fn template(firm_name: &str, brief: &DraftBrief) -> DraftText {
         upload_line(brief),
     );
     let reminder = brief.tone != Tone::Friendly;
-    let (subject, body) = match brief.language {
-        Language::Taglish => (
+    let (subject, request) = match (brief.language, brief.purpose) {
+        (Language::Taglish, Purpose::BirFilings) => (
             format!("Mga dokumento para sa {label}, bago {cut_off}"),
-            format!(
-                "Hi {name},\n\n{}Para sa {label} BIR filings ninyo, paki-send po ang mga ito bago {cut_off}:\n\n\
-                 {list}\n{upload}\n\nSalamat po!\n{firm_name}\n{FOOTER}",
-                if reminder { "Paalala lang po. " } else { "" }
-            ),
+            format!("Para sa {label} BIR filings ninyo, paki-send po ang mga ito bago {cut_off}:"),
         ),
-        Language::English => (
+        (Language::Taglish, Purpose::Payroll) => (
+            format!("Mga dokumento para sa {label}, bago {cut_off}"),
+            format!("Para sa {label}, paki-send po ang mga ito bago {cut_off}:"),
+        ),
+        (Language::Taglish, Purpose::Contributions) => (
+            format!("Mga resibo para sa {label}, bago {cut_off}"),
+            format!("Para sa {label} ninyo, paki-send po ang mga resibo bago {cut_off}:"),
+        ),
+        (Language::English, Purpose::BirFilings) => (
             format!("Documents for {label}, by {cut_off}"),
-            format!(
-                "Hi {name},\n\n{}For your {label} BIR filings, please send us these by {cut_off}:\n\n\
-                 {list}\n{upload}\n\nThank you!\n{firm_name}\n{FOOTER}",
-                if reminder { "A quick reminder. " } else { "" }
-            ),
+            format!("For your {label} BIR filings, please send us these by {cut_off}:"),
+        ),
+        (Language::English, Purpose::Payroll) => (
+            format!("Documents for the {label}, by {cut_off}"),
+            format!("For the {label}, please send us these by {cut_off}:"),
+        ),
+        (Language::English, Purpose::Contributions) => (
+            format!("Receipts for your {label}, by {cut_off}"),
+            format!("For your {label}, please send us the payment receipts by {cut_off}:"),
+        ),
+    };
+    let body = match brief.language {
+        Language::Taglish => format!(
+            "Hi {name},\n\n{}{request}\n\n{list}\n{upload}\n\nSalamat po!\n{firm_name}\n{FOOTER}",
+            if reminder { "Paalala lang po. " } else { "" }
+        ),
+        Language::English => format!(
+            "Hi {name},\n\n{}{request}\n\n{list}\n{upload}\n\nThank you!\n{firm_name}\n{FOOTER}",
+            if reminder { "A quick reminder. " } else { "" }
         ),
     };
     DraftText {

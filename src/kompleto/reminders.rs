@@ -27,7 +27,7 @@ use sqlx::PgPool;
 use super::calendar::{Calendar, CalendarError};
 use super::checklist::owed_documents;
 use super::clients::{Client, ClientError, ClientId, Clients};
-use super::drafting::{DraftBrief, Drafter, Tone};
+use super::drafting::{DraftBrief, Drafter, Purpose, Tone};
 use super::drafts::Drafts;
 use super::firms::FirmId;
 use super::periods::{ClientCalendar, CollectionPeriod};
@@ -203,6 +203,7 @@ impl Scheduler {
             contact_first_name: client.details.contact_first_name.clone(),
             owed,
             period: period.label.to_string(),
+            purpose: Purpose::BirFilings,
             cut_off: period.cut_off,
             language: client.details.language,
             tone: Tone::for_reminder(match draft.slot {

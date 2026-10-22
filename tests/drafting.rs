@@ -10,7 +10,7 @@ use common::clock;
 use kompleto::engine::ids::TenantId;
 use kompleto::engine::llm::AnthropicClient;
 use kompleto::kompleto::clients::Language;
-use kompleto::kompleto::drafting::{DraftBrief, DraftSource, Drafter, Tone};
+use kompleto::kompleto::drafting::{DraftBrief, DraftSource, Drafter, Purpose, Tone, template};
 use secrecy::SecretString;
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -26,6 +26,7 @@ fn brief() -> DraftBrief {
             "2307s received from customers".to_owned(),
         ],
         period: "Q3 2026".to_owned(),
+        purpose: Purpose::BirFilings,
         cut_off: date!(2026 - 10 - 21),
         language: Language::Taglish,
         tone: Tone::Firmer,
@@ -201,4 +202,47 @@ async fn j1_each_model_call_is_recorded_with_model_tokens_cost_and_request_id(po
     assert_eq!((model.as_str(), input, output), ("claude-haiku-5-5", 300, 80));
     assert_eq!(cost, Some(300 * 100 + 80 * 500));
     assert_eq!((request_id.as_deref(), outcome.as_str()), (Some("req_42"), "ok"));
+}
+
+#[test]
+fn p1_p2_payroll_templates_say_what_the_documents_are_for() {
+    let payroll = DraftBrief {
+        owed: vec!["Timesheets or DTRs".to_owned()],
+        period: "payroll on Thu 15 Oct 2026".to_owned(),
+        purpose: Purpose::Payroll,
+        language: Language::English,
+        ..brief()
+    };
+    let receipts = DraftBrief {
+        period: "September 2026 SSS, PhilHealth and Pag-IBIG contributions".to_owned(),
+        purpose: Purpose::Contributions,
+        language: Language::Taglish,
+        ..brief()
+    };
+
+    let payroll = template("Santos Bookkeeping", &payroll);
+    let receipts = template("Santos Bookkeeping", &receipts);
+
+    assert!(
+        payroll
+            .subject
+            .starts_with("Documents for the payroll on Thu 15 Oct 2026"),
+        "{}",
+        payroll.subject
+    );
+    assert!(
+        payroll
+            .body
+            .contains("For the payroll on Thu 15 Oct 2026, please send us these"),
+        "{}",
+        payroll.body
+    );
+    assert!(!payroll.body.contains("BIR"), "{}", payroll.body);
+    assert!(
+        receipts.body.contains(
+            "Para sa September 2026 SSS, PhilHealth and Pag-IBIG contributions ninyo, paki-send po ang mga resibo"
+        ),
+        "{}",
+        receipts.body
+    );
 }
