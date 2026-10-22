@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update clients set pay_cycle = $3, philhealth_due_day = $4, pagibig_due_day = $5, updated_at = $6\n             where firm_id = $1 and id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Int2",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b8ed427ddd4848aa05e39348a22fdb2543815e316fbf046066d2af02999707bc"
+}

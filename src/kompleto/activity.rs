@@ -130,6 +130,7 @@ pub fn describe(action: &str) -> &str {
         "client.created" => "Added a client",
         "client.updated" => "Changed a client's details",
         "client.schedule_changed" => "Changed a client's reminder schedule",
+        "client.payroll_changed" => "Changed a client's payroll chasing",
         "client.due_date_set" => "Changed a client's due date",
         "checklist.item_removed" => "Removed a checklist item",
         "checklist.item_restored" => "Restored a checklist item",

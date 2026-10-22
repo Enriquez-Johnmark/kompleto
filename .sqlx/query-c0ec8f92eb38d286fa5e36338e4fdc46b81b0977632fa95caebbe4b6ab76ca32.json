@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select pay_cycle, philhealth_due_day, pagibig_due_day from clients where firm_id = $1 and id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pay_cycle",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "pay_cycle"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "philhealth_due_day",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "philhealth_due_day"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "pagibig_due_day",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "pagibig_due_day"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c0ec8f92eb38d286fa5e36338e4fdc46b81b0977632fa95caebbe4b6ab76ca32"
+}
