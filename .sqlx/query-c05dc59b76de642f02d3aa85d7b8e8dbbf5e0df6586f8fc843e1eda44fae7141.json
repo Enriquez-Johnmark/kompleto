@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select firm_id from sessions where session_hash = $1 and expires_at > $2",
+  "query": "select s.firm_id from sessions s join firms f on f.id = s.firm_id and f.closed_at is null\n             where s.session_hash = $1 and s.expires_at > $2",
   "describe": {
     "columns": [
       {
@@ -25,5 +25,5 @@
       false
     ]
   },
-  "hash": "80d01ff3be9e9a46e22737198883b7bc775e7429435dddb0c23a9642ee9ebf37"
+  "hash": "c05dc59b76de642f02d3aa85d7b8e8dbbf5e0df6586f8fc843e1eda44fae7141"
 }

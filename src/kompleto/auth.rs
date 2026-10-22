@@ -142,9 +142,11 @@ impl Auth {
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
         let firm = sqlx::query_scalar!(
-            "update login_tokens set used_at = $2
-             where token_hash = $1 and used_at is null and expires_at > $2
-             returning firm_id",
+            "update login_tokens t set used_at = $2
+             from firms f
+             where t.token_hash = $1 and t.used_at is null and t.expires_at > $2
+               and f.id = t.firm_id and f.closed_at is null
+             returning t.firm_id",
             &hash(token)[..],
             now,
         )
@@ -180,7 +182,8 @@ impl Auth {
     /// The Firm a live session belongs to.
     pub async fn firm_for_session(&self, session: &str) -> Result<Option<FirmId>, AuthError> {
         let firm = sqlx::query_scalar!(
-            "select firm_id from sessions where session_hash = $1 and expires_at > $2",
+            "select s.firm_id from sessions s join firms f on f.id = s.firm_id and f.closed_at is null
+             where s.session_hash = $1 and s.expires_at > $2",
             &hash(session)[..],
             self.clock.now(),
         )
