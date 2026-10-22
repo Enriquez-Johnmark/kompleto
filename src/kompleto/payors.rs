@@ -8,7 +8,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::activity::record_by_firm;
+use super::activity::record_as;
 use super::checklist::{ANOTHER_PAYOR_2307, payor_2307};
 use super::clients::{ClientError, ClientId};
 use super::firms::FirmId;
@@ -38,12 +38,28 @@ pub struct Payor {
 pub struct Payors {
     pool: PgPool,
     clock: Arc<dyn Clock>,
+    /// Who the activity log names; `None` is the Firm's login address.
+    actor: Option<String>,
 }
 
 impl Payors {
     /// Payor lists in `pool`.
     pub fn new(pool: PgPool, clock: Arc<dyn Clock>) -> Self {
-        Self { pool, clock }
+        Self {
+            pool,
+            clock,
+            actor: None,
+        }
+    }
+
+    /// The same repository, naming `actor` (a member's address) in the
+    /// activity log (K3).
+    #[must_use]
+    pub fn by(&self, actor: &str) -> Self {
+        Self {
+            actor: Some(actor.to_owned()),
+            ..self.clone()
+        }
     }
 
     /// A Client's Payors, by name.
@@ -99,9 +115,10 @@ impl Payors {
         .await?;
         if added.rows_affected() == 1 {
             let subject = ("client", client.as_uuid());
-            record_by_firm(
+            record_as(
                 &mut tx,
                 firm,
+                self.actor.as_deref(),
                 self.clock.now(),
                 "payor.added",
                 subject,
@@ -145,9 +162,10 @@ impl Payors {
             return Err(ClientError::NotFound);
         };
         let subject = ("client", client.as_uuid());
-        record_by_firm(
+        record_as(
             &mut tx,
             firm,
+            self.actor.as_deref(),
             self.clock.now(),
             "payor.removed",
             subject,

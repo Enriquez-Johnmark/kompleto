@@ -8,7 +8,7 @@ use axum::{Json, Router};
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::{ApiError, ApiFirm, ApiJson, ApiPath};
+use super::{ApiError, ApiFirm, ApiJson, ApiMember, ApiPath};
 use crate::kompleto::calendar::BirForm;
 use crate::kompleto::clients::{Client, ClientError, ClientId, ClientInput, Language, NewClient};
 use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
@@ -102,25 +102,36 @@ fn duplicate(err: ClientError) -> ApiError {
 
 async fn create(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiJson(input): ApiJson<ClientInput>,
 ) -> Result<(StatusCode, Json<Created>), ApiError> {
     let client = parse(&input)?;
-    let id = state.clients.create(firm, &client).await.map_err(duplicate)?;
+    let id = state
+        .clients
+        .by(&member.email)
+        .create(member.firm, &client)
+        .await
+        .map_err(duplicate)?;
     Ok((StatusCode::CREATED, Json(Created { id: id.as_uuid() })))
 }
 
 async fn update(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(input): ApiJson<ClientInput>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     let id = ClientId::from(id);
     // Another Firm's Client is "not found" before any field is checked.
     state.clients.get(firm, id).await?;
     let client = parse(&input)?;
-    state.clients.update(firm, id, &client).await.map_err(duplicate)?;
+    state
+        .clients
+        .by(&member.email)
+        .update(firm, id, &client)
+        .await
+        .map_err(duplicate)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

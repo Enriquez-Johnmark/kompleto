@@ -11,7 +11,7 @@ use uuid::Uuid;
 use super::{Language, NewClient};
 use crate::engine::clock::Clock;
 use crate::engine::ids::id_type;
-use crate::kompleto::activity::record_by_firm;
+use crate::kompleto::activity::record_as;
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::{ChecklistEdits, DEFAULT_ITEMS, ExtraItem, Recurs};
 use crate::kompleto::firms::FirmId;
@@ -75,12 +75,28 @@ pub enum ClientError {
 pub struct Clients {
     pool: PgPool,
     clock: Arc<dyn Clock>,
+    /// Who the activity log names; `None` is the Firm's login address.
+    actor: Option<String>,
 }
 
 impl Clients {
     /// A repository over `pool`.
     pub fn new(pool: PgPool, clock: Arc<dyn Clock>) -> Self {
-        Self { pool, clock }
+        Self {
+            pool,
+            clock,
+            actor: None,
+        }
+    }
+
+    /// The same repository, naming `actor` (a member's address) in the
+    /// activity log (K3).
+    #[must_use]
+    pub fn by(&self, actor: &str) -> Self {
+        Self {
+            actor: Some(actor.to_owned()),
+            ..self.clone()
+        }
     }
 
     /// Adds one Client.
@@ -157,7 +173,16 @@ impl Clients {
             return Err(ClientError::NotFound);
         }
         let subject = ("client", id.as_uuid());
-        record_by_firm(&mut tx, firm, self.clock.now(), "client.updated", subject, json!({})).await?;
+        record_as(
+            &mut tx,
+            firm,
+            self.actor.as_deref(),
+            self.clock.now(),
+            "client.updated",
+            subject,
+            json!({}),
+        )
+        .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -189,9 +214,10 @@ impl Clients {
         }
         let details = json!({ "paused": settings.paused });
         let subject = ("client", id.as_uuid());
-        record_by_firm(
+        record_as(
             &mut tx,
             firm,
+            self.actor.as_deref(),
             self.clock.now(),
             "client.schedule_changed",
             subject,
@@ -241,7 +267,16 @@ impl Clients {
         };
         let details = json!({ "form": form.code(), "period": period.key(), "due": due.map(|d| d.to_string()) });
         let subject = ("client", id.as_uuid());
-        record_by_firm(&mut tx, firm, self.clock.now(), "client.due_date_set", subject, details).await?;
+        record_as(
+            &mut tx,
+            firm,
+            self.actor.as_deref(),
+            self.clock.now(),
+            "client.due_date_set",
+            subject,
+            details,
+        )
+        .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -285,9 +320,10 @@ impl Clients {
         .await?;
         let subject = ("client", id.as_uuid());
         let now = self.clock.now();
-        record_by_firm(
+        record_as(
             &mut tx,
             firm,
+            self.actor.as_deref(),
             now,
             "checklist.item_removed",
             subject,
@@ -312,9 +348,10 @@ impl Clients {
         .await?;
         let subject = ("client", id.as_uuid());
         let now = self.clock.now();
-        record_by_firm(
+        record_as(
             &mut tx,
             firm,
+            self.actor.as_deref(),
             now,
             "checklist.item_restored",
             subject,
@@ -353,9 +390,10 @@ impl Clients {
         .await?;
         let subject = ("client", id.as_uuid());
         let details = json!({ "item": label });
-        record_by_firm(
+        record_as(
             &mut tx,
             firm,
+            self.actor.as_deref(),
             self.clock.now(),
             "checklist.item_added",
             subject,
@@ -382,9 +420,10 @@ impl Clients {
         };
         let subject = ("client", id.as_uuid());
         let details = json!({ "item": label });
-        record_by_firm(
+        record_as(
             &mut tx,
             firm,
+            self.actor.as_deref(),
             self.clock.now(),
             "checklist.item_deleted",
             subject,
@@ -480,7 +519,16 @@ impl Clients {
         .execute(&mut *tx)
         .await
         .map_err(|err| duplicate_name(err, client))?;
-        record_by_firm(tx, firm, now, "client.created", ("client", id.as_uuid()), json!({})).await?;
+        record_as(
+            tx,
+            firm,
+            self.actor.as_deref(),
+            now,
+            "client.created",
+            ("client", id.as_uuid()),
+            json!({}),
+        )
+        .await?;
         Ok(id)
     }
 }

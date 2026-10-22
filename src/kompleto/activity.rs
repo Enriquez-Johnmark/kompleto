@@ -71,6 +71,23 @@ pub(crate) async fn record_by(
     audit::record(&mut *tx, &event).await
 }
 
+/// Records a change to `firm` by `actor`, a member's address, or without
+/// one by the Firm's login address, in the caller's transaction.
+pub(crate) async fn record_as(
+    tx: &mut PgConnection,
+    firm: FirmId,
+    actor: Option<&str>,
+    at: OffsetDateTime,
+    action: &str,
+    subject: (&str, Uuid),
+    details: serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    match actor {
+        Some(actor) => record_by(tx, firm, actor, at, action, subject, details).await,
+        None => record_by_firm(tx, firm, at, action, subject, details).await,
+    }
+}
+
 /// Records a change the Firm made, in the caller's transaction, naming the
 /// Firm's login address as the actor.
 pub(crate) async fn record_by_firm(

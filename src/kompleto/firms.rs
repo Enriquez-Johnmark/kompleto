@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use sqlx::PgPool;
 
-use super::activity::record_by_firm;
+use super::activity::record_as;
 use super::members::MemberId;
 use crate::engine::clock::Clock;
 use crate::engine::ids::TenantId;
@@ -49,12 +49,28 @@ pub enum FirmError {
 pub struct Firms {
     pool: PgPool,
     clock: Arc<dyn Clock>,
+    /// Who the activity log names; `None` is the Firm's login address.
+    actor: Option<String>,
 }
 
 impl Firms {
     /// A repository over `pool`.
     pub fn new(pool: PgPool, clock: Arc<dyn Clock>) -> Self {
-        Self { pool, clock }
+        Self {
+            pool,
+            clock,
+            actor: None,
+        }
+    }
+
+    /// The same repository, naming `actor` (a member's address) in the
+    /// activity log (K3).
+    #[must_use]
+    pub fn by(&self, actor: &str) -> Self {
+        Self {
+            actor: Some(actor.to_owned()),
+            ..self.clone()
+        }
     }
 
     /// Creates a Firm.
@@ -140,7 +156,16 @@ impl Firms {
         }
         let details = serde_json::json!({ "days": days });
         let subject = ("firm", id.as_uuid());
-        record_by_firm(&mut tx, id, self.clock.now(), "firm.cut_off_changed", subject, details).await?;
+        record_as(
+            &mut tx,
+            id,
+            self.actor.as_deref(),
+            self.clock.now(),
+            "firm.cut_off_changed",
+            subject,
+            details,
+        )
+        .await?;
         tx.commit().await?;
         Ok(())
     }

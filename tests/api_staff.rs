@@ -175,3 +175,46 @@ async fn k2_only_the_firms_owner_manages_its_staff(pool: PgPool) {
     let after = app.api(Method::GET, "/api/me", Some(&joy), None).await;
     assert_eq!(after.status, StatusCode::UNAUTHORIZED, "removed: logged out at once");
 }
+
+#[sqlx::test]
+async fn k3_changes_to_clients_payors_and_settings_name_the_person(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (firm, _) = app.logged_in_firm("Santos Bookkeeping").await;
+    let joy = app.logged_in_staff(firm, "joy@santos.test").await;
+    let nena = json!({
+        "business_name": "Nena's Store", "contact_first_name": "Nena", "email": "nena@example.test",
+        "language": "taglish", "forms": ["2551Q", "1701Q"],
+    });
+
+    let added = app.api(Method::POST, "/api/clients", Some(&joy), Some(nena)).await;
+    let id = added.json()["id"].as_str().unwrap().to_owned();
+    let payor = app
+        .api(
+            Method::POST,
+            &format!("/api/clients/{id}/payors"),
+            Some(&joy),
+            Some(json!({ "name": "SM Supermalls" })),
+        )
+        .await;
+    let settings = app
+        .api(
+            Method::PUT,
+            "/api/settings",
+            Some(&joy),
+            Some(json!({ "cut_off_offset_days": 7 })),
+        )
+        .await;
+
+    assert_eq!(added.status, StatusCode::CREATED, "{}", added.body);
+    assert_eq!(payor.status, StatusCode::CREATED, "{}", payor.body);
+    assert!(settings.status.is_success(), "{}", settings.body);
+    let actors: Vec<(String, String)> = sqlx::query_as(
+        "select action, actor from audit_events
+         where action in ('client.created', 'payor.added', 'firm.cut_off_changed') order by at, action",
+    )
+    .fetch_all(&app.pool)
+    .await
+    .unwrap();
+    assert_eq!(actors.len(), 3, "{actors:?}");
+    assert!(actors.iter().all(|(_, actor)| actor == "joy@santos.test"), "{actors:?}");
+}

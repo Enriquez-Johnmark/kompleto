@@ -9,7 +9,7 @@ use serde::Deserialize;
 use time::Date;
 use uuid::Uuid;
 
-use super::{ApiError, ApiFirm, ApiJson, ApiPath};
+use super::{ApiError, ApiJson, ApiMember, ApiPath};
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::{ExtraItem, Recurs};
 use crate::kompleto::clients::{ClientError, ClientId, ExtraItemId, ScheduleSettings};
@@ -114,10 +114,11 @@ pub struct ScheduleChange {
 
 async fn set_schedule(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(change): ApiJson<ScheduleChange>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     let id = ClientId::from(id);
     state.clients.get(firm, id).await?;
     if change.cut_off_offset_days.is_some_and(|days| days > 30) {
@@ -129,7 +130,11 @@ async fn set_schedule(
         reminder_days,
         paused: change.paused,
     };
-    state.clients.set_schedule(firm, id, &settings).await?;
+    state
+        .clients
+        .by(&member.email)
+        .set_schedule(firm, id, &settings)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -147,10 +152,11 @@ pub struct DueDateChange {
 
 async fn set_due_date(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(change): ApiJson<DueDateChange>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     let id = ClientId::from(id);
     state.clients.get(firm, id).await?;
     let (form, period) = BirForm::parse(&change.form)
@@ -164,7 +170,11 @@ async fn set_due_date(
                 .map_err(|_| refused(format!("{text:?} isn't a date.")))?,
         ),
     };
-    state.clients.set_due_override(firm, id, form, period, due).await?;
+    state
+        .clients
+        .by(&member.email)
+        .set_due_override(firm, id, form, period, due)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -177,12 +187,14 @@ pub struct ItemKey {
 
 async fn remove_item(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(item): ApiJson<ItemKey>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     state
         .clients
+        .by(&member.email)
         .remove_default_item(firm, ClientId::from(id), &item.key)
         .await
         .map_err(client_refusal)?;
@@ -191,12 +203,14 @@ async fn remove_item(
 
 async fn restore_item(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(item): ApiJson<ItemKey>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     state
         .clients
+        .by(&member.email)
         .restore_default_item(firm, ClientId::from(id), &item.key)
         .await?;
     Ok(StatusCode::NO_CONTENT)
@@ -213,10 +227,11 @@ pub struct NewItem {
 
 async fn add_item(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(item): ApiJson<NewItem>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     let id = ClientId::from(id);
     state.clients.get(firm, id).await?;
     let recurs = Recurs::parse(&item.recurs).ok_or_else(|| refused("Choose when the document is owed."))?;
@@ -226,6 +241,7 @@ async fn add_item(
     };
     state
         .clients
+        .by(&member.email)
         .add_extra_item(firm, id, &item)
         .await
         .map_err(client_refusal)?;
@@ -234,11 +250,13 @@ async fn add_item(
 
 async fn delete_item(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath((id, item)): ApiPath<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     state
         .clients
+        .by(&member.email)
         .delete_extra_item(firm, ClientId::from(id), ExtraItemId::from(item))
         .await?;
     Ok(StatusCode::NO_CONTENT)
@@ -253,12 +271,14 @@ pub struct NewPayor {
 
 async fn add_payor(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(payor): ApiJson<NewPayor>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     state
         .payors
+        .by(&member.email)
         .add(firm, ClientId::from(id), &payor.name)
         .await
         .map_err(client_refusal)?;
@@ -267,11 +287,13 @@ async fn add_payor(
 
 async fn remove_payor(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath((id, payor)): ApiPath<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     state
         .payors
+        .by(&member.email)
         .remove(firm, ClientId::from(id), PayorId::from(payor))
         .await?;
     Ok(StatusCode::NO_CONTENT)

@@ -8,7 +8,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use super::{ApiError, ApiFirm, ApiJson, ApiOwner};
+use super::{ApiError, ApiFirm, ApiJson, ApiMember, ApiOwner};
 use crate::engine::cost_log;
 use crate::kompleto::closing::{self, ClosingError};
 use crate::kompleto::dates::manila_month;
@@ -70,13 +70,17 @@ pub struct SettingsChange {
 
 async fn save(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiJson(change): ApiJson<SettingsChange>,
 ) -> Result<StatusCode, ApiError> {
     if change.cut_off_offset_days > 30 {
         return Err(ApiError::invalid("The cut-off offset is 0 to 30 days."));
     }
-    state.firms.set_cut_off_offset(firm, change.cut_off_offset_days).await?;
+    state
+        .firms
+        .by(&member.email)
+        .set_cut_off_offset(member.firm, change.cut_off_offset_days)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

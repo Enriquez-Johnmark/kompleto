@@ -9,7 +9,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use super::{ApiError, ApiFirm, ApiJson};
+use super::{ApiError, ApiFirm, ApiJson, ApiMember};
 use crate::kompleto::clients::{ClientError, ClientInput, NewClient};
 use crate::kompleto::firms::FirmId;
 use crate::kompleto::import::{self, COLUMNS, ImportError, ImportRow, MAX_BYTES, MAX_ROWS};
@@ -143,9 +143,10 @@ pub struct Imported {
 
 async fn confirm(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiJson(confirmation): ApiJson<ImportConfirmation>,
 ) -> Result<Json<Imported>, ApiError> {
+    let firm = member.firm;
     if confirmation.rows.len() > MAX_ROWS {
         return Err(refused(ImportError::TooManyRows));
     }
@@ -178,6 +179,7 @@ async fn confirm(
     let clients: Vec<NewClient> = checked.valid.into_iter().map(|(_, client)| client).collect();
     let added = state
         .clients
+        .by(&member.email)
         .create_all(firm, &clients)
         .await
         .map_err(|err| match err {
