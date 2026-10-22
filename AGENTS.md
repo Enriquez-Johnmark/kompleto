@@ -32,7 +32,7 @@ Record every approved decision, dated, in `docs/decisions.md`, and update the su
 - **Engine:** our own design, borrowing Harvey's ideas but copying none of its code. Built inside P1, with engine and product modules kept separate.
 - **Build first:** build the whole product, core loop first; the owner chooses when to demo.
 - **Go-to-market:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.
-- **Budget:** ₱0 until pilots; the first spend is the domain, just before pilots. No customer data goes to free LLM tiers that train on inputs, and the app never runs on a Claude subscription (API key only).
+- **Budget:** ₱0 until pilots; the first spend is the domain, just before pilots. Pilots run on free hosting (Oracle Always Free, or the owner's Mac behind Cloudflare Tunnel) and Resend Free; paid hosting starts with the first payment. No customer data goes to free LLM tiers that train on inputs, and the app never runs on a Claude subscription (API key only).
 - **Owner constraints:** no network, no interviews or sales calls, no paid ads. Written, asynchronous contact is fine.
 
 ## Evidence

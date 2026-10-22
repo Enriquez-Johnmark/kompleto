@@ -2,6 +2,21 @@
 
 Every owner-approved decision, newest first, with the date it was made. Decisions that a later one replaced stay here, marked **superseded**, so the reasoning trail survives. `AGENTS.md` lists only the decisions in force.
 
+## 2026-10-22
+
+- **M6 round.** The owner accepted the recommendations ("go ahead"); whether they hold a bank-issued card (question 1) is still to be answered before deployment:
+  - **hosting at ₱0 for the pilots:** Oracle Cloud Always Free in Singapore if the owner has a bank-issued card, otherwise the owner's Mac behind a free Cloudflare Tunnel; the paid Singapore VPS (≈ ₱410/month) once the first Firm pays. Supersedes "paid hosting starts at M6" (`docs/research/free-hosting.md`);
+  - **backups:** nightly, encrypted, to the owner's Google Drive (free 15 GB), kept 30 days;
+  - **domain:** getkompleto.com at Cloudflare Registrar, paid through PayPal with a Maya virtual card (tested with a small amount first), bought just before pilots;
+  - **sending:** Resend Free with the daily budget of 90, nearest Cut-offs first; the Amazon SES plan is dropped (its free tier closed to new accounts on 21 Jul 2026); Resend Pro from the first payment if 90 a day isn't enough (`docs/research/domain-and-email-at-zero.md`);
+  - **receiving:** Cloudflare Email Routing and a free Email Worker POST each reply to the signed endpoint; replies stay off Resend's quota;
+  - **export (I1):** one "Download all data" zip from Settings: CSVs of Clients, Payors, checklist items, messages, Uploads, Replies and the activity log, plus the files still held; each export is logged;
+  - **closing (I2):** "Close account" with the Firm's name typed to confirm; sending stops, waiting Drafts are cancelled and sessions end at once; everything is deleted after 7 days; backups age out by day 30;
+  - **activity log (J2):** also records Replies, logins and Client, Payor and checklist changes; an "Activity" page shows the Firm its last 90 days;
+  - **hardening:** rate limits on login links and uploads, security headers, a health check for a free uptime monitor, a non-admin service account, Postgres reachable only locally;
+  - **order:** export, closing, activity log, send budget and hardening first, locally at ₱0; hosting, domain and email last, once the domain is bought;
+  - **each Firm sending from its own Gmail:** not now; kept in the research note.
+
 ## 2026-10-21
 
 - **After the M5 code review.** The owner accepted four recommendations ("go ahead"):

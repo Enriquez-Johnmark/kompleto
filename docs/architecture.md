@@ -163,7 +163,8 @@ Each milestone ends with its acceptance tests passing; the owner can demo after 
 ### Hosting (2026-10-21)
 
 - **Development:** on the owner's Mac (Docker via OrbStack for Postgres), at no cost.
-- **Paid hosting starts at M6:**
+- **Pilots run at ₱0 (owner, 2026-10-22):** Oracle Cloud Always Free in Singapore if the owner has a bank-issued card, otherwise the owner's Mac behind a free Cloudflare Tunnel. Nightly encrypted backups go to the owner's Google Drive, kept 30 days (`docs/research/free-hosting.md`).
+- **Paid hosting starts once the first Firm pays** (was: at M6):
   - a Vultr 1 GB server in Singapore, with automatic backups, running the binary, Postgres and Caddy (TLS);
   - Cloudflare R2 for encrypted files and nightly encrypted `pg_dump` backups (kept 30 days);
   - Cloudflare Email Routing plus an Email Worker that POSTs each reply's raw MIME to the app;
@@ -173,7 +174,7 @@ Each milestone ends with its acceptance tests passing; the owner can demo after 
 ### Email sending (2026-10-21)
 
 - Pilots send through **Resend's free tier**, with an `Idempotency-Key` per send (E1).
-- The owner applies for **Amazon SES** (Singapore) in pilot week 1. If it's refused, we stay on Resend.
+- ~~The owner applies for Amazon SES in pilot week 1.~~ Dropped 2026-10-22: SES's free tier closed to new accounts and sign-up needs a card. If 90 a day isn't enough, Resend Pro comes out of the first payment (`docs/research/domain-and-email-at-zero.md`).
 - The app enforces a **daily send budget of 90**, under Resend's 100/day cap. When more reminders are due, the nearest deadlines go first, the rest wait until the next day, and the dashboard shows what's waiting.
 
 ### Crate stack (2026-10-21)
