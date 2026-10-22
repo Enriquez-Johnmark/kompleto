@@ -79,7 +79,8 @@ pub struct Config {
     /// closes. Route it to a person, not to the reply Worker.
     pub support_email: Option<String>,
     /// ClamAV's daemon (`CLAMD_ADDR`, `host:port`), which scans every
-    /// Upload. Without it, nothing is scanned.
+    /// Upload. `serve` requires it in production;
+    /// without it, nothing is scanned.
     pub clamd_addr: Option<String>,
     /// Run as if today were this date (`DEMO_DATE`, `YYYY-MM-DD`, Manila),
     /// for showing a demo Firm. Only with Mailpit, so never in production.

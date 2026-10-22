@@ -148,6 +148,10 @@ async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
 
 async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::Result<()> {
     let master = config.master_key()?;
+    // Live, every Upload is scanned; a missing scanner stops the start-up.
+    if config.clamd_addr.is_none() && !matches!(config.mail, MailConfig::Mailpit { .. }) {
+        anyhow::bail!("CLAMD_ADDR must be set in production, so Uploads are scanned for viruses");
+    }
     migrate(&pool).await?;
     let today = clock.now().date();
     if !Calendar::built_in()?.holidays_cover(today, today + time::Duration::days(365)) {

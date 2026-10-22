@@ -170,3 +170,23 @@ async fn dev_schedule_only_runs_against_the_local_test_mailbox(pool: PgPool) {
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("development only"));
 }
+
+#[sqlx::test]
+async fn f1_the_live_server_wont_start_without_a_virus_scanner(pool: PgPool) {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kompleto"));
+    cmd.arg("serve")
+        .env("DATABASE_URL", common::database_url(&pool).await)
+        .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
+        .env("MAIL_PROVIDER", "resend")
+        .env("RESEND_API_KEY", "re_test")
+        .env("FILE_MASTER_KEY", "ab".repeat(32))
+        .env("BIND_ADDR", "127.0.0.1:0")
+        .env_remove("CLAMD_ADDR");
+
+    let out = tokio::task::spawn_blocking(move || cmd.output().unwrap())
+        .await
+        .unwrap();
+
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("CLAMD_ADDR must be set"));
+}
