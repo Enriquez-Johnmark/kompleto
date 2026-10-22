@@ -4,6 +4,7 @@
 #![allow(dead_code)] // Each test binary uses a different subset of these helpers.
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
 
+pub mod clamd;
 pub mod web;
 
 use std::sync::{Arc, Mutex};
