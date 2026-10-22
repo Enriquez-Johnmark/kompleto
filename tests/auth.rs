@@ -10,6 +10,7 @@ use common::clock;
 use kompleto::engine::clock::FixedClock;
 use kompleto::kompleto::auth::{Auth, LoginOutcome};
 use kompleto::kompleto::firms::{FirmId, Firms};
+use kompleto::kompleto::members::{Members, Role};
 use sqlx::PgPool;
 use time::Duration;
 
@@ -134,4 +135,46 @@ async fn a1_parallel_requests_still_get_at_most_five_login_emails(pool: PgPool) 
 
     assert_eq!(sent, 5);
     assert_eq!(login_emails(&pool).await.len(), 5);
+}
+
+#[sqlx::test]
+async fn k1_staff_log_in_with_their_own_link_to_the_firms_data(pool: PgPool) {
+    let (auth, clock, firm) = setup(&pool).await;
+    Members::new(pool.clone(), clock)
+        .add_staff(firm, "joy@santos.test", "ana@santos.test")
+        .await
+        .unwrap();
+
+    assert_eq!(auth.request_link("Joy@santos.test").await.unwrap(), LoginOutcome::Sent);
+    let emails = login_emails(&pool).await;
+    assert_eq!(
+        (emails[0].0.as_str(), emails[0].1.as_str()),
+        ("joy@santos.test", "approved"),
+        "sent to the person who asked"
+    );
+    let session = auth.log_in(&latest_token(&pool).await).await.unwrap().unwrap();
+
+    let who = auth.session(&session).await.unwrap().unwrap();
+    assert_eq!(who.firm, firm);
+    assert_eq!(who.email, "joy@santos.test");
+    assert_eq!(who.role, Role::Staff);
+}
+
+#[sqlx::test]
+async fn k1_removing_a_member_ends_their_sessions_and_links(pool: PgPool) {
+    let (auth, clock, firm) = setup(&pool).await;
+    let members = Members::new(pool.clone(), clock);
+    let joy = members
+        .add_staff(firm, "joy@santos.test", "ana@santos.test")
+        .await
+        .unwrap();
+    auth.request_link("joy@santos.test").await.unwrap();
+    let unused = latest_token(&pool).await;
+    auth.request_link("joy@santos.test").await.unwrap();
+    let session = auth.log_in(&latest_token(&pool).await).await.unwrap().unwrap();
+
+    members.remove_staff(firm, joy, "ana@santos.test").await.unwrap();
+
+    assert!(auth.session(&session).await.unwrap().is_none());
+    assert_eq!(auth.log_in(&unused).await.unwrap(), None);
 }

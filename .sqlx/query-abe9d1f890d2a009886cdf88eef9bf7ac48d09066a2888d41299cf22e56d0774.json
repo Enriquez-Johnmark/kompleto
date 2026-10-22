@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select s.firm_id, s.member_id, m.email, m.role\n             from sessions s\n             join firms f on f.id = s.firm_id and f.closed_at is null\n             join firm_members m on m.id = s.member_id and m.firm_id = s.firm_id\n             where s.session_hash = $1 and s.expires_at > $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "firm_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "firm_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "member_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "member_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "firm_members",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "role",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "firm_members",
+            "name": "role"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "abe9d1f890d2a009886cdf88eef9bf7ac48d09066a2888d41299cf22e56d0774"
+}

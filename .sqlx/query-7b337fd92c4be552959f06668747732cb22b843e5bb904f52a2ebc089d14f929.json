@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from firm_members where firm_id = $1 and lower(email) = lower($2)) as \"to_member!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "to_member!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7b337fd92c4be552959f06668747732cb22b843e5bb904f52a2ebc089d14f929"
+}

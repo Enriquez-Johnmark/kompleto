@@ -96,12 +96,17 @@ impl KompletoChecks {
                 )),
             };
         }
-        let login_email = sqlx::query_scalar!("select login_email from firms where id = $1", firm.as_uuid())
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(failed)?;
+        // A login email goes to one of the Firm's own members (M9).
+        let to_member = sqlx::query_scalar!(
+            r#"select exists (select 1 from firm_members where firm_id = $1 and lower(email) = lower($2)) as "to_member!""#,
+            firm.as_uuid(),
+            email.to_address.trim(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(failed)?;
         let body_links = links(&email.body_text);
-        let is_login = login_email.is_some_and(|login| same_address(&email.to_address, &login))
+        let is_login = to_member
             && body_links.len() == 1
             && body_links.iter().all(|link| {
                 self.firm_link_prefixes

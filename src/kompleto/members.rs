@@ -30,7 +30,7 @@ pub enum Role {
 }
 
 impl Role {
-    fn parse(text: &str) -> Self {
+    pub(crate) fn parse(text: &str) -> Self {
         if text == "owner" { Self::Owner } else { Self::Staff }
     }
 }
