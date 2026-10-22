@@ -33,6 +33,38 @@ pub struct Payor {
     pub name: String,
 }
 
+/// What became of a batch of names.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct AddedPayors {
+    /// The names added, as stored.
+    pub added: Vec<String>,
+    /// Names already on the list, or given twice.
+    pub already_listed: usize,
+    /// Each refused name with why.
+    pub refused: Vec<(String, String)>,
+}
+
+/// `name`, trimmed, if it can be a Payor's name.
+fn check_name(name: &str) -> Result<&str, ClientError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > MAX_NAME_CHARS || name.chars().any(char::is_control) {
+        return Err(ClientError::Invalid(format!(
+            "a Payor's name is 1 to {MAX_NAME_CHARS} characters"
+        )));
+    }
+    // It appears in Reminders, which carry no link but the upload link.
+    if !links(name).is_empty() {
+        return Err(ClientError::Invalid(
+            "a Payor's name can't look like a web address".to_owned(),
+        ));
+    }
+    // Its 2307 would read as the upload page's choice for unlisted ones.
+    if payor_2307(name).eq_ignore_ascii_case(ANOTHER_PAYOR_2307) {
+        return Err(ClientError::Invalid(format!("\"{name}\" can't be a Payor's name")));
+    }
+    Ok(name)
+}
+
 /// The Payor lists of a Firm's Clients.
 #[derive(Clone)]
 pub struct Payors {
@@ -82,22 +114,7 @@ impl Payors {
 
     /// Adds `name` to a Client's Payors.
     pub async fn add(&self, firm: FirmId, client: ClientId, name: &str) -> Result<PayorId, ClientError> {
-        let name = name.trim();
-        if name.is_empty() || name.chars().count() > MAX_NAME_CHARS || name.chars().any(char::is_control) {
-            return Err(ClientError::Invalid(format!(
-                "a Payor's name is 1 to {MAX_NAME_CHARS} characters"
-            )));
-        }
-        // It appears in Reminders, which carry no link but the upload link.
-        if !links(name).is_empty() {
-            return Err(ClientError::Invalid(
-                "a Payor's name can't look like a web address".to_owned(),
-            ));
-        }
-        // Its 2307 would read as the upload page's choice for unlisted ones.
-        if payor_2307(name).eq_ignore_ascii_case(ANOTHER_PAYOR_2307) {
-            return Err(ClientError::Invalid(format!("\"{name}\" can't be a Payor's name")));
-        }
+        let name = check_name(name)?;
         let id = PayorId::new();
         let mut tx = self.pool.begin().await?;
         let added = sqlx::query!(
@@ -148,6 +165,66 @@ impl Payors {
     }
 
     /// Removes a Payor from a Client's list.
+    /// Adds `names` at once (H3), in one transaction: all or, on an
+    /// error, none. A name refused or listed already is reported, not an
+    /// error.
+    pub async fn add_all(&self, firm: FirmId, client: ClientId, names: &[String]) -> Result<AddedPayors, ClientError> {
+        let mut outcome = AddedPayors::default();
+        let mut valid = Vec::new();
+        for name in names {
+            match check_name(name) {
+                Ok(name) => valid.push(name.to_owned()),
+                Err(ClientError::Invalid(reason)) => outcome.refused.push((name.trim().to_owned(), reason)),
+                Err(other) => return Err(other),
+            }
+        }
+        let mut tx = self.pool.begin().await?;
+        let found = sqlx::query_scalar!(
+            r#"select exists (select 1 from clients where firm_id = $1 and id = $2) as "found!""#,
+            firm.as_uuid(),
+            client.as_uuid(),
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        if !found {
+            return Err(ClientError::NotFound);
+        }
+        let ids: Vec<Uuid> = valid.iter().map(|_| PayorId::new().as_uuid()).collect();
+        // A name listed already, or twice in `names`, is skipped by the
+        // unique index.
+        outcome.added = sqlx::query_scalar!(
+            "insert into payors (id, firm_id, client_id, name, created_at)
+             select new.id, $3, $4, new.name, $5
+             from unnest($1::uuid[], $2::text[]) with ordinality as new (id, name, n)
+             order by new.n
+             on conflict do nothing
+             returning name",
+            &ids,
+            &valid,
+            firm.as_uuid(),
+            client.as_uuid(),
+            self.clock.now(),
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        for name in &outcome.added {
+            let subject = ("client", client.as_uuid());
+            record_as(
+                &mut tx,
+                firm,
+                self.actor.as_deref(),
+                self.clock.now(),
+                "payor.added",
+                subject,
+                json!({ "payor": name }),
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        outcome.already_listed = valid.len() - outcome.added.len();
+        Ok(outcome)
+    }
+
     pub async fn remove(&self, firm: FirmId, client: ClientId, payor: PayorId) -> Result<(), ClientError> {
         let mut tx = self.pool.begin().await?;
         let removed = sqlx::query_scalar!(

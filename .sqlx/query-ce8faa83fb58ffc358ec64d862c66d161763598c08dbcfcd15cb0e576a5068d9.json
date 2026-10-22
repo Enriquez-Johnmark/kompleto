@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into payors (id, firm_id, client_id, name, created_at)\n             select new.id, $3, $4, new.name, $5\n             from unnest($1::uuid[], $2::text[]) with ordinality as new (id, name, n)\n             order by new.n\n             on conflict do nothing\n             returning name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payors",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ce8faa83fb58ffc358ec64d862c66d161763598c08dbcfcd15cb0e576a5068d9"
+}

@@ -320,20 +320,21 @@ async fn add_payors(
     if batch.names.len() > MAX_NAMES {
         return Err(refused(format!("Add at most {MAX_NAMES} Payors at once.")));
     }
-    let payors = state.payors.by(&member.email);
-    let mut outcome = PayorsAdded {
-        added: 0,
-        already_listed: 0,
-        refused: Vec::new(),
+    let outcome = state
+        .payors
+        .by(&member.email)
+        .add_all(member.firm, ClientId::from(id), &batch.names)
+        .await?;
+    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    let outcome = PayorsAdded {
+        added: count(outcome.added.len()),
+        already_listed: count(outcome.already_listed),
+        refused: outcome
+            .refused
+            .into_iter()
+            .map(|(name, reason)| format!("{name}: {reason}"))
+            .collect(),
     };
-    for name in &batch.names {
-        match payors.add(member.firm, ClientId::from(id), name).await {
-            Ok(_) => outcome.added += 1,
-            Err(ClientError::DuplicateName(_)) => outcome.already_listed += 1,
-            Err(ClientError::Invalid(reason)) => outcome.refused.push(format!("{}: {reason}", name.trim())),
-            Err(other) => return Err(other.into()),
-        }
-    }
     Ok(Json(outcome))
 }
 

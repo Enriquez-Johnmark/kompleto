@@ -124,3 +124,26 @@ async fn h3_a_batch_beyond_the_limit_adds_nothing(pool: PgPool) {
     let payors = Payors::new(pool, app.clock.clone());
     assert!(payors.list(firm, client).await.unwrap().is_empty());
 }
+
+#[sqlx::test]
+async fn h3_a_name_given_twice_in_a_batch_is_added_once(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let (firm, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let client = Clients::new(pool.clone(), app.clock.clone())
+        .create(firm, &nena())
+        .await
+        .unwrap();
+
+    let added = app
+        .api(
+            Method::POST,
+            &format!("/api/clients/{client}/payors/batch"),
+            Some(&cookie),
+            Some(json!({ "names": ["Niño Foods", " NIÑO FOODS "] })),
+        )
+        .await;
+
+    assert_eq!(added.json(), json!({ "added": 1, "already_listed": 1, "refused": [] }));
+    let payors = Payors::new(pool, app.clock.clone());
+    assert_eq!(payors.list(firm, client).await.unwrap().len(), 1);
+}
