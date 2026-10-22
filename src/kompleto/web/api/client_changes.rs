@@ -15,7 +15,7 @@ use crate::kompleto::checklist::{ExtraItem, Recurs};
 use crate::kompleto::clients::{ClientError, ClientId, ExtraItemId, ScheduleSettings};
 use crate::kompleto::import::payors::MAX_NAMES;
 use crate::kompleto::payors::PayorId;
-use crate::kompleto::payroll::{PayCycle, PayrollChoice};
+use crate::kompleto::payroll::{PayCycle, PayrollChoice, PayrollKey};
 use crate::kompleto::schedule::ReminderDays;
 use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
 
@@ -346,6 +346,25 @@ async fn set_payroll(
         .set_payroll(member.firm, ClientId::from(id), choice)
         .await
         .map_err(client_refusal)?;
+    // Reminders for a payday or receipts no longer chased must not go out.
+    let settings = choice.settings();
+    let waiting = state
+        .drafts
+        .waiting_periods(member.firm, ClientId::from(id))
+        .await
+        .map_err(ApiError::internal)?;
+    for period in waiting {
+        let Some(key) = PayrollKey::parse(&period) else {
+            continue;
+        };
+        if !settings.is_some_and(|settings| settings.still_has(&state.calendar, &key)) {
+            state
+                .drafts
+                .cancel_waiting(member.firm, ClientId::from(id), &period)
+                .await
+                .map_err(ApiError::internal)?;
+        }
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 

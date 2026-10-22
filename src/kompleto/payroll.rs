@@ -183,6 +183,18 @@ impl PayrollSettings {
         periods
     }
 
+    /// Whether `key` is still one of this Client's payroll Periods, after
+    /// its settings changed.
+    pub fn still_has(&self, calendar: &Calendar, key: &PayrollKey) -> bool {
+        match key {
+            PayrollKey::Inputs(payday) => self.cycle.paydays(payday.year(), payday.month()).contains(payday),
+            PayrollKey::Receipts { year, month, .. } => self
+                .receipts(calendar, *year, *month)
+                .iter()
+                .any(|period| period.key == *key),
+        }
+    }
+
     /// The receipts Periods for one month's contributions: one per due
     /// date, so each is asked for once it's due, and a Reply to one
     /// request never stops the requests for receipts due later.

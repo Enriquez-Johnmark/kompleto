@@ -96,6 +96,19 @@ impl Drafts {
         self.cancel(firm, client, Some(period), None).await
     }
 
+    /// The Periods in which the Client has Reminders that haven't gone out.
+    pub async fn waiting_periods(&self, firm: FirmId, client: ClientId) -> Result<Vec<String>, OutboxError> {
+        Ok(sqlx::query_scalar!(
+            "select distinct s.period from scheduled_drafts s
+             join outbox_messages m on m.id = s.message_id and m.tenant_id = s.firm_id
+             where s.firm_id = $1 and s.client_id = $2 and m.status in ('draft', 'approved')",
+            firm.as_uuid(),
+            client.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
     /// Cancels the Client's Reminders to `address` in every Period that
     /// haven't gone out, because it bounced (G3); returns how many.
     pub async fn cancel_waiting_to(&self, firm: FirmId, client: ClientId, address: &str) -> Result<usize, OutboxError> {
