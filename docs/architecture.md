@@ -169,6 +169,8 @@ Each milestone ends with its acceptance tests passing; the owner can demo after 
 | **M4** | Phone upload page, encrypted files, auto-deletion | F1–F3 → **core loop demo-ready (~week 4)** |
 | **M5** | Replies and bounces, dashboard, 2307 tracker | G1–G3, H1–H2 |
 | **M6** | Data export, account closure, real email domain, daily send budget, hosting, hardening | I1–I2, E2, J2 → pilot-ready |
+| **M7** (2026-10-22) | The bookkeeper's pages as a React app over a JSON API; the upload page restyled to match | Every criterion's test still passes against the API |
+| **M8** (2026-10-22) | Demo Firm, ClamAV scanning of Uploads, help page, privacy notice, terms and data agreement, screenshots and walkthrough video | **showcase-ready** |
 
 ### Hosting (2026-10-21)
 
@@ -195,7 +197,7 @@ Pinned versions from `docs/research/rust-crates.md`:
 |---|---|
 | Runtime and web | tokio 1.54, axum 0.8.9, tower-http 0.7, axum-extra 0.12 |
 | Database | sqlx 0.9 (Postgres, migrations, offline macros) |
-| Pages | askama 0.16 + askama_web, with htmx 2.0.11 vendored |
+| Pages | askama 0.16 + askama_web, with htmx 2.0.11 vendored; from M7 only the Client's upload page (the bookkeeper's pages move to React: `docs/frontend.md`) |
 | HTTP client | reqwest 0.13 (rustls) |
 | Inbound mail | mail-parser 0.11 |
 | Import | csv 1.4, calamine 0.37 |

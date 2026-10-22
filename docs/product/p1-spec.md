@@ -22,7 +22,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 | BIR forms each client files | Matching 2307s against invoices |
 | Deadline calendar | Xero / QuickBooks import |
 | Checklist of documents owed per month or quarter | SMS (link-free reminders only) |
-| Reminder drafts the bookkeeper approves | React dashboard |
+| Reminder drafts the bookkeeper approves | |
 | Sending by email with a private upload link | In-app billing (pilots pay by GCash, by hand) |
 | Phone-friendly upload page | Staff logins; public sign-up |
 | Received / missing tracker for 2307s | |
@@ -151,7 +151,7 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
   - **Storage:** each file has its own key, wrapped by the master key (`FILE_MASTER_KEY`; `kompleto gen-key` makes one) and bound to the file and its Firm. Files sit on local disk behind the engine's file store until R2 replaces it at M6; they are never stored in Postgres, so database backups never hold them.
   - **Received and deletion:** the Client page lists each Upload with Download and Mark received. An hourly sweep deletes the file and its key 30 days after it is marked received, or 90 days after upload, whichever is first, and records each deletion in the audit log. Downloads are attachments with a generated name, never the Contact's own file name.
   - **Stopping (G2, brought into M4):** later Reminders list only the Owed documents not yet uploaded; when none are left, no more Reminders are drafted for that Period and any waiting Draft is cancelled.
-  - **No virus scanning** in M4: nothing fits the budget. Files are only ever downloaded as attachments, never shown in the browser. Revisit before paid pilots.
+  - **No virus scanning** in M4: nothing fits the budget. Files are only ever downloaded as attachments, never shown in the browser. ~~Revisit before paid pilots.~~ Superseded 2026-10-22: Uploads are scanned with ClamAV (free) at M8 (showcase round, `docs/decisions.md`).
 
 ### Leaving (2026-10-21)
 
@@ -184,7 +184,8 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 
 ### Web technology (2026-10-21)
 
-- **Server-rendered pages from the Rust backend**; no React in the first version.
+- ~~Server-rendered pages from the Rust backend; no React in the first version.~~ Superseded 2026-10-22 (showcase round, `docs/decisions.md`).
+- **The bookkeeper's pages are a React app** (Vite, shadcn/ui) served by the Rust binary through a JSON API. The Client's upload page stays server-rendered (`docs/adr/0005-react-app-served-by-the-rust-binary.md`, `docs/frontend.md`).
 
 ### Pilots and launch (2026-10-21)
 

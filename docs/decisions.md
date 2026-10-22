@@ -4,6 +4,16 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-22
 
+- **Showcase round.** The owner wants Kompleto complete before showing it to any bookkeeper, and accepted all six recommendations ("yes"), with React for the first:
+  1. **React for the bookkeeper's pages:** a Vite single-page app with shadcn/ui, served by the Rust binary through a JSON API; the Client's upload page stays server-rendered and is restyled to match (`docs/adr/0005-react-app-served-by-the-rust-binary.md`, conventions in `docs/frontend.md`). Supersedes "server-rendered pages; no React in the first version";
+  2. **a demo Firm:** one command fills Kompleto with a realistic pretend firm (about 15 Clients, Drafts, Uploads, Replies, 2307s);
+  3. **screenshots and a 2–3 minute walkthrough video,** made by Claude from the demo Firm, for outreach;
+  4. **free items a finished product needs:** virus scanning of Uploads with ClamAV (supersedes "no virus scanning in M4"), a help page for bookkeepers, and the privacy notice, terms and data processing agreement (brought forward from "before the first pilot");
+  5. **the large later features wait for pilot feedback:** public sign-up, staff logins, payroll chasing, Xero/QuickBooks import, 2307 matching;
+  6. **no public "try it" demo link** for now.
+
+  Unchanged, because they need money: real email from the domain, AI-worded Drafts (templates until an API key is paid for) and always-on hosting.
+
 - **M6 round.** The owner accepted the recommendations ("go ahead"); whether they hold a bank-issued card (question 1) is still to be answered before deployment:
   - **hosting at ₱0 for the pilots:** Oracle Cloud Always Free in Singapore if the owner has a bank-issued card, otherwise the owner's Mac behind a free Cloudflare Tunnel; the paid Singapore VPS (≈ ₱410/month) once the first Firm pays. Supersedes "paid hosting starts at M6" (`docs/research/free-hosting.md`);
   - **backups:** nightly, encrypted, to the owner's Google Drive (free 15 GB), kept 30 days;
