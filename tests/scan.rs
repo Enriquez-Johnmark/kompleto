@@ -63,6 +63,7 @@ async fn f1_a_real_clamd_finds_the_eicar_test_file_and_passes_clean_files() {
     ]
     .concat();
 
+    clamd.ping().await.unwrap();
     let infected = clamd.scan(eicar.as_bytes()).await.unwrap();
     let clean = clamd.scan(b"%PDF-1.4\n%%EOF\n").await.unwrap();
     // The largest file the upload page takes.

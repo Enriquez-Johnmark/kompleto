@@ -241,16 +241,20 @@ async fn security_headers(State(state): State<AppState>, request: Request, next:
     response
 }
 
-/// "ok" while the database answers, for an uptime monitor; the reason for
-/// a failure goes to the log, not to whoever asked.
+/// "ok" while the database and virus scanner answer, for an uptime monitor;
+/// the reason for a failure goes to the log, not to whoever asked.
 async fn health(State(state): State<AppState>) -> Response {
-    match sqlx::query_scalar!("select 1 as \"one!\"").fetch_one(&state.pool).await {
-        Ok(_) => "ok".into_response(),
-        Err(err) => {
-            tracing::error!(%err, "health check: the database didn't answer");
-            (StatusCode::SERVICE_UNAVAILABLE, "unavailable").into_response()
-        }
+    let unavailable = (StatusCode::SERVICE_UNAVAILABLE, "unavailable").into_response();
+    if let Err(err) = sqlx::query_scalar!("select 1 as \"one!\"").fetch_one(&state.pool).await {
+        tracing::error!(%err, "health check: the database didn't answer");
+        return unavailable;
     }
+    // Without the scanner, every Upload is refused.
+    if let Err(err) = state.uploads.scanner_answers().await {
+        tracing::error!(%err, "health check: the virus scanner didn't answer");
+        return unavailable;
+    }
+    "ok".into_response()
 }
 
 /// The upload pages' stylesheet (`static/kompleto.css`), built into the binary.

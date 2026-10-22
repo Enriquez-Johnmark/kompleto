@@ -49,9 +49,18 @@ impl FakeClamd {
 }
 
 async fn serve(mut socket: TcpStream, behaviour: Behaviour, streams: Arc<Mutex<Vec<Vec<u8>>>>) {
-    let mut command = [0u8; 10];
-    socket.read_exact(&mut command).await.unwrap();
-    assert_eq!(&command, b"zINSTREAM\0", "unexpected clamd command");
+    let mut command = Vec::new();
+    while command.last() != Some(&0) {
+        command.push(socket.read_u8().await.unwrap());
+    }
+    if command == b"zPING\0" {
+        match behaviour {
+            Behaviour::Hangs => std::future::pending::<()>().await,
+            _ => socket.write_all(b"PONG\0").await.unwrap(),
+        }
+        return;
+    }
+    assert_eq!(command, b"zINSTREAM\0", "unexpected clamd command");
     let mut stream = Vec::new();
     loop {
         let length = socket.read_u32().await.unwrap() as usize;

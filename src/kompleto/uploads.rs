@@ -22,7 +22,7 @@ use crate::engine::audit::{self, AuditEvent};
 use crate::engine::clock::Clock;
 use crate::engine::files::{FileError, Files};
 use crate::engine::ids::FileId;
-use crate::engine::scan::{Clamd, Verdict};
+use crate::engine::scan::{Clamd, ScanError, Verdict};
 
 /// The largest file accepted, in bytes (F1).
 pub const MAX_FILE_BYTES: usize = 10 * 1024 * 1024;
@@ -339,6 +339,14 @@ impl Uploads {
             }
         }
         Ok(id)
+    }
+
+    /// Whether files can be scanned now; always, when there's no scanner.
+    pub async fn scanner_answers(&self) -> Result<(), ScanError> {
+        match &self.scanner {
+            Some(scanner) => scanner.ping().await,
+            None => Ok(()),
+        }
     }
 
     /// Refuses `bytes` if they carry a virus or can't be scanned.
