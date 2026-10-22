@@ -81,11 +81,16 @@ impl Mailer for RecordingMailer {
 
 /// Creates a Firm named `name` with a login email derived from it.
 pub async fn firm(pool: &sqlx::PgPool, name: &str) -> kompleto::kompleto::firms::FirmId {
-    let email = format!("{}@firm.test", name.to_lowercase().replace(' ', "."));
+    let email = firm_email(name);
     kompleto::kompleto::firms::Firms::new(pool.clone(), clock())
         .create(name, &email)
         .await
         .unwrap()
+}
+
+/// The login address [`firm`] gives a Firm named `name`.
+pub fn firm_email(name: &str) -> String {
+    format!("{}@firm.test", name.to_lowercase().replace(' ', "."))
 }
 
 /// The file master key tests use.

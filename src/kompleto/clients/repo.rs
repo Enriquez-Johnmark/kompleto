@@ -3,13 +3,15 @@
 
 use std::sync::Arc;
 
-use sqlx::{PgExecutor, PgPool};
+use serde_json::json;
+use sqlx::{PgConnection, PgPool};
 use time::Date;
 use uuid::Uuid;
 
 use super::{Language, NewClient};
 use crate::engine::clock::Clock;
 use crate::engine::ids::id_type;
+use crate::kompleto::activity::record_by_firm;
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::{ChecklistEdits, DEFAULT_ITEMS, ExtraItem, Recurs};
 use crate::kompleto::firms::FirmId;
@@ -83,7 +85,10 @@ impl Clients {
 
     /// Adds one Client.
     pub async fn create(&self, firm: FirmId, client: &NewClient) -> Result<ClientId, ClientError> {
-        self.insert(&self.pool, firm, client).await
+        let mut tx = self.pool.begin().await?;
+        let id = self.insert(&mut tx, firm, client).await?;
+        tx.commit().await?;
+        Ok(id)
     }
 
     /// Adds every Client in `clients` in one transaction: all of them, or
@@ -92,7 +97,7 @@ impl Clients {
         let mut tx = self.pool.begin().await?;
         let mut ids = Vec::with_capacity(clients.len());
         for client in clients {
-            ids.push(self.insert(&mut *tx, firm, client).await?);
+            ids.push(self.insert(&mut tx, firm, client).await?);
         }
         tx.commit().await?;
         Ok(ids)
@@ -131,6 +136,7 @@ impl Clients {
     /// Replaces a Client's name, Contact, language and forms.
     pub async fn update(&self, firm: FirmId, id: ClientId, client: &NewClient) -> Result<(), ClientError> {
         let forms = form_codes(&client.forms);
+        let mut tx = self.pool.begin().await?;
         let updated = sqlx::query!(
             "update clients set business_name = $3, contact_first_name = $4, email = $5,
                     language = $6, forms = $7, updated_at = $8
@@ -144,12 +150,15 @@ impl Clients {
             &forms,
             self.clock.now(),
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(|err| duplicate_name(err, client))?;
         if updated.rows_affected() == 0 {
             return Err(ClientError::NotFound);
         }
+        let subject = ("client", id.as_uuid());
+        record_by_firm(&mut tx, firm, self.clock.now(), "client.updated", subject, json!({})).await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -162,6 +171,7 @@ impl Clients {
         settings: &ScheduleSettings,
     ) -> Result<(), ClientError> {
         let days: Vec<i16> = settings.reminder_days.days().iter().map(|&d| i16::from(d)).collect();
+        let mut tx = self.pool.begin().await?;
         let updated = sqlx::query!(
             "update clients set cut_off_offset_days = $3, reminder_days = $4, paused = $5, updated_at = $6
              where firm_id = $1 and id = $2",
@@ -172,11 +182,23 @@ impl Clients {
             settings.paused,
             self.clock.now(),
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
         if updated.rows_affected() == 0 {
             return Err(ClientError::NotFound);
         }
+        let details = json!({ "paused": settings.paused });
+        let subject = ("client", id.as_uuid());
+        record_by_firm(
+            &mut tx,
+            firm,
+            self.clock.now(),
+            "client.schedule_changed",
+            subject,
+            details,
+        )
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -191,6 +213,7 @@ impl Clients {
         due: Option<Date>,
     ) -> Result<(), ClientError> {
         self.ensure_exists(firm, id).await?;
+        let mut tx = self.pool.begin().await?;
         match due {
             Some(due) => {
                 sqlx::query!(
@@ -203,7 +226,7 @@ impl Clients {
                     period.key(),
                     due,
                 )
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await?
             }
             None => sqlx::query!(
@@ -213,9 +236,13 @@ impl Clients {
                 form.code(),
                 period.key(),
             )
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?,
         };
+        let details = json!({ "form": form.code(), "period": period.key(), "due": due.map(|d| d.to_string()) });
+        let subject = ("client", id.as_uuid());
+        record_by_firm(&mut tx, firm, self.clock.now(), "client.due_date_set", subject, details).await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -382,7 +409,7 @@ impl Clients {
         .ok_or(ClientError::NotFound)
     }
 
-    async fn insert(&self, db: impl PgExecutor<'_>, firm: FirmId, client: &NewClient) -> Result<ClientId, ClientError> {
+    async fn insert(&self, tx: &mut PgConnection, firm: FirmId, client: &NewClient) -> Result<ClientId, ClientError> {
         let id = ClientId::new();
         let now = self.clock.now();
         sqlx::query!(
@@ -398,9 +425,10 @@ impl Clients {
             &form_codes(&client.forms),
             now,
         )
-        .execute(db)
+        .execute(&mut *tx)
         .await
         .map_err(|err| duplicate_name(err, client))?;
+        record_by_firm(tx, firm, now, "client.created", ("client", id.as_uuid()), json!({})).await?;
         Ok(id)
     }
 }

@@ -1,12 +1,12 @@
 //! The Firm's activity log (J2): the engine's audit entries for one Firm,
-//! in words.
+//! in words, and how Kompleto records the Firm's own changes in them.
 
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use super::firms::FirmId;
-use crate::engine::audit;
+use crate::engine::audit::{self, AuditEvent};
 
 /// How far back the Activity page looks.
 pub const SHOWN_DAYS: i64 = 90;
@@ -48,6 +48,31 @@ pub async fn since(pool: &PgPool, firm: FirmId, since: OffsetDateTime) -> Result
         .collect())
 }
 
+/// Records a change the Firm made, in the caller's transaction, naming the
+/// Firm's login address as the actor (a Firm has one login).
+pub(crate) async fn record_by_firm(
+    tx: &mut PgConnection,
+    firm: FirmId,
+    at: OffsetDateTime,
+    action: &str,
+    subject: (&str, Uuid),
+    details: serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    let actor = sqlx::query_scalar!("select login_email from firms where id = $1", firm.as_uuid())
+        .fetch_one(&mut *tx)
+        .await?;
+    let event = AuditEvent {
+        tenant: firm,
+        at,
+        actor: &actor,
+        action,
+        subject_type: subject.0,
+        subject_id: subject.1,
+        details,
+    };
+    audit::record(&mut *tx, &event).await
+}
+
 /// `action` in words.
 pub fn describe(action: &str) -> &str {
     match action {
@@ -62,6 +87,10 @@ pub fn describe(action: &str) -> &str {
         "outbox.send_failed" => "Sending a message failed",
         "outbox.send_interrupted" => "Sending a message was interrupted",
         "upload.received" => "Marked an upload received",
+        "client.created" => "Added a client",
+        "client.updated" => "Changed a client's details",
+        "client.schedule_changed" => "Changed a client's reminder schedule",
+        "client.due_date_set" => "Changed a client's due date",
         "file.deleted" => "Deleted an uploaded file",
         other => other,
     }
