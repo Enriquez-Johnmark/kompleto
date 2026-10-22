@@ -377,6 +377,8 @@ impl UploadError {
             Self::TooBig => StatusCode::PAYLOAD_TOO_LARGE,
             Self::Incomplete => StatusCode::BAD_REQUEST,
             Self::LinkFull => StatusCode::TOO_MANY_REQUESTS,
+            Self::Infected => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::NotScanned => StatusCode::SERVICE_UNAVAILABLE,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::NoFile | Self::Invalid(_) | Self::File(_) | Self::Database(_) => StatusCode::UNPROCESSABLE_ENTITY,
         }
@@ -399,6 +401,14 @@ fn message(language: Language, err: &UploadError, firm_name: &str) -> String {
             return format!("Puno na po ang link na ito. Pakisabihan po ang {firm_name}.");
         }
         UploadError::LinkFull => return format!("This link can't take any more files. Please tell {firm_name}."),
+        UploadError::Infected if taglish => {
+            "Hindi po tinanggap ang file na ito dahil mukhang may virus. Pakipadala po ng malinis na kopya."
+        }
+        UploadError::Infected => {
+            "This file wasn't accepted because it looks like it has a virus. Please send a clean copy."
+        }
+        UploadError::NotScanned if taglish => "Hindi pa po ma-check ang mga file ngayon. Pakisubukan po ulit mamaya.",
+        UploadError::NotScanned => "Files can't be checked for viruses just now. Please try again in a few minutes.",
         UploadError::Invalid(problem) => match (problem, taglish) {
             (LabelProblem::NotOwed, true) => "Pakipili po kung ano ang file na ito.",
             (LabelProblem::NotOwed, false) => "Please choose what this file is.",

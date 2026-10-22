@@ -30,6 +30,7 @@ use kompleto::engine::files::{FileCipher, Files, LocalDisk, MasterKey};
 use kompleto::engine::ids::TenantId;
 use kompleto::engine::mail::Email;
 use kompleto::engine::outbox::{NoExtraChecks, Outbox, Sender};
+use kompleto::engine::scan::Clamd;
 use kompleto::kompleto::calendar::Calendar;
 use kompleto::kompleto::closing;
 use kompleto::kompleto::demo::{self, DemoServices};
@@ -166,8 +167,12 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         xlsx,
         &master,
         files.clone(),
+        config.clamd_addr.as_deref().map(Clamd::new),
     )?
     .with_web_dir(&config.web_dir);
+    if config.clamd_addr.is_none() {
+        tracing::warn!("CLAMD_ADDR isn't set; Uploads aren't scanned for viruses");
+    }
     let state = match &config.resend_webhook_secret {
         Some(secret) => state.with_delivery_events(secret.clone()),
         None => state,

@@ -78,6 +78,9 @@ pub struct Config {
     /// Where Firms write for help (`SUPPORT_EMAIL`), shown when an account
     /// closes. Route it to a person, not to the reply Worker.
     pub support_email: Option<String>,
+    /// ClamAV's daemon (`CLAMD_ADDR`, `host:port`), which scans every
+    /// Upload. Without it, nothing is scanned.
+    pub clamd_addr: Option<String>,
     /// Run as if today were this date (`DEMO_DATE`, `YYYY-MM-DD`, Manila),
     /// for showing a demo Firm. Only with Mailpit, so never in production.
     pub demo_date: Option<time::Date>,
@@ -152,6 +155,7 @@ impl Config {
             inbound_secret: optional("INBOUND_SECRET").map(SecretString::from),
             resend_webhook_secret: optional("RESEND_WEBHOOK_SECRET").map(SecretString::from),
             support_email: optional("SUPPORT_EMAIL"),
+            clamd_addr: optional("CLAMD_ADDR"),
             demo_date,
         })
     }

@@ -7,6 +7,7 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use kompleto::engine::clock::FixedClock;
 use kompleto::engine::files::Files;
+use kompleto::engine::scan::Clamd;
 use kompleto::kompleto::firms::{FirmId, Firms};
 use kompleto::kompleto::web::{AppState, router};
 use sqlx::PgPool;
@@ -67,15 +68,20 @@ impl TestApp {
 
     /// The app serving the built React app from `web_dir`.
     pub fn with_web_dir(pool: PgPool, web_dir: &std::path::Path) -> Self {
-        Self::build(pool, BASE_URL, Some(web_dir))
+        Self::build(pool, BASE_URL, Some(web_dir), None)
+    }
+
+    /// The app scanning Uploads with the clamd at `addr`.
+    pub fn scanning(pool: PgPool, addr: &str) -> Self {
+        Self::build(pool, BASE_URL, None, Some(Clamd::new(addr)))
     }
 
     /// The app served at `base_url`, which may have a path.
     pub fn at(pool: PgPool, base_url: &str) -> Self {
-        Self::build(pool, base_url, None)
+        Self::build(pool, base_url, None, None)
     }
 
-    fn build(pool: PgPool, base_url: &str, web_dir: Option<&std::path::Path>) -> Self {
+    fn build(pool: PgPool, base_url: &str, web_dir: Option<&std::path::Path>, scanner: Option<Clamd>) -> Self {
         let clock = super::clock();
         let xlsx = kompleto::kompleto::import::xlsx::XlsxReader::new(env!("CARGO_BIN_EXE_kompleto").into());
         let files = super::files(&pool, clock.clone());
@@ -86,6 +92,7 @@ impl TestApp {
             xlsx,
             &super::master_key(),
             files.clone(),
+            scanner,
         )
         .unwrap()
         .with_inbound(INBOUND_SECRET.to_owned().into(), "getkompleto.test")

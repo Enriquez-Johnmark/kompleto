@@ -6,9 +6,11 @@ mod common;
 
 use std::sync::Arc;
 
+use common::clamd::{Behaviour, FakeClamd};
 use common::{clock, firm, nena};
 use kompleto::engine::clock::FixedClock;
 use kompleto::engine::inbound::parse;
+use kompleto::engine::scan::Clamd;
 use kompleto::kompleto::calendar::BirForm;
 use kompleto::kompleto::clients::{Clients, NewClient};
 use kompleto::kompleto::firms::FirmId;
@@ -48,8 +50,16 @@ async fn reminded(pool: &PgPool) -> (FirmId, Arc<FixedClock>, String) {
 }
 
 fn replies(pool: &PgPool, clock: Arc<FixedClock>) -> Replies {
+    replies_scanned_by(pool, clock, None)
+}
+
+fn replies_scanned_by(pool: &PgPool, clock: Arc<FixedClock>, scanner: Option<Clamd>) -> Replies {
     let checks = common::kompleto_checks(pool, clock.clone());
     let uploads = Uploads::new(pool.clone(), clock.clone(), common::files(pool, clock.clone()));
+    let uploads = match scanner {
+        Some(clamd) => uploads.scanned_by(clamd),
+        None => uploads,
+    };
     Replies::new(
         pool.clone(),
         clock.clone(),
@@ -267,6 +277,29 @@ async fn g1_photo_and_pdf_attachments_are_kept_as_uploads_and_the_rest_dropped(p
         Label::SomethingElse {
             note: "Sent by email".to_owned()
         }
+    );
+}
+
+#[sqlx::test]
+async fn g1_an_attachment_with_a_virus_is_not_kept(pool: PgPool) {
+    let clamd = FakeClamd::start(Behaviour::Scans).await;
+    let (santos, clock, reply_to) = reminded(&pool).await;
+    // The photo, now carrying the fake clamd's test virus.
+    let infected = String::from_utf8(common::inbound("with_attachments", &reply_to))
+        .unwrap()
+        .replace("/9j/4CBhIHBob3RvIG9mIGEgcmVjZWlwdA==", "/9j/4CBFSUNBUg==");
+    let email = parse(infected.as_bytes()).unwrap();
+    let replies = replies_scanned_by(&pool, clock, Some(Clamd::new(clamd.addr())));
+
+    let Received::Human(id) = replies.receive(&email).await.unwrap() else {
+        panic!("not a human reply");
+    };
+
+    assert_eq!(replies.get(santos, id).await.unwrap().attachments, 0);
+    assert_eq!(
+        clamd.streams.lock().unwrap().len(),
+        1,
+        "only the photo is scanned; the program was refused before"
     );
 }
 

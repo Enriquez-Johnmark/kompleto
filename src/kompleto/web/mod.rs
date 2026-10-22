@@ -47,6 +47,7 @@ use super::uploads::Uploads;
 use crate::engine::clock::Clock;
 use crate::engine::files::{Files, MasterKey};
 use crate::engine::outbox::{Outbox, OutboxError};
+use crate::engine::scan::Clamd;
 
 /// The session cookie's name.
 const SESSION_COOKIE: &str = "kompleto_session";
@@ -100,7 +101,8 @@ struct Inbound {
 
 impl AppState {
     /// The app's state; links in emails point at `base_url`, Upload links
-    /// are signed with a key from `master`, and Uploads kept in `files`.
+    /// are signed with a key from `master`, and Uploads kept in `files`
+    /// after `scanner`, if any, finds them clean.
     pub fn new(
         pool: PgPool,
         clock: Arc<dyn Clock>,
@@ -108,6 +110,7 @@ impl AppState {
         xlsx: XlsxReader,
         master: &MasterKey,
         files: Files,
+        scanner: Option<Clamd>,
     ) -> Result<Self, CalendarError> {
         let base_url = base_url.trim_end_matches('/');
         let origin = match base_url.split_once("://") {
@@ -117,6 +120,11 @@ impl AppState {
         let links = UploadLinks::new(pool.clone(), clock.clone(), master, base_url);
         let checks = KompletoChecks::new(pool.clone(), clock.clone(), base_url, links.clone());
         let replies = Replies::new(pool.clone(), clock.clone(), links.clone(), checks.clone(), base_url);
+        let uploads = Uploads::new(pool.clone(), clock.clone(), files);
+        let uploads = match scanner {
+            Some(clamd) => uploads.scanned_by(clamd),
+            None => uploads,
+        };
         Ok(Self {
             calendar: Arc::new(Calendar::built_in()?),
             auth: Auth::new(pool.clone(), clock.clone(), base_url, checks.clone()),
@@ -126,7 +134,7 @@ impl AppState {
             outbox: Outbox::new(pool.clone(), clock.clone()),
             checks,
             links,
-            uploads: Uploads::new(pool.clone(), clock.clone(), files),
+            uploads,
             replies,
             payors: Payors::new(pool.clone(), clock.clone()),
             upload_slots: Arc::new(Semaphore::new(upload::UPLOAD_SLOTS)),

@@ -22,6 +22,7 @@ use crate::engine::audit::{self, AuditEvent};
 use crate::engine::clock::Clock;
 use crate::engine::files::{FileError, Files};
 use crate::engine::ids::FileId;
+use crate::engine::scan::{Clamd, Verdict};
 
 /// The largest file accepted, in bytes (F1).
 pub const MAX_FILE_BYTES: usize = 10 * 1024 * 1024;
@@ -163,6 +164,12 @@ pub enum UploadError {
     /// The link has taken all the files it can.
     #[error("this link can't take any more files")]
     LinkFull,
+    /// The virus scanner found a virus.
+    #[error("the file looks like it has a virus")]
+    Infected,
+    /// The virus scanner couldn't be asked, so nothing is kept.
+    #[error("files can't be checked for viruses just now")]
+    NotScanned,
     /// No such Upload for this Client, or its file was deleted.
     #[error("upload not found")]
     NotFound,
@@ -234,12 +241,25 @@ pub struct Uploads {
     pool: PgPool,
     clock: Arc<dyn Clock>,
     files: Files,
+    scanner: Option<Clamd>,
 }
 
 impl Uploads {
-    /// Uploads kept in `files`.
+    /// Uploads kept in `files`, not scanned for viruses.
     pub fn new(pool: PgPool, clock: Arc<dyn Clock>, files: Files) -> Self {
-        Self { pool, clock, files }
+        Self {
+            pool,
+            clock,
+            files,
+            scanner: None,
+        }
+    }
+
+    /// The same Uploads, each file scanned by `clamd` before it is kept.
+    #[must_use]
+    pub fn scanned_by(mut self, clamd: Clamd) -> Self {
+        self.scanner = Some(clamd);
+        self
     }
 
     /// Keeps `bytes`, labelled `label`, sent through `link`. `owed` is the
@@ -260,6 +280,7 @@ impl Uploads {
         }
         let kind = FileKind::sniff(bytes).ok_or(UploadError::NotAllowedType)?;
         let size = i32::try_from(bytes.len()).map_err(|_| UploadError::TooBig)?;
+        self.scan(link, bytes).await?;
         let mut tx = self.pool.begin().await?;
         // One upload at a time per link, so two can't both squeeze under the limits.
         sqlx::query!(
@@ -318,6 +339,24 @@ impl Uploads {
             }
         }
         Ok(id)
+    }
+
+    /// Refuses `bytes` if they carry a virus or can't be scanned.
+    async fn scan(&self, link: &OpenLink, bytes: &[u8]) -> Result<(), UploadError> {
+        let Some(scanner) = &self.scanner else {
+            return Ok(());
+        };
+        match scanner.scan(bytes).await {
+            Ok(Verdict::Clean) => Ok(()),
+            Ok(Verdict::Infected(virus)) => {
+                tracing::warn!(firm = %link.firm, client = %link.client, %virus, "refused an infected file");
+                Err(UploadError::Infected)
+            }
+            Err(err) => {
+                tracing::error!(firm = %link.firm, %err, "a file couldn't be scanned, so it was refused");
+                Err(UploadError::NotScanned)
+            }
+        }
     }
 
     /// A Client's Uploads for one Period, oldest first.

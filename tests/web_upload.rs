@@ -5,6 +5,7 @@
 mod common;
 
 use axum::http::StatusCode;
+use common::clamd::{Behaviour, FakeClamd, nobody_listening};
 use common::nena;
 use common::web::TestApp;
 use kompleto::kompleto::checklist::owed_documents;
@@ -16,6 +17,8 @@ use time::Month;
 use time::macros::date;
 
 const JPEG: &[u8] = b"\xFF\xD8\xFF\xE0 a photo of a receipt";
+/// A PDF that the fake clamd reports as infected.
+const INFECTED_PDF: &[u8] = b"%PDF-1.4 EICAR";
 /// Nena's first Owed document, as the upload form names it.
 const FIRST: &str = "Sales invoices issued, including cancelled ones";
 
@@ -429,4 +432,57 @@ async fn h2_the_client_picks_a_listed_payors_2307_or_names_another_business(pool
         .find(|li| li.starts_with("<span>BIR Form 2307 from PUREGOLD"))
         .unwrap();
     assert!(item.contains("Na-upload na"), "{item}");
+}
+
+async fn kept_files(app: &TestApp) -> (i64, i64) {
+    let uploads = sqlx::query_scalar("select count(*) from uploads")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    let stored = sqlx::query_scalar("select count(*) from stored_files")
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    (uploads, stored)
+}
+
+#[sqlx::test]
+async fn f1_a_file_is_scanned_for_viruses_before_it_is_kept(pool: PgPool) {
+    let clamd = FakeClamd::start(Behaviour::Scans).await;
+    let app = TestApp::scanning(pool, &clamd.addr());
+    let link = nena_link(&app).await;
+
+    upload_photo(&app, &link).await;
+
+    assert_eq!(clamd.streams.lock().unwrap().as_slice(), [JPEG]);
+    assert_eq!(kept_files(&app).await, (1, 1));
+}
+
+#[sqlx::test]
+async fn f1_a_file_with_a_virus_is_refused_and_not_kept(pool: PgPool) {
+    let clamd = FakeClamd::start(Behaviour::Scans).await;
+    let app = TestApp::scanning(pool, &clamd.addr());
+    let link = nena_link(&app).await;
+
+    let refused = app
+        .post_multipart(&link, &[("document", FIRST.as_bytes()), ("file", INFECTED_PDF)])
+        .await;
+
+    assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(refused.body.contains("mukhang may virus"), "{}", refused.body);
+    assert_eq!(kept_files(&app).await, (0, 0));
+}
+
+#[sqlx::test]
+async fn f1_while_files_cant_be_scanned_none_are_kept(pool: PgPool) {
+    let app = TestApp::scanning(pool, &nobody_listening().await);
+    let link = nena_link(&app).await;
+
+    let refused = app
+        .post_multipart(&link, &[("document", FIRST.as_bytes()), ("file", JPEG)])
+        .await;
+
+    assert_eq!(refused.status, StatusCode::SERVICE_UNAVAILABLE);
+    assert!(refused.body.contains("subukan po ulit mamaya"), "{}", refused.body);
+    assert_eq!(kept_files(&app).await, (0, 0));
 }
