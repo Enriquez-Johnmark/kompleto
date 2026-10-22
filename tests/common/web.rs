@@ -215,7 +215,17 @@ impl TestApp {
         (firm, self.log_in(&email).await)
     }
 
-    /// Logs in as the Firm whose login address is `email`; returns the
+    /// Adds `email` to `firm`'s staff and logs them in; returns their
+    /// session cookie.
+    pub async fn logged_in_staff(&self, firm: FirmId, email: &str) -> String {
+        kompleto::kompleto::members::Members::new(self.pool.clone(), self.clock.clone())
+            .add_staff(firm, email, "owner")
+            .await
+            .unwrap();
+        self.log_in(email).await
+    }
+
+    /// Logs in as the member whose address is `email`; returns the
     /// session cookie.
     pub async fn log_in(&self, email: &str) -> String {
         let earlier: i64 = sqlx::query_scalar("select count(*) from outbox_messages where to_address = $1")

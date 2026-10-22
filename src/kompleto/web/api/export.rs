@@ -13,8 +13,8 @@ use axum::routing::get;
 use serde_json::json;
 use time::macros::format_description;
 
-use super::{ApiError, ApiFirm};
-use crate::kompleto::activity::record_by_firm;
+use super::{ApiError, ApiOwner};
+use crate::kompleto::activity::record_by;
 use crate::kompleto::export::write_zip;
 use crate::kompleto::schedule::MANILA;
 use crate::kompleto::web::AppState;
@@ -51,7 +51,8 @@ impl Drop for TempFile {
 
 /// The zip is written to a temporary file, not memory, and streamed from
 /// it; the file is removed once open, so nothing is left behind.
-async fn export(State(state): State<AppState>, ApiFirm(firm): ApiFirm) -> Result<Response, ApiError> {
+async fn export(State(state): State<AppState>, ApiOwner(owner): ApiOwner) -> Result<Response, ApiError> {
+    let firm = owner.firm;
     let (temp, file) = TempFile::create().map_err(ApiError::internal)?;
     let written = write_zip(&state.pool, &state.clients, &state.uploads, firm, BufWriter::new(file))
         .await
@@ -64,9 +65,17 @@ async fn export(State(state): State<AppState>, ApiFirm(firm): ApiFirm) -> Result
     drop(temp);
     let now = state.clock.now();
     let mut tx = state.pool.begin().await.map_err(ApiError::internal)?;
-    record_by_firm(&mut tx, firm, now, "firm.exported", ("firm", firm.as_uuid()), json!({}))
-        .await
-        .map_err(ApiError::internal)?;
+    record_by(
+        &mut tx,
+        firm,
+        &owner.email,
+        now,
+        "firm.exported",
+        ("firm", firm.as_uuid()),
+        json!({}),
+    )
+    .await
+    .map_err(ApiError::internal)?;
     tx.commit().await.map_err(ApiError::internal)?;
     let date = now
         .to_offset(MANILA)

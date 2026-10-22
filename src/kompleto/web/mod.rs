@@ -37,7 +37,7 @@ use super::calendar::{Calendar, CalendarError};
 use super::clients::{ClientError, Clients};
 use super::dates::show_date;
 use super::drafts::Drafts;
-use super::firms::{FirmError, FirmId, Firms};
+use super::firms::{FirmError, Firms};
 use super::import::xlsx::XlsxReader;
 use super::payors::Payors;
 use super::presend::KompletoChecks;
@@ -322,11 +322,6 @@ fn scoped_router(pages: Vec<(ScopedRoute, MethodRouter<AppState>)>) -> Router<Ap
     by_path
         .into_iter()
         .fold(Router::new(), |router, (path, handler)| router.route(path, handler))
-}
-
-/// Who is acting, for the audit log: the Firm's login email.
-async fn actor(state: &AppState, firm: FirmId) -> Result<String, WebError> {
-    Ok(state.firms.get(firm).await?.login_email)
 }
 
 /// The session secret from the request's cookies.

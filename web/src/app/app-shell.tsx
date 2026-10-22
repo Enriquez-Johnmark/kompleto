@@ -72,7 +72,7 @@ export function AppShell() {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
-          <FirmMenu firmName={me.data?.firm_name} email={me.data?.login_email} />
+          <FirmMenu firmName={me.data?.firm_name} email={me.data?.email} />
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>

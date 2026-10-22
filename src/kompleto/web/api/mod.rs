@@ -36,8 +36,10 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use super::{AppState, WebError, session_cookie};
+use crate::kompleto::auth::Session;
 use crate::kompleto::clients::ClientError;
 use crate::kompleto::firms::{FirmError, FirmId};
+use crate::kompleto::members::Role;
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
@@ -95,7 +97,7 @@ pub enum ApiError {
     /// The request was understood but refused, with the reason and
     /// any problems found.
     Refused {
-        /// 409, 422 or 503.
+        /// 403, 409, 422 or 503.
         status: StatusCode,
         /// One sentence for the bookkeeper.
         message: String,
@@ -235,11 +237,43 @@ impl FromRequestParts<AppState> for ApiFirm {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        let ApiMember(member) = ApiMember::from_request_parts(parts, state).await?;
+        Ok(Self(member.firm))
+    }
+}
+
+/// The logged-in person (M9), owner or staff; answers 401 when there's no
+/// live session.
+pub struct ApiMember(pub Session);
+
+impl FromRequestParts<AppState> for ApiMember {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let session = session_cookie(parts).ok_or(ApiError::NotLoggedIn)?;
-        match state.auth.firm_for_session(&session).await {
-            Ok(Some(firm)) => Ok(Self(firm)),
+        match state.auth.session(&session).await {
+            Ok(Some(member)) => Ok(Self(member)),
             Ok(None) => Err(ApiError::NotLoggedIn),
             Err(err) => Err(ApiError::internal(err)),
         }
+    }
+}
+
+/// The logged-in Firm's owner; staff are refused with 403 (K2).
+pub struct ApiOwner(pub Session);
+
+impl FromRequestParts<AppState> for ApiOwner {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        let ApiMember(member) = ApiMember::from_request_parts(parts, state).await?;
+        if member.role != Role::Owner {
+            return Err(ApiError::Refused {
+                status: StatusCode::FORBIDDEN,
+                message: "Only the firm's owner can do this.".to_owned(),
+                problems: Vec::new(),
+            });
+        }
+        Ok(Self(member))
     }
 }

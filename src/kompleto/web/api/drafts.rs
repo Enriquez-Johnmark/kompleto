@@ -11,12 +11,12 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{ApiError, ApiFirm, ApiJson, ApiPath};
+use super::{ApiError, ApiFirm, ApiJson, ApiMember, ApiPath};
 use crate::engine::outbox::{ContentHash, MessageStatus, OutboxError};
 use crate::kompleto::drafting::DraftSource;
 use crate::kompleto::drafts::Reminder;
 use crate::kompleto::firms::FirmId;
-use crate::kompleto::web::{AppState, ScopedRoute, actor, scoped_router};
+use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
 
 pub(super) fn routes() -> Router<AppState> {
     scoped_router(draft_endpoints())
@@ -155,13 +155,14 @@ pub struct Approval {
 
 async fn approve(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(approval): ApiJson<Approval>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     let reminder = reminder(&state, firm, id).await?;
     let seen = ContentHash::from_hex(&approval.hash).ok_or_else(damaged)?;
-    let approver = actor(&state, firm).await?;
+    let approver = member.email;
     state
         .outbox
         .approve(firm, reminder.id, &approver, &seen, &state.checks)
@@ -213,11 +214,12 @@ fn refusal(err: OutboxError) -> ApiError {
 
 async fn discard(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
 ) -> Result<StatusCode, ApiError> {
+    let firm = member.firm;
     let reminder = reminder(&state, firm, id).await?;
-    let actor = actor(&state, firm).await?;
+    let actor = member.email;
     state.outbox.cancel(firm, reminder.id, &actor).await.map_err(refusal)?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -234,15 +236,16 @@ pub struct DraftEdit {
 /// checked again when approved (D7).
 async fn save_edit(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(edit): ApiJson<DraftEdit>,
 ) -> Result<Json<DraftView>, ApiError> {
+    let firm = member.firm;
     let reminder = reminder(&state, firm, id).await?;
     let mut email = reminder.email.clone();
     email.subject = edit.subject.trim().to_owned();
     email.body_text = edit.body.replace("\r\n", "\n");
-    let editor = actor(&state, firm).await?;
+    let editor = member.email;
     state
         .outbox
         .edit(firm, reminder.id, &email, &editor)
@@ -294,14 +297,15 @@ pub struct BatchRefusal {
 /// Every ID is checked before anything is approved (A2).
 async fn approve_batch(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiJson(batch): ApiJson<BatchApproval>,
 ) -> Result<Json<BatchResult>, ApiError> {
+    let firm = member.firm;
     let mut reviewed = Vec::with_capacity(batch.approvals.len());
     for item in batch.approvals {
         reviewed.push((reminder(&state, firm, item.id).await?, item.hash));
     }
-    let approver = actor(&state, firm).await?;
+    let approver = member.email;
     let mut result = BatchResult {
         approved: 0,
         refused: Vec::new(),

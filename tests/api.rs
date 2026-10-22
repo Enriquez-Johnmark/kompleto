@@ -38,7 +38,7 @@ async fn without_a_session_the_api_answers_not_logged_in(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn me_names_the_logged_in_firm(pool: PgPool) {
+async fn me_names_the_logged_in_person_and_their_firm(pool: PgPool) {
     let app = TestApp::new(pool);
     let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
 
@@ -47,7 +47,7 @@ async fn me_names_the_logged_in_firm(pool: PgPool) {
     assert_eq!(response.status, StatusCode::OK, "{}", response.body);
     assert_eq!(
         response.json(),
-        json!({"firm_name": "Santos Bookkeeping", "login_email": "santos.bookkeeping@firm.test"})
+        json!({"firm_name": "Santos Bookkeeping", "email": "santos.bookkeeping@firm.test", "role": "owner"})
     );
 }
 

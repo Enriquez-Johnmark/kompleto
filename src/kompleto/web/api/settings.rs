@@ -8,12 +8,12 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use super::{ApiError, ApiFirm, ApiJson};
+use super::{ApiError, ApiFirm, ApiJson, ApiOwner};
 use crate::engine::cost_log;
 use crate::kompleto::closing::{self, ClosingError};
 use crate::kompleto::dates::manila_month;
 use crate::kompleto::schedule::MANILA;
-use crate::kompleto::web::{AppState, SESSION_COOKIE, actor};
+use crate::kompleto::web::{AppState, SESSION_COOKIE};
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
@@ -100,10 +100,11 @@ pub struct Closed {
 /// Closes the account once the Firm's name is typed (I2), and logs out.
 async fn close_account(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiOwner(member): ApiOwner,
     ApiJson(close): ApiJson<CloseAccount>,
 ) -> Result<Response, ApiError> {
-    let actor = actor(&state, firm).await?;
+    let firm = member.firm;
+    let actor = member.email;
     match closing::close(&state.pool, &state.clock, firm, &close.confirm, &actor).await {
         Ok(erase_after) => {
             let closed = Closed {

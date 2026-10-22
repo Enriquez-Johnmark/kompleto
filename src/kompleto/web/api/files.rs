@@ -8,10 +8,10 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{MethodRouter, get, post};
 use uuid::Uuid;
 
-use super::{ApiError, ApiFirm, ApiPath};
+use super::{ApiError, ApiFirm, ApiMember, ApiPath};
 use crate::engine::ids::FileId;
 use crate::kompleto::clients::ClientId;
-use crate::kompleto::web::{AppState, ScopedRoute, actor, scoped_router};
+use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
 
 pub(super) fn routes() -> Router<AppState> {
     scoped_router(file_endpoints())
@@ -65,10 +65,11 @@ async fn download(
 
 async fn received(
     State(state): State<AppState>,
-    ApiFirm(firm): ApiFirm,
+    ApiMember(member): ApiMember,
     ApiPath((id, upload)): ApiPath<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
-    let by = actor(&state, firm).await?;
+    let firm = member.firm;
+    let by = member.email;
     state
         .uploads
         .mark_received(firm, ClientId::from(id), FileId::from(upload), &by)
