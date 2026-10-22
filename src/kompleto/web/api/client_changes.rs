@@ -1,11 +1,11 @@
 //! Changes made from a Client's page: its reminder schedule (D1), its own
 //! Due dates (B3), the documents asked for (B4) and its Payors (H2).
 
-use axum::Router;
 use axum::extract::State;
 use axum::http::{Method, StatusCode};
 use axum::routing::{MethodRouter, delete, post, put};
-use serde::Deserialize;
+use axum::{Json, Router};
+use serde::{Deserialize, Serialize};
 use time::Date;
 use uuid::Uuid;
 
@@ -13,6 +13,7 @@ use super::{ApiError, ApiJson, ApiMember, ApiPath};
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::{ExtraItem, Recurs};
 use crate::kompleto::clients::{ClientError, ClientId, ExtraItemId, ScheduleSettings};
+use crate::kompleto::import::payors::MAX_NAMES;
 use crate::kompleto::payors::PayorId;
 use crate::kompleto::schedule::ReminderDays;
 use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
@@ -80,6 +81,14 @@ pub(in crate::kompleto::web) fn change_endpoints() -> Vec<(ScopedRoute, MethodRo
                 r#"{"name": "Puregold Price Club"}"#,
             ),
             post(add_payor),
+        ),
+        (
+            endpoint(
+                Method::POST,
+                "/api/clients/{id}/payors/batch",
+                r#"{"names": ["Puregold Price Club"]}"#,
+            ),
+            post(add_payors),
         ),
         (
             endpoint(Method::DELETE, "/api/clients/{id}/payors/{payor}", ""),
@@ -283,6 +292,49 @@ async fn add_payor(
         .await
         .map_err(client_refusal)?;
     Ok(StatusCode::CREATED)
+}
+
+/// Names ticked from a sales export (H3).
+#[derive(Debug, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct NewPayors {
+    pub names: Vec<String>,
+}
+
+/// What became of each name.
+#[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct PayorsAdded {
+    pub added: u32,
+    pub already_listed: u32,
+    /// Each refused name with why, e.g. "Puregold: a Payor's name is 1 to 100 characters".
+    pub refused: Vec<String>,
+}
+
+async fn add_payors(
+    State(state): State<AppState>,
+    ApiMember(member): ApiMember,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(batch): ApiJson<NewPayors>,
+) -> Result<Json<PayorsAdded>, ApiError> {
+    if batch.names.len() > MAX_NAMES {
+        return Err(refused(format!("Add at most {MAX_NAMES} Payors at once.")));
+    }
+    let payors = state.payors.by(&member.email);
+    let mut outcome = PayorsAdded {
+        added: 0,
+        already_listed: 0,
+        refused: Vec::new(),
+    };
+    for name in &batch.names {
+        match payors.add(member.firm, ClientId::from(id), name).await {
+            Ok(_) => outcome.added += 1,
+            Err(ClientError::DuplicateName(_)) => outcome.already_listed += 1,
+            Err(ClientError::Invalid(reason)) => outcome.refused.push(format!("{}: {reason}", name.trim())),
+            Err(other) => return Err(other.into()),
+        }
+    }
+    Ok(Json(outcome))
 }
 
 async fn remove_payor(

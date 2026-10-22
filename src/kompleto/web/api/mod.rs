@@ -20,6 +20,7 @@ mod files;
 mod import;
 mod login;
 mod me;
+mod payor_import;
 mod replies;
 mod settings;
 mod signup;
@@ -55,6 +56,7 @@ pub(super) fn routes() -> Router<AppState> {
         .merge(export::routes())
         .merge(files::routes())
         .merge(import::routes())
+        .merge(payor_import::routes())
         .merge(replies::routes())
         .merge(settings::routes())
         .merge(signup::routes())
