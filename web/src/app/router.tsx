@@ -24,6 +24,12 @@ export const router = createBrowserRouter([
           Component: (await import("@/features/dashboard/dashboard-page")).DashboardPage,
         }),
       },
+      {
+        path: "drafts",
+        lazy: async () => ({
+          Component: (await import("@/features/drafts/drafts-page")).DraftsPage,
+        }),
+      },
       { path: "*", Component: NotFoundPage },
     ],
   },
