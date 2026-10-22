@@ -14,6 +14,7 @@ mod clients;
 mod dashboard;
 mod drafts;
 mod files;
+mod import;
 mod login;
 mod me;
 mod replies;
@@ -39,6 +40,7 @@ pub(super) fn routes() -> Router<AppState> {
         .merge(dashboard::routes())
         .merge(drafts::routes())
         .merge(files::routes())
+        .merge(import::routes())
         .merge(replies::routes())
         .merge(login::routes())
         .merge(me::routes())

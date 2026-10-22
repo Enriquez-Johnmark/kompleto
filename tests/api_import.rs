@@ -1,13 +1,14 @@
-//! Seam 4: importing clients through the web pages (B2).
+//! Importing clients through the API (B2).
 
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
 
 mod common;
 
 use axum::body::Body;
-use axum::http::{Request, StatusCode, header};
+use axum::http::{Method, Request, StatusCode, header};
 use common::web::{BASE_URL, Response, TestApp};
 use kompleto::kompleto::clients::Clients;
+use serde_json::json;
 use sqlx::PgPool;
 
 const CSV: &str = "Business name,Contact first name,Email,Language,Forms\n\
@@ -24,7 +25,7 @@ async fn upload(app: &TestApp, cookie: &str, filename: &str, bytes: &[u8]) -> Re
     .into_bytes();
     body.extend_from_slice(bytes);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
-    let request = Request::post("/import")
+    let request = Request::post("/api/import")
         .header(header::COOKIE, cookie)
         .header(header::ORIGIN, BASE_URL)
         .header(
@@ -36,31 +37,6 @@ async fn upload(app: &TestApp, cookie: &str, filename: &str, bytes: &[u8]) -> Re
     app.send(request).await
 }
 
-/// The preview page's hidden `rows` field, unescaped and URL-encoded for posting.
-fn confirm_form(preview: &str) -> String {
-    let start = preview.find(r#"name="rows" value=""#).unwrap() + r#"name="rows" value=""#.len();
-    let html = &preview[start..start + preview[start..].find('"').unwrap()];
-    let json = html
-        .replace("&quot;", "\"")
-        .replace("&#34;", "\"")
-        .replace("&#x27;", "'")
-        .replace("&#39;", "'")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&");
-    let encoded: String = json
-        .bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() {
-                (b as char).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect();
-    format!("rows={encoded}")
-}
-
 #[sqlx::test]
 async fn b2_an_upload_is_previewed_and_only_confirming_adds_the_valid_rows(pool: PgPool) {
     let app = TestApp::new(pool.clone());
@@ -70,21 +46,37 @@ async fn b2_an_upload_is_previewed_and_only_confirming_adds_the_valid_rows(pool:
     let preview = upload(&app, &cookie, "clients.csv", CSV.as_bytes()).await;
 
     assert_eq!(preview.status, StatusCode::OK, "{}", preview.body);
-    for expected in ["Add 2 clients", "Row 3", "Business name: is required", "Lito Hardware"] {
-        assert!(
-            preview.body.contains(expected),
-            "missing {expected:?} in {}",
-            preview.body
-        );
-    }
+    let preview = preview.json();
+    let valid: Vec<&str> = preview["valid"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["business_name"].as_str().unwrap())
+        .collect();
+    assert_eq!(valid, ["Nena's Store", "Lito Hardware"]);
+    assert_eq!(preview["invalid"][0]["row"], 3);
+    assert!(
+        preview["invalid"][0]["reasons"]
+            .to_string()
+            .contains("Business name: is required"),
+        "{preview}"
+    );
     assert!(
         clients.list(firm).await.unwrap().is_empty(),
         "nothing is added before confirming"
     );
 
-    let confirmed = app.post("/import/confirm", &cookie, &confirm_form(&preview.body)).await;
+    let confirmed = app
+        .api(
+            Method::POST,
+            "/api/import/confirm",
+            Some(&cookie),
+            Some(json!({ "rows": preview["rows"] })),
+        )
+        .await;
 
-    assert_eq!(confirmed.status, StatusCode::SEE_OTHER, "{}", confirmed.body);
+    assert_eq!(confirmed.status, StatusCode::OK, "{}", confirmed.body);
+    assert_eq!(confirmed.json()["added"], 2);
     let names: Vec<_> = clients
         .list(firm)
         .await
@@ -105,15 +97,14 @@ async fn b2_a_file_that_cant_be_read_is_refused_whole(pool: PgPool) {
 
     assert_eq!(wrong_columns.status, StatusCode::UNPROCESSABLE_ENTITY);
     assert!(
-        wrong_columns.body.contains("the first row needs these columns"),
+        wrong_columns.json()["message"]
+            .as_str()
+            .unwrap()
+            .contains("the first row needs these columns"),
         "{}",
         wrong_columns.body
     );
-    assert!(
-        wrong_type.body.contains("Upload a .csv or .xlsx file"),
-        "{}",
-        wrong_type.body
-    );
+    assert_eq!(wrong_type.json()["message"], "Upload a .csv or .xlsx file.");
 }
 
 #[sqlx::test]
@@ -121,7 +112,7 @@ async fn b2_the_template_file_has_the_import_columns(pool: PgPool) {
     let app = TestApp::new(pool);
     let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
 
-    let template = app.get("/import/template.csv", &cookie).await;
+    let template = app.get("/api/import/template.csv", &cookie).await;
 
     assert_eq!(template.status, StatusCode::OK);
     assert!(
@@ -135,20 +126,30 @@ async fn b2_the_template_file_has_the_import_columns(pool: PgPool) {
 async fn b2_a_confirmation_over_the_row_limit_is_refused(pool: PgPool) {
     let app = TestApp::new(pool.clone());
     let (firm, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
-    let rows: Vec<String> = (0..=500)
-        .map(|n| {
-            format!(
-                r#"%7B%22business_name%22%3A%22C{n}%22%2C%22contact_first_name%22%3A%22A%22%2C%22email%22%3A%22a%40b.test%22%2C%22language%22%3A%22English%22%2C%22forms%22%3A%5B%222551Q%22%5D%7D"#
-            )
-        })
-        .collect();
+    let row = json!({
+        "business_name": "C", "contact_first_name": "A", "email": "a@b.test",
+        "language": "English", "forms": ["2551Q"],
+    });
+    let rows: Vec<_> = (0..=500).map(|_| row.clone()).collect();
 
     let refused = app
-        .post("/import/confirm", &cookie, &format!("rows=%5B{}%5D", rows.join("%2C")))
+        .api(
+            Method::POST,
+            "/api/import/confirm",
+            Some(&cookie),
+            Some(json!({ "rows": rows })),
+        )
         .await;
 
     assert_eq!(refused.status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert!(refused.body.contains("more than 500 rows"), "{}", refused.body);
+    assert!(
+        refused.json()["message"]
+            .as_str()
+            .unwrap()
+            .contains("more than 500 rows"),
+        "{}",
+        refused.body
+    );
     assert!(
         Clients::new(pool, app.clock.clone())
             .list(firm)

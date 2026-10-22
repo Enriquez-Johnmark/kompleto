@@ -11,7 +11,6 @@ mod activity;
 mod api;
 mod export;
 mod hooks;
-mod import;
 mod settings;
 mod spa;
 mod tracker;
@@ -196,7 +195,6 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(api::routes())
-        .merge(import::routes())
         .merge(settings::routes())
         .merge(upload::routes())
         .merge(hooks::routes())
