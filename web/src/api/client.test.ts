@@ -25,6 +25,13 @@ describe("api", () => {
     })
   })
 
+  it("accepts a success with no body, such as 201 Created", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 201 })))
+    await expect(
+      api("POST", "/api/clients/1/payors", { name: "Jollibee" })
+    ).resolves.toBeUndefined()
+  })
+
   it("turns a refusal into an ApiError with the API's words", async () => {
     answer(422, { message: "Not saved.", problems: ["Email is missing."] })
     const error = await api("POST", "/api/clients", {}).catch((e: unknown) => e)

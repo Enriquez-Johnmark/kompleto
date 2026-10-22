@@ -29,6 +29,23 @@ test("b1 a client added through the form gets its deadlines", async ({ page }) =
   await expect(page.getByText(/^Cut-off/).first()).toBeVisible()
 })
 
+test("h2 a Payor added on the client page is listed", async ({ page }) => {
+  await page.goto("/clients/new")
+  await page.getByLabel("Business name").fill(`Dental Clinic ${run}`)
+  await page.getByLabel("Contact's first name").fill("Mike")
+  await page.getByLabel("Email").fill("mike@example.test")
+  await page.getByRole("checkbox", { name: /2551Q/ }).click()
+  await page.getByRole("button", { name: "Add client" }).click()
+  await page.getByRole("tab", { name: "Documents" }).click()
+
+  await page.getByLabel("Payor's name").fill("Jollibee Foods Corp")
+  await page.getByRole("button", { name: "Add" }).last().click()
+
+  await expect(page.getByText("Jollibee Foods Corp")).toBeVisible()
+  await expect(page.getByLabel("Payor's name")).toHaveValue("")
+  await expect(page.getByRole("alert")).toHaveCount(0)
+})
+
 test("b1 a form with problems shows every reason and adds nothing", async ({ page }) => {
   await page.goto("/clients/new")
   await page.getByRole("button", { name: "Add client" }).click()

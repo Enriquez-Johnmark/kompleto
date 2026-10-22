@@ -32,8 +32,9 @@ export async function api<T>(method: Method, path: string, body?: unknown): Prom
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (!response.ok) throw new ApiError(response.status, await errorBody(response))
-  if (response.status === 204 || response.status === 202) return undefined as T
-  return (await response.json()) as T
+  // 201, 202 and 204 answers may have no body at all.
+  const text = await response.text()
+  return (text === "" ? undefined : JSON.parse(text)) as T
 }
 
 /** Sends a file to the API as a form, the one request that isn't JSON. */
