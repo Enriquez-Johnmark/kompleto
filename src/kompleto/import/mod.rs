@@ -3,6 +3,7 @@
 //! the file into rows; checking sorts them into valid and invalid with
 //! reasons. Nothing is stored until the bookkeeper confirms.
 
+pub mod payors;
 pub mod xlsx;
 
 use std::collections::HashMap;
