@@ -83,7 +83,8 @@ test("b5 a Xero contact export imports with the forms chosen for it", async ({ p
   )
   await page.goto("/import")
   const defaults = page.locator("[data-slot=card]", { hasText: "For files without" })
-  await defaults.getByLabel("Language").selectOption("english")
+  await defaults.getByRole("checkbox", { name: "My file has no Language or Forms columns" }).click()
+  await defaults.getByLabel("Language", { exact: true }).selectOption("english")
   await defaults.getByRole("checkbox", { name: /2551Q/ }).click()
   await page.locator("input[type=file]").setInputFiles(file)
 
@@ -91,7 +92,7 @@ test("b5 a Xero contact export imports with the forms chosen for it", async ({ p
   await page.getByRole("button", { name: "Add 1 client" }).click()
   await page.getByRole("link", { name: `Aquino Rice ${run}` }).click()
 
-  await expect(page.getByText("English")).toBeVisible()
+  await expect(page.getByText("English").first()).toBeVisible()
   await expect(page.getByText("2551Q", { exact: true }).first()).toBeVisible()
 })
 

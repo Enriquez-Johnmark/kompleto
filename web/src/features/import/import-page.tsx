@@ -31,14 +31,31 @@ export function ImportPage() {
   const navigate = useNavigate()
   const refresh = useRefreshClients()
   const [fileName, setFileName] = useState("")
-  const [defaults, setDefaults] = useState<BatchDefaults>({ language: "taglish", forms: [] })
+  const [defaults, setDefaults] = useState<BatchDefaults>({
+    enabled: false,
+    language: "taglish",
+    forms: [],
+  })
   const check = useMutation({
     mutationFn: (file: File) =>
-      apiUpload<ImportPreview>("/api/import", file, [
-        ["default_language", defaults.language],
-        ...defaults.forms.map((form): [string, string] => ["default_forms", form]),
-      ]),
+      apiUpload<ImportPreview>(
+        "/api/import",
+        file,
+        defaults.enabled
+          ? [
+              ["default_language", defaults.language],
+              ...defaults.forms.map((form): [string, string] => ["default_forms", form]),
+            ]
+          : []
+      ),
   })
+
+  // A preview made with other choices would add the wrong values.
+  function handleDefaults(changed: BatchDefaults) {
+    setDefaults(changed)
+    check.reset()
+    setFileName("")
+  }
   const confirm = useMutation({
     mutationFn: (confirmation: ImportConfirmation) =>
       api<Imported>("POST", "/api/import/confirm", confirmation),
@@ -74,7 +91,7 @@ export function ImportPage() {
           Download the template
         </Button>
       </PageHeader>
-      <BatchDefaultsCard defaults={defaults} onChange={setDefaults} />
+      <BatchDefaultsCard defaults={defaults} onChange={handleDefaults} />
       <Card>
         <CardHeader>
           <CardTitle>Choose a file</CardTitle>

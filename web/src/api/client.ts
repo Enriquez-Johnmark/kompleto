@@ -37,8 +37,8 @@ export async function api<T>(method: Method, path: string, body?: unknown): Prom
   return (text === "" ? undefined : JSON.parse(text)) as T
 }
 
-/** Sends a file to the API as a form, the one request that isn't JSON. */
-/** Posts `file` as a form, after any other `fields` (name, value). */
+/** Sends `file` to the API as a form, the one request that isn't JSON,
+ *  after any other `fields` (name, value). */
 export async function apiUpload<T>(
   path: string,
   file: File,
