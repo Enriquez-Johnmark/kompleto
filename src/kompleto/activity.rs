@@ -100,6 +100,7 @@ pub fn describe(action: &str) -> &str {
         "reply.received" => "A reply arrived",
         "firm.logged_in" => "Logged in",
         "firm.exported" => "Downloaded all data",
+        "firm.cut_off_changed" => "Changed the default cut-off",
         "firm.closed" => "Closed the account",
         "firm.reopened" => "Reopened the account",
         "file.deleted" => "Deleted an uploaded file",

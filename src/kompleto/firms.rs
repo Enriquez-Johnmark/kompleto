@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use sqlx::PgPool;
 
+use super::activity::record_by_firm;
 use crate::engine::clock::Clock;
 use crate::engine::ids::TenantId;
 use crate::engine::outbox::links;
@@ -110,16 +111,21 @@ impl Firms {
         if days > 30 {
             return Err(FirmError::Invalid("the cut-off offset is 0 to 30 days".to_owned()));
         }
+        let mut tx = self.pool.begin().await?;
         let updated = sqlx::query!(
             "update firms set cut_off_offset_days = $2 where id = $1",
             id.as_uuid(),
             i16::from(days)
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
         if updated.rows_affected() == 0 {
             return Err(FirmError::NotFound);
         }
+        let details = serde_json::json!({ "days": days });
+        let subject = ("firm", id.as_uuid());
+        record_by_firm(&mut tx, id, self.clock.now(), "firm.cut_off_changed", subject, details).await?;
+        tx.commit().await?;
         Ok(())
     }
 

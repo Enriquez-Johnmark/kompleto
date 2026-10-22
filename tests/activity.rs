@@ -119,3 +119,21 @@ async fn j2_checklist_and_payor_changes_are_logged(pool: PgPool) {
         ]
     );
 }
+
+#[sqlx::test]
+async fn j2_a_change_to_the_firms_default_cut_off_is_logged(pool: PgPool) {
+    use kompleto::kompleto::firms::Firms;
+
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+
+    Firms::new(pool.clone(), clock())
+        .set_cut_off_offset(santos, 10)
+        .await
+        .unwrap();
+
+    let actor = common::firm_email("Santos Bookkeeping");
+    assert_eq!(
+        logged(&pool, santos).await,
+        [(actor, "firm.cut_off_changed".to_owned())]
+    );
+}
