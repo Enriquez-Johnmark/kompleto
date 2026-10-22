@@ -1,6 +1,6 @@
 # Going live
 
-Status: prepared 2026-10-22, not yet followed. It starts once the owner has the domain (decision M6 round, `docs/decisions.md`). Every step is at ₱0 except the domain. Vendor screens change; where a label below no longer matches, look for the nearest one, and note the change here.
+Status: prepared 2026-10-22, updated for the React app (M7), not yet followed. It starts once the owner has the domain (decision M6 round, `docs/decisions.md`). Every step is at ₱0 except the domain. Vendor screens change; where a label below no longer matches, look for the nearest one, and note the change here.
 
 Two paths, depending on the card question:
 
@@ -65,13 +65,17 @@ Known limit: the free Worker plan allows about 10 ms of CPU per email. Signing a
    sudo -u postgres createuser kompleto --pwprompt     # the Postgres password
    sudo -u postgres createdb kompleto --owner kompleto
    curl https://sh.rustup.rs -sSf | sh
+   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash - && sudo apt install -y nodejs
+   sudo corepack enable                                # pnpm, at the version web/package.json names
    # then, in a clone of this (private) repository: `gh auth login` first,
    # or a read-only deploy key added on GitHub
    git clone https://github.com/Enriquez-Johnmark/kompleto && cd kompleto
    cargo build --release
+   pnpm --dir web install --frozen-lockfile && pnpm --dir web build
    sudo useradd --system --home /var/lib/kompleto --create-home kompleto
    sudo mkdir -p /opt/kompleto /etc/kompleto
    sudo cp target/release/kompleto deploy/backup.sh /opt/kompleto/
+   sudo cp -r web/dist /opt/kompleto/web
    ```
    Postgres listens only on localhost by default; keep it that way.
 4. Write `/etc/kompleto/kompleto.env` (below), then `sudo chmod 600 /etc/kompleto/*.env`, and install the units:
@@ -82,8 +86,8 @@ Known limit: the free Worker plan allows about 10 ms of CPU per email. Signing a
 
 ### Path B: the owner's Mac
 
-1. `brew install postgresql@17 cloudflared rclone gnupg`, then `brew services start postgresql@17`, and create the user and database as in path A.
-2. Build with `cargo build --release`. Copy `target/release/kompleto`, `deploy/backup.sh` and `deploy/mac/run.sh` into `~/kompleto/`, and write `~/kompleto/kompleto.env` (below, `chmod 600`).
+1. `brew install postgresql@17 cloudflared rclone gnupg node@22`, then `corepack enable` and `brew services start postgresql@17`, and create the user and database as in path A.
+2. Build with `cargo build --release` and `pnpm --dir web install --frozen-lockfile && pnpm --dir web build`. Copy `target/release/kompleto`, `deploy/backup.sh` and `deploy/mac/run.sh` into `~/kompleto/`, `web/dist` to `~/kompleto/web`, and write `~/kompleto/kompleto.env` (below, `chmod 600`).
 3. Copy both files in `deploy/mac/*.plist` to `~/Library/LaunchAgents/` and `launchctl load` each.
 4. **System Settings → Energy**: prevent automatic sleeping while the display is off. While the Mac sleeps or is off, nothing is sent and replies queue in Cloudflare.
 
@@ -100,6 +104,7 @@ MAIL_FROM_ADDRESS=reminders@getkompleto.com
 INBOUND_SECRET=<from step 1>
 FILE_MASTER_KEY=<from step 1>
 UPLOAD_DIR=/var/lib/kompleto/uploads          # ~/kompleto/uploads on the Mac
+WEB_DIR=/opt/kompleto/web                     # ~/kompleto/web on the Mac
 SUPPORT_EMAIL=help@getkompleto.com
 # ANTHROPIC_API_KEY=   only once paid for; drafts are templates until then
 ```

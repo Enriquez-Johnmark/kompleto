@@ -15,7 +15,7 @@ Each gate needs the owner's explicit "yes"; an approval for one phase never carr
 | 7. Rust architecture (engine vs product split) | done (`docs/architecture.md`) |
 | 8. Project rules, glossary & ADRs | done (`GLOSSARY.md`, `docs/adr/`, rules below) |
 | 9. Implementation readiness gate | done (2026-10-21) |
-| 10+. Build engine + P1 (Rust backend and API; React for the bookkeeper's pages) | **in progress**: M1–M5 done; M6 built, deployment waits for the domain; M7 (React app) and M8 (showcase) next |
+| 10+. Build engine + P1 (Rust backend and API; React for the bookkeeper's pages) | **in progress**: M1–M5 and M7 done; M6 built, deployment waits for the domain; M8 (showcase) next |
 
 **No application code exists or gets written until the Phase 9 gate passes.** Research, docs and throwaway prototypes that answer a specific question are in scope; prototypes live in `prototypes/<question>/` and are deleted once their answer is recorded.
 
@@ -77,6 +77,7 @@ Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a
 - Run tests with `cargo test --all-features`: the E1 crash test needs the `failpoints` feature and is skipped without it.
 - After changing any SQL, run `cargo sqlx prepare -- --all-targets --all-features` and commit `.sqlx/`; CI compiles offline from it.
 - `cargo run -- demo` puts one approved email through the outbox into Mailpit.
+- The React app: `pnpm --dir web install`, then `pnpm --dir web build` for the Rust server to serve it, or `pnpm --dir web dev` (http://localhost:5173, with `PUBLIC_BASE_URL` set to it) while working on it. `cargo test` writes the API's TypeScript types into `web/src/api/generated/`; commit them.
 
 ## Milestone workflow
 
@@ -85,7 +86,7 @@ The owner is the only developer: work directly on `main`. No branches, no pull r
 1. Follow the build order in `docs/architecture.md`, one milestone at a time.
 2. Test first, using the `tdd` skill: write one criterion's test, see it fail, then make it pass.
 3. **Small commits.** Each commit is one behaviour (one test plus the code that makes it pass) or one small refactor or doc change, aiming for under ~150 changed lines excluding `.sqlx/` and `Cargo.lock`. Messages are imperative and describe the behaviour, e.g. "Add CSV client import with per-row errors". Commit messages carry no AI attribution trailers such as "Co-Authored-By" (owner's choice).
-4. Before every commit: `cargo fmt --check`, `cargo clippy --all-targets --all-features --locked -- -D warnings` and `cargo test --all-features --locked` all pass. If SQL changed, run `cargo sqlx prepare -- --all-targets --all-features` and commit `.sqlx/` with it.
+4. Before every commit: `cargo fmt --check`, `cargo clippy --all-targets --all-features --locked -- -D warnings` and `cargo test --all-features --locked` all pass, and for changes under `web/`, `pnpm --dir web lint`, `typecheck`, `test` and `build` too (`pnpm --dir web e2e` runs the browser tests against a running server; CI runs them on every push). If SQL changed, run `cargo sqlx prepare -- --all-targets --all-features` and commit `.sqlx/` with it.
 5. Push to `origin main` after each commit. If CI goes red, fixing it is the next commit.
 6. At the end of a milestone, run the `code-review` skill, fix findings in small commits, and tell the owner how to try it.
 

@@ -88,7 +88,8 @@ kompleto/
 │   ├── tsconfig.json
 │   ├── components.json         shadcn settings
 │   ├── eslint.config.js
-│   ├── e2e/                    Playwright tests
+│   ├── e2e/                    Playwright tests of the main journeys
+│   ├── scripts/                vendor-shadcn.mjs
 │   └── src/
 │       ├── main.tsx            entry: providers and router
 │       ├── app/                router, app shell (navigation), error and 404 pages
@@ -216,6 +217,12 @@ Default exports only where a tool requires them (Vite config, lazy-loaded routes
 - **Browser tests (Playwright)** cover the main journeys end to end: log in, add and import Clients, approve a batch of Drafts, see an Upload arrive, read a Reply, export data. A test that proves a criterion in the browser starts its name with the ID, e.g. `d3 batch review shows every draft before approving`.
 - **Unit tests (Vitest)** cover components with logic, such as the batch-review selection, not static layout.
 - Test what the user sees: find elements by role and label, not by CSS class.
+
+## Running it
+
+- **With the Rust server:** `pnpm --dir web build`, then `cargo run -- serve` serves the app from `web/dist` (`WEB_DIR`) at http://127.0.0.1:3000, as in production.
+- **While working on it:** `pnpm --dir web dev` serves it at http://localhost:5173 with instant reloads, passing `/api`, `/u/`, `/static/`, `/hooks` and `/health` to the Rust server. Set `PUBLIC_BASE_URL=http://localhost:5173` in `.env` so login links open there and the API accepts changes from it.
+- **Browser tests:** `pnpm --dir web e2e` runs `web/e2e/` against a running server, logging in once through Mailpit for a new Firm per run. Set `CHROMIUM_PATH` to use an installed Chromium.
 
 ## Checks before every commit
 

@@ -25,8 +25,8 @@ Kompleto never keeps books, computes tax, files returns or produces BIR-format f
 | **M4** Phone upload page, encrypted files, auto-deletion | Done |
 | **M5** Replies, bounces, dashboard, 2307 tracker | Done |
 | **M6** Export, account closing, activity log, send budget, hardening | Built; going live waits for the domain |
-| **M7** The bookkeeper's pages as a React app | **In progress** |
-| **M8** Demo Firm, virus scanning, help and privacy pages, screenshots, video | Next |
+| **M7** The bookkeeper's pages as a React app | Done |
+| **M8** Demo Firm, virus scanning, help and privacy pages, screenshots, video | **Next** |
 | Go live, then 3–5 free 4-week pilots | After M8, once a bookkeeper says yes |
 
 All 28 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.
@@ -43,24 +43,28 @@ One Rust program, in two parts:
 | Part | Technology |
 |---|---|
 | Backend | Rust, axum, sqlx, PostgreSQL 17 |
-| Bookkeeper's pages | React with Vite, TypeScript, shadcn/ui, Tailwind (from M7; `docs/frontend.md`) |
+| Bookkeeper's pages | React with Vite, TypeScript, shadcn/ui, Tailwind, over a JSON API (`docs/frontend.md`) |
 | Client upload page | Server-rendered HTML, built to load fast on cheap phones |
 | Email | Resend (sending), Cloudflare Email Routing (replies), Mailpit in development |
 | AI | Claude via API key, for wording reminders only; fixed templates when no key is set |
 
 ## Run it locally
 
-You need Docker and Rust (the version is pinned in `rust-toolchain.toml`).
+You need Docker, Rust (the version is pinned in `rust-toolchain.toml`), Node 22 and pnpm (`corepack enable`).
 
 ```sh
 cp .env.example .env          # once
 docker compose up -d          # Postgres 17 and Mailpit
 cargo run -- migrate
 cargo run -- firm add --name "Santos Bookkeeping" --email you@example.com
+pnpm --dir web install
+pnpm --dir web build          # the React app, served by the Rust server
 cargo run -- serve            # http://127.0.0.1:3000
 ```
 
 Log in with the email you gave. The login link arrives in Mailpit at http://localhost:8025, where every email lands in development; nothing leaves your machine.
+
+**Working on the React app:** run `pnpm --dir web dev` as well and open http://localhost:5173, which reloads as you edit and passes `/api` to the Rust server. Set `PUBLIC_BASE_URL=http://localhost:5173` in `.env` so login links open there.
 
 Other commands:
 
@@ -79,15 +83,25 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo test --all-features --locked
 ```
 
-`--all-features` includes the E1 crash test. After changing SQL, run `cargo sqlx prepare -- --all-targets --all-features` and commit `.sqlx/`, because CI compiles without a database. Once `web/` exists, the React checks in `docs/frontend.md` run as well.
+`--all-features` includes the E1 crash test. `cargo test` also writes the API's TypeScript types into `web/src/api/generated/`; commit them. After changing SQL, run `cargo sqlx prepare -- --all-targets --all-features` and commit `.sqlx/`, because CI compiles without a database.
+
+The React app's checks:
+
+```sh
+pnpm --dir web lint
+pnpm --dir web typecheck
+pnpm --dir web test
+pnpm --dir web build
+pnpm --dir web e2e            # browser tests, against a running `cargo run -- serve`
+```
 
 ## Project layout
 
 ```
 src/engine/       reusable engine
-src/kompleto/     the product, including its web API
-web/              the React app (from M7)
-templates/        server-rendered pages (the upload page from M7 on)
+src/kompleto/     the product, including its JSON API (src/kompleto/web/api/)
+web/              the React app; web/e2e/ holds the browser tests
+templates/        the Client's server-rendered upload page
 migrations/       database migrations
 tests/            Rust tests; each acceptance criterion's test starts with its ID
 deploy/           service, backup, tunnel and email-worker files for going live
