@@ -39,6 +39,7 @@ use super::dates::show_date;
 use super::drafts::Drafts;
 use super::firms::{FirmError, Firms};
 use super::import::xlsx::XlsxReader;
+use super::members::Members;
 use super::payors::Payors;
 use super::presend::KompletoChecks;
 use super::replies::Replies;
@@ -60,6 +61,7 @@ pub struct AppState {
     calendar: Arc<Calendar>,
     auth: Auth,
     firms: Firms,
+    members: Members,
     clients: Clients,
     drafts: Drafts,
     outbox: Outbox,
@@ -129,6 +131,7 @@ impl AppState {
             calendar: Arc::new(Calendar::built_in()?),
             auth: Auth::new(pool.clone(), clock.clone(), base_url, checks.clone()),
             firms: Firms::new(pool.clone(), clock.clone()),
+            members: Members::new(pool.clone(), clock.clone()),
             clients: Clients::new(pool.clone(), clock.clone()),
             drafts: Drafts::new(pool.clone(), clock.clone()),
             outbox: Outbox::new(pool.clone(), clock.clone()),

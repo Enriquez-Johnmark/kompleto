@@ -97,3 +97,81 @@ async fn k3_an_approval_names_the_staff_member_who_gave_it(pool: PgPool) {
         .unwrap();
     assert_eq!(approver, "joy@santos.test");
 }
+
+#[sqlx::test]
+async fn k1_the_owner_invites_staff_who_get_their_own_login_link(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, owner) = app.logged_in_firm("Santos Bookkeeping").await;
+
+    let invited = app
+        .api(
+            Method::POST,
+            "/api/staff",
+            Some(&owner),
+            Some(json!({ "email": "joy@santos.test" })),
+        )
+        .await;
+    let taken = app
+        .api(
+            Method::POST,
+            "/api/staff",
+            Some(&owner),
+            Some(json!({ "email": "JOY@santos.test" })),
+        )
+        .await;
+
+    assert_eq!(invited.status, StatusCode::CREATED, "{}", invited.body);
+    assert_eq!(taken.status, StatusCode::CONFLICT);
+    let (subject, body): (String, String) =
+        sqlx::query_as("select subject, body_text from outbox_messages where to_address = 'joy@santos.test'")
+            .fetch_one(&app.pool)
+            .await
+            .unwrap();
+    assert_eq!(subject, "You've been added to Santos Bookkeeping on Kompleto");
+    assert!(body.contains("santos.bookkeeping@firm.test added you"), "{body}");
+    let token = app.login_token_for("joy@santos.test").await;
+    let logged_in = app.api(Method::POST, &format!("/api/login/{token}"), None, None).await;
+    assert!(
+        logged_in.session_cookie().is_some(),
+        "the invitation's link logs them in"
+    );
+    let listed = app.api(Method::GET, "/api/staff", Some(&owner), None).await.json();
+    assert_eq!(listed["max_staff"], 5);
+    assert_eq!(listed["members"][1]["email"], "joy@santos.test");
+    assert_eq!(listed["members"][1]["role"], "staff");
+}
+
+#[sqlx::test]
+async fn k2_only_the_firms_owner_manages_its_staff(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (santos, owner) = app.logged_in_firm("Santos Bookkeeping").await;
+    let (_, other_owner) = app.logged_in_firm("Reyes CPA").await;
+    let joy = app.logged_in_staff(santos, "joy@santos.test").await;
+    let listed = app.api(Method::GET, "/api/staff", Some(&owner), None).await.json();
+    let joy_id = listed["members"][1]["id"].as_str().unwrap().to_owned();
+    let remove = |cookie: &str| {
+        let cookie = cookie.to_owned();
+        let path = format!("/api/staff/{joy_id}");
+        let app = &app;
+        async move { app.api(Method::DELETE, &path, Some(&cookie), None).await }
+    };
+
+    let by_staff = app
+        .api(
+            Method::POST,
+            "/api/staff",
+            Some(&joy),
+            Some(json!({ "email": "kim@santos.test" })),
+        )
+        .await;
+    let listed_by_staff = app.api(Method::GET, "/api/staff", Some(&joy), None).await;
+    let by_other_firm = remove(&other_owner).await;
+    let by_owner = remove(&owner).await;
+
+    assert_eq!(by_staff.status, StatusCode::FORBIDDEN);
+    assert_eq!(listed_by_staff.status, StatusCode::FORBIDDEN);
+    assert_eq!(by_other_firm.status, StatusCode::NOT_FOUND);
+    assert_eq!(by_owner.status, StatusCode::NO_CONTENT);
+    let after = app.api(Method::GET, "/api/me", Some(&joy), None).await;
+    assert_eq!(after.status, StatusCode::UNAUTHORIZED, "removed: logged out at once");
+}

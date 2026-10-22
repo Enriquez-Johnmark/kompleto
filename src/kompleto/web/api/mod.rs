@@ -22,6 +22,7 @@ mod login;
 mod me;
 mod replies;
 mod settings;
+mod staff;
 mod tracker;
 
 use axum::Json;
@@ -55,6 +56,7 @@ pub(super) fn routes() -> Router<AppState> {
         .merge(import::routes())
         .merge(replies::routes())
         .merge(settings::routes())
+        .merge(staff::routes())
         .merge(tracker::routes())
         .merge(login::routes())
         .merge(me::routes())

@@ -99,6 +99,16 @@ impl Auth {
     /// Emails a login link to `email` if it's the address of a member of an
     /// open Firm.
     pub async fn request_link(&self, email: &str) -> Result<LoginOutcome, AuthError> {
+        self.send_link(email, None).await
+    }
+
+    /// Emails a new staff member at `email` a login link saying that
+    /// `invited_by` added them (M9).
+    pub async fn invite(&self, email: &str, invited_by: &str) -> Result<LoginOutcome, AuthError> {
+        self.send_link(email, Some(invited_by)).await
+    }
+
+    async fn send_link(&self, email: &str, invited_by: Option<&str>) -> Result<LoginOutcome, AuthError> {
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
         // Locking the member serialises their requests, so parallel ones
@@ -139,15 +149,29 @@ impl Auth {
         )
         .execute(&mut *tx)
         .await?;
+        let link = format!("{}/login/{token}", self.base_url);
+        let (subject, opening) = match invited_by {
+            None => (
+                "Your Kompleto login link".to_owned(),
+                format!("Hi {},\n\nOpen this link to log in to Kompleto:", member.firm_name),
+            ),
+            Some(owner) => (
+                format!("You've been added to {} on Kompleto", member.firm_name),
+                format!(
+                    "Hi,\n\n{owner} added you to {} on Kompleto, which chases clients for their \
+                     BIR documents. Open this link to log in:",
+                    member.firm_name
+                ),
+            ),
+        };
         let email = Email {
             to_address: member.email,
             from_name: "Kompleto".to_owned(),
             reply_to: None,
-            subject: "Your Kompleto login link".to_owned(),
+            subject,
             body_text: format!(
-                "Hi {},\n\nOpen this link to log in to Kompleto:\n\n{}/login/{token}\n\n\
-                 It works once, for the next 15 minutes. If you didn't ask for it, ignore this email.\n",
-                member.firm_name, self.base_url
+                "{opening}\n\n{link}\n\nIt works once, for the next 15 minutes. After that, ask for a new one \
+                 on Kompleto's login page. If you didn't expect this email, ignore it.\n"
             ),
         };
         let id = self.outbox.create_draft_in(&mut tx, firm, &email, None).await?;
