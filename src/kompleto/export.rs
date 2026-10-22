@@ -195,12 +195,13 @@ pub async fn write_zip<W: Write + Seek>(
     let mut rows = Vec::new();
     let mut names = HashSet::new();
     for client in &list {
-        for upload in uploads.for_client(firm, client.id).await? {
+        let listed = uploads.for_client(firm, client.id).await?;
+        for (position, upload) in listed.iter().enumerate() {
             let download = if upload.deleted {
                 None
             } else {
                 match uploads
-                    .download(firm, client.id, upload.id, &client.details.business_name)
+                    .download_listed(firm, &listed, position, &client.details.business_name)
                     .await
                 {
                     Ok(download) => Some(download),
@@ -219,7 +220,7 @@ pub async fn write_zip<W: Write + Seek>(
             };
             rows.push(vec![
                 client.details.business_name.clone(),
-                upload.period,
+                upload.period.clone(),
                 upload.label.document().to_owned(),
                 upload.label.detail().unwrap_or_default().to_owned(),
                 upload.kind.media_type().to_owned(),

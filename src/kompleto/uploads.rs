@@ -381,7 +381,21 @@ impl Uploads {
             .iter()
             .position(|upload| upload.id == id)
             .ok_or(UploadError::NotFound)?;
-        let upload = &uploads[position];
+        self.download_listed(firm, &uploads, position, business_name).await
+    }
+
+    /// Like [`Uploads::download`], for the Upload at `position` in
+    /// `uploads`, the Client's list from [`Uploads::for_client`] (so many
+    /// downloads need only one listing).
+    pub async fn download_listed(
+        &self,
+        firm: FirmId,
+        uploads: &[Upload],
+        position: usize,
+        business_name: &str,
+    ) -> Result<Download, UploadError> {
+        let upload = uploads.get(position).ok_or(UploadError::NotFound)?;
+        let id = upload.id;
         let number = uploads[..=position]
             .iter()
             .filter(|other| other.period == upload.period && other.label.document() == upload.label.document())
