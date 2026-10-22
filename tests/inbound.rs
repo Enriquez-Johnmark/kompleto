@@ -72,3 +72,12 @@ fn g1_a_small_signature_image_is_not_an_attachment_but_an_inline_photo_is() {
         "the photo, not the logo"
     );
 }
+
+#[test]
+fn g1_the_email_worker_and_the_app_agree_on_the_signature() {
+    // The vector `deploy/email-worker/worker.test.mjs` checks too.
+    let raw = b"From: nena@example.test\r\nSubject: Re: docs\r\n\r\nHi po\r\n";
+    let vector = "62c376e06f8b7a0bddc963a7c17ee0bf0170a0aabeacbc8dd582574788e4e950";
+
+    assert!(kompleto::engine::inbound::signed(b"test-inbound-secret", raw, vector));
+}

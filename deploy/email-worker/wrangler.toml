@@ -1,0 +1,12 @@
+# Deploy with `npx wrangler deploy` from this folder, after
+# `npx wrangler secret put INBOUND_SECRET`. Then, in the Cloudflare
+# dashboard: Email > Email Routing > Routing rules > Catch-all > "Send to a
+# Worker" > kompleto-replies. See docs/deploy.md.
+name = "kompleto-replies"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+
+[vars]
+INBOUND_URL = "https://app.getkompleto.com/hooks/inbound-email"
+# A verified destination address in Email Routing (the owner's inbox).
+FALLBACK_ADDRESS = "owner@example.com"

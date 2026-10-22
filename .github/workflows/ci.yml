@@ -45,3 +45,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
+
+  email-worker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # The runner's own Node (22 or later), no packages to install.
+      - name: Test the Cloudflare Email Worker
+        run: node --test deploy/email-worker/worker.test.mjs
