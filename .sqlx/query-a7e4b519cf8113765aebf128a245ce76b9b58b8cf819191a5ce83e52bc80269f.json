@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select closed_at is not null as \"closed!\" from firms where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "closed!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a7e4b519cf8113765aebf128a245ce76b9b58b8cf819191a5ce83e52bc80269f"
+}

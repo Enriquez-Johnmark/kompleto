@@ -194,3 +194,30 @@ async fn i2_an_operator_can_reopen_a_closed_account_before_it_is_erased(pool: Pg
             .unwrap();
     assert_eq!(logged, 1);
 }
+
+#[sqlx::test]
+async fn i2_nothing_goes_out_for_a_closed_account_not_even_a_retry(pool: PgPool) {
+    use kompleto::engine::ids::MessageId;
+    use kompleto::engine::outbox::{CheckFailed, PreSendCheck};
+
+    let clock = clock();
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let dynamic: Arc<dyn kompleto::engine::clock::Clock> = clock.clone();
+    close(
+        &pool,
+        &dynamic,
+        santos,
+        "Santos Bookkeeping",
+        "santos.bookkeeping@firm.test",
+    )
+    .await
+    .unwrap();
+    let checks = common::kompleto_checks(&pool, clock);
+
+    let refused = checks.check(santos, MessageId::new(), &common::sample_email()).await;
+
+    assert!(
+        matches!(&refused, Err(CheckFailed::Refused(reason)) if reason.contains("closed")),
+        "{refused:?}"
+    );
+}

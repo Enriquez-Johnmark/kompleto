@@ -7,6 +7,7 @@
 //! - A login email or a Reply notice goes only to its Firm's login address,
 //!   with exactly one link, to our own login page or Reply page.
 //! - Anything else isn't recognised, and never goes out.
+//! - Nothing goes out for a closed account (I2), or one already erased.
 
 use sqlx::PgPool;
 
@@ -42,6 +43,18 @@ impl KompletoChecks {
 
     async fn check_message(&self, firm: FirmId, id: MessageId, email: &Email) -> Result<(), CheckFailed> {
         let failed = |err: sqlx::Error| CheckFailed::Unavailable(err.to_string());
+        // Run before every send, so it also stops retries and anything
+        // approved in the moment the account closed (I2).
+        let closed = sqlx::query_scalar!(
+            r#"select closed_at is not null as "closed!" from firms where id = $1"#,
+            firm.as_uuid()
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(failed)?;
+        if closed != Some(false) {
+            return Err(CheckFailed::Refused("the firm's account is closed".to_owned()));
+        }
         let reminder = sqlx::query!(
             "select client_id, period from scheduled_drafts where firm_id = $1 and message_id = $2",
             firm.as_uuid(),
