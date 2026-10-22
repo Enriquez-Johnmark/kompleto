@@ -1,7 +1,9 @@
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation } from "@tanstack/react-query"
 import { MailCheckIcon } from "lucide-react"
-import { useState, type FormEvent } from "react"
+import { Controller, useForm } from "react-hook-form"
 import { Link } from "react-router"
+import { z } from "zod"
 
 import { api, ApiError } from "@/api/client"
 import type { SignupRequest } from "@/api/generated/SignupRequest"
@@ -10,26 +12,33 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+
+const schema = z.object({
+  firm_name: z
+    .string()
+    .trim()
+    .min(1, "Enter your firm's name.")
+    .max(100, "Keep it to 100 characters."),
+  email: z.email("Enter your email address."),
+  accepted_terms: z
+    .boolean()
+    .refine((accepted) => accepted, "Accept the terms and the data processing agreement"),
+})
 
 /** L1: asking for an account. Kompleto opens it once the operator approves;
  *  the answer is the same whether or not the address has one already. */
 export function SignupPage() {
-  const [form, setForm] = useState<SignupRequest>({
-    firm_name: "",
-    email: "",
-    accepted_terms: false,
+  const form = useForm<SignupRequest>({
+    resolver: zodResolver(schema),
+    defaultValues: { firm_name: "", email: "", accepted_terms: false },
   })
+  const errors = form.formState.errors
   const request = useMutation({
     mutationFn: (body: SignupRequest) => api("POST", "/api/signup", body),
   })
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    request.mutate(form)
-  }
 
   return (
     <CenteredLayout>
@@ -47,53 +56,65 @@ export function SignupPage() {
               <MailCheckIcon />
               <AlertTitle>Thanks! Your request is in</AlertTitle>
               <AlertDescription>
-                We'll email {form.email} when the account for {form.firm_name} is ready, usually
-                within 2 working days.
+                We'll email {form.getValues("email")} when the account for{" "}
+                {form.getValues("firm_name")} is ready, usually within 2 working days.
               </AlertDescription>
             </Alert>
           ) : (
-            <form onSubmit={handleSubmit} noValidate>
+            <form onSubmit={form.handleSubmit((values) => request.mutate(values))} noValidate>
               <FieldGroup>
-                <Field>
+                <Field data-invalid={errors.firm_name ? true : undefined}>
                   <FieldLabel htmlFor="firm-name">Firm name</FieldLabel>
                   <Input
                     id="firm-name"
                     autoComplete="organization"
-                    maxLength={100}
-                    value={form.firm_name}
-                    onChange={(event) => setForm({ ...form, firm_name: event.target.value })}
+                    aria-invalid={errors.firm_name ? true : undefined}
+                    {...form.register("firm_name")}
                   />
+                  <FieldError errors={[errors.firm_name]} />
                 </Field>
-                <Field>
+                <Field data-invalid={errors.email ? true : undefined}>
                   <FieldLabel htmlFor="email">Your email</FieldLabel>
                   <Input
                     id="email"
                     type="email"
                     autoComplete="email"
-                    value={form.email}
-                    onChange={(event) => setForm({ ...form, email: event.target.value })}
+                    aria-invalid={errors.email ? true : undefined}
+                    {...form.register("email")}
                   />
+                  <FieldError errors={[errors.email]} />
                 </Field>
-                <Field orientation="horizontal">
-                  <Checkbox
-                    id="accept"
-                    checked={form.accepted_terms}
-                    onCheckedChange={(checked) => setForm({ ...form, accepted_terms: checked })}
-                  />
-                  <FieldLabel htmlFor="accept" className="font-normal">
-                    <span>
-                      I accept the{" "}
-                      <Link to="/terms" className="underline underline-offset-4">
-                        terms
-                      </Link>{" "}
-                      and the{" "}
-                      <Link to="/data-processing" className="underline underline-offset-4">
-                        data processing agreement
-                      </Link>
-                      .
-                    </span>
-                  </FieldLabel>
-                </Field>
+                <Controller
+                  control={form.control}
+                  name="accepted_terms"
+                  render={({ field }) => (
+                    <Field
+                      orientation="horizontal"
+                      data-invalid={errors.accepted_terms ? true : undefined}
+                    >
+                      <Checkbox
+                        id="accept"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        aria-invalid={errors.accepted_terms ? true : undefined}
+                      />
+                      <FieldLabel htmlFor="accept" className="font-normal">
+                        <span>
+                          I accept the{" "}
+                          <Link to="/terms" className="underline underline-offset-4">
+                            terms
+                          </Link>{" "}
+                          and the{" "}
+                          <Link to="/data-processing" className="underline underline-offset-4">
+                            data processing agreement
+                          </Link>
+                          .
+                        </span>
+                      </FieldLabel>
+                    </Field>
+                  )}
+                />
+                <FieldError errors={[errors.accepted_terms]} />
                 {request.isError ? (
                   <Alert variant="destructive">
                     <AlertDescription>
