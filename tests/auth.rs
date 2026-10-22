@@ -178,3 +178,23 @@ async fn k1_removing_a_member_ends_their_sessions_and_links(pool: PgPool) {
     assert!(auth.session(&session).await.unwrap().is_none());
     assert_eq!(auth.log_in(&unused).await.unwrap(), None);
 }
+
+#[sqlx::test]
+async fn k1_removing_and_inviting_again_doesnt_reset_the_hourly_limit(pool: PgPool) {
+    let (auth, clock, firm) = setup(&pool).await;
+    let members = Members::new(pool.clone(), clock);
+
+    let mut sent = 0;
+    for _ in 0..8 {
+        let joy = members
+            .add_staff(firm, "joy@example.test", "ana@santos.test")
+            .await
+            .unwrap();
+        if auth.invite("joy@example.test", "ana@santos.test").await.unwrap() == LoginOutcome::Sent {
+            sent += 1;
+        }
+        members.remove_staff(firm, joy, "ana@santos.test").await.unwrap();
+    }
+
+    assert_eq!(sent, 5, "at most five emails an hour to one address");
+}

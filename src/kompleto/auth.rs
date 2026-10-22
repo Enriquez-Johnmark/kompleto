@@ -7,7 +7,8 @@
 //! - An address with no account gets no email; callers show the same
 //!   screen either way.
 //! - Each person logs in with their own address (M9): the owner's or a
-//!   staff member's. At most five login emails per person per hour.
+//!   staff member's. At most five login emails per address, and 30 per
+//!   Firm, an hour.
 //! - A session lasts 30 days, or until logout.
 
 use std::sync::Arc;
@@ -30,8 +31,10 @@ use crate::engine::outbox::{Outbox, OutboxError};
 pub const LINK_LIFETIME: Duration = Duration::minutes(15);
 /// How long a session lasts.
 pub const SESSION_LIFETIME: Duration = Duration::days(30);
-/// Login emails per person per hour.
+/// Login emails per address per hour.
 pub const MAX_LINKS_PER_HOUR: i64 = 5;
+/// Login and invitation emails per Firm per hour, across its members.
+pub const MAX_FIRM_LINKS_PER_HOUR: i64 = 30;
 /// The approver recorded for login emails.
 pub const LOGIN_APPROVER: &str = "system:login";
 
@@ -111,13 +114,10 @@ impl Auth {
     async fn send_link(&self, email: &str, invited_by: Option<&str>) -> Result<LoginOutcome, AuthError> {
         let now = self.clock.now();
         let mut tx = self.pool.begin().await?;
-        // Locking the member serialises their requests, so parallel ones
-        // can't all pass the hourly limit before any of them is counted.
         let Some(member) = sqlx::query!(
             "select m.id, m.firm_id, m.email, f.name as firm_name
              from firm_members m join firms f on f.id = m.firm_id and f.closed_at is null
-             where lower(m.email) = lower($1)
-             for update of m",
+             where lower(m.email) = lower($1)",
             email.trim(),
         )
         .fetch_optional(&mut *tx)
@@ -126,14 +126,25 @@ impl Auth {
             return Ok(LoginOutcome::NotSent);
         };
         let firm = FirmId::from(member.firm_id);
-        let recent = sqlx::query_scalar!(
-            r#"select count(*) as "count!" from login_tokens where member_id = $1 and created_at > $2"#,
-            member.id,
+        // Locking the Firm serialises its requests, so parallel ones can't
+        // all pass the limits before any of them is counted.
+        sqlx::query!("select id from firms where id = $1 for update", firm.as_uuid())
+            .fetch_one(&mut *tx)
+            .await?;
+        // Counted from the outbox, which keeps the emails of removed members
+        // too: removing and inviting an address again can't reset its limit.
+        let recent = sqlx::query!(
+            r#"select count(*) filter (where lower(to_address) = lower($2)) as "to_address!",
+                      count(*) filter (where approved_by = $4) as "firm!"
+               from outbox_messages where tenant_id = $1 and created_at > $3"#,
+            firm.as_uuid(),
+            member.email,
             now - Duration::hours(1),
+            LOGIN_APPROVER,
         )
         .fetch_one(&mut *tx)
         .await?;
-        if recent >= MAX_LINKS_PER_HOUR {
+        if recent.to_address >= MAX_LINKS_PER_HOUR || recent.firm >= MAX_FIRM_LINKS_PER_HOUR {
             tracing::warn!(%firm, "login emails limited this hour");
             return Ok(LoginOutcome::NotSent);
         }
