@@ -7,7 +7,7 @@ Every month, bookkeepers chase each client for receipts, bank statements, GCash 
 - a **BIR deadline calendar** for each client (0619-E, 1601-C, 2550Q, 1701Q and more);
 - a **checklist** of the documents each client still owes for each month or quarter;
 - **reminder emails in Taglish or English**, sent only after the bookkeeper approves them;
-- a **private upload link** that clients open on their phone, with no app and no login;
+- a **private upload link** that clients open on their phone, with no app and no login; every file is scanned for viruses before it is kept;
 - reminders that **stop** once the client uploads everything or replies;
 - a **2307 tracker** showing which Payors have sent their 2307s and which are still missing;
 - a **dashboard** of what's missing, nearest cut-off first.
@@ -61,6 +61,8 @@ pnpm --dir web install
 pnpm --dir web build          # the React app, served by the Rust server
 cargo run -- serve            # http://127.0.0.1:3000
 ```
+
+To scan Uploads for viruses as production does, run `docker compose --profile scan up -d` as well and set `CLAMD_ADDR=127.0.0.1:3310` in `.env`.
 
 Log in with the email you gave. The login link arrives in Mailpit at http://localhost:8025, where every email lands in development; nothing leaves your machine.
 

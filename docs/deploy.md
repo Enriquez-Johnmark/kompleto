@@ -61,7 +61,7 @@ Known limit: the free Worker plan allows about 10 ms of CPU per email. Signing a
 3. On it:
    ```
    sudo apt install -y postgresql-common && sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
-   sudo apt install -y postgresql-17 gnupg rclone build-essential pkg-config
+   sudo apt install -y postgresql-17 gnupg rclone build-essential pkg-config docker.io
    sudo -u postgres createuser kompleto --pwprompt     # the Postgres password
    sudo -u postgres createdb kompleto --owner kompleto
    curl https://sh.rustup.rs -sSf | sh
@@ -78,6 +78,10 @@ Known limit: the free Worker plan allows about 10 ms of CPU per email. Signing a
    sudo cp -r web/dist /opt/kompleto/web
    ```
    Postgres listens only on localhost by default; keep it that way.
+   Start ClamAV, which scans every Upload and keeps its virus signatures up to date by itself (about 1.5 GB of memory):
+   ```
+   sudo docker run -d --name clamav --restart unless-stopped -p 127.0.0.1:3310:3310 clamav/clamav:1.4.3
+   ```
 4. Write `/etc/kompleto/kompleto.env` (below), then `sudo chmod 600 /etc/kompleto/*.env`, and install the units:
    ```
    sudo cp deploy/linux/*.service deploy/linux/*.timer /etc/systemd/system/
@@ -86,7 +90,7 @@ Known limit: the free Worker plan allows about 10 ms of CPU per email. Signing a
 
 ### Path B: the owner's Mac
 
-1. `brew install postgresql@17 cloudflared rclone gnupg node@22`, then `corepack enable` and `brew services start postgresql@17`, and create the user and database as in path A.
+1. `brew install postgresql@17 cloudflared rclone gnupg node@22`, then `corepack enable` and `brew services start postgresql@17`, and create the user and database as in path A. Start ClamAV in Docker Desktop with the same `docker run` line as path A, without `sudo`.
 2. Build with `cargo build --release` and `pnpm --dir web install --frozen-lockfile && pnpm --dir web build`. Copy `target/release/kompleto`, `deploy/backup.sh` and `deploy/mac/run.sh` into `~/kompleto/`, `web/dist` to `~/kompleto/web`, and write `~/kompleto/kompleto.env` (below, `chmod 600`).
 3. Copy both files in `deploy/mac/*.plist` to `~/Library/LaunchAgents/` and `launchctl load` each.
 4. **System Settings → Energy**: prevent automatic sleeping while the display is off. While the Mac sleeps or is off, nothing is sent and replies queue in Cloudflare.
@@ -106,6 +110,7 @@ FILE_MASTER_KEY=<from step 1>
 UPLOAD_DIR=/var/lib/kompleto/uploads          # ~/kompleto/uploads on the Mac
 WEB_DIR=/opt/kompleto/web                     # ~/kompleto/web on the Mac
 SUPPORT_EMAIL=help@getkompleto.com
+CLAMD_ADDR=127.0.0.1:3310                     # Kompleto won't start live without it
 # ANTHROPIC_API_KEY=   only once paid for; drafts are templates until then
 ```
 
@@ -134,7 +139,7 @@ Copy `deploy/cloudflared.yml` to the cloudflared config folder, set `credentials
 
 ## 8. Watching it
 
-Better Stack Free → a monitor on `https://app.getkompleto.com/health`, every 3 minutes, alerting your email. "ok" means the app and its database answer.
+Better Stack Free → a monitor on `https://app.getkompleto.com/health`, every 3 minutes, alerting your email. "ok" means the app, its database and ClamAV answer; while ClamAV is down, Uploads are refused with "try again in a few minutes", so an alert here needs action.
 
 ## 9. First firm, and checks before the first pilot
 

@@ -19,5 +19,12 @@ services:
     image: axllent/mailpit:v1.27.11
     ports:
       - "127.0.0.1:8025:8025"
+  # Virus scanning of Uploads, only when asked for: `docker compose --profile
+  # scan up -d`, then CLAMD_ADDR=127.0.0.1:3310. It needs about 1.5 GB of memory.
+  clamav:
+    image: clamav/clamav:1.4.3
+    profiles: [scan]
+    ports:
+      - "127.0.0.1:3310:3310"
 volumes:
   pgdata:

@@ -68,7 +68,7 @@ Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a
 - **Engine boundary:** `src/engine` never depends on `src/kompleto`; a CI check fails the build otherwise (`docs/adr/0001-engine-and-product-in-one-crate.md`).
 - **BIR limits:** no feature may keep books, compute tax, produce BIR-format files or archive documents (`docs/adr/0004-stay-outside-bir-accounting-system-rules.md`).
 - **Tests:** every acceptance criterion has a test whose name starts with its ID, e.g. `e1_crash_mid_send_never_sends_twice`.
-- **Local only in development:** `docker compose` runs Postgres 17 and Mailpit; no real email leaves a dev machine.
+- **Local only in development:** `docker compose` runs Postgres 17 and Mailpit (and ClamAV with `--profile scan`); no real email leaves a dev machine.
 
 ## Development
 
