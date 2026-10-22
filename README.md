@@ -33,7 +33,8 @@ Kompleto never keeps books, computes tax, files returns or produces BIR-format f
 | **M7** The bookkeeper's pages as a React app | Done |
 | **M8** Demo Firm, virus scanning, help and privacy pages, screenshots, video | Done; the legal pages are drafts for the owner (`docs/legal.md`) |
 | **M9** Staff logins: an owner and up to 5 staff | Done |
-| **M10–M13** Sign-up, Xero/QuickBooks import, 2307 matching, payroll chasing | **Next** |
+| **M10** "Request an account" page, approved by the operator | Done |
+| **M11–M13** Xero/QuickBooks import, 2307 matching, payroll chasing | **Next** |
 | Go live, then 3–5 free 4-week pilots | After M13, once the domain is bought and a bookkeeper says yes |
 
 All 28 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.
@@ -80,6 +81,7 @@ Other commands:
 | Command | What it does |
 |---|---|
 | `cargo run -- demo` | Sends one approved email through the outbox into Mailpit |
+| `cargo run -- requests` | Account requests from the sign-up page; `requests approve ID` opens the firm and emails its owner a welcome login link, `requests decline ID` deletes it |
 | `cargo run -- dev-schedule --date 2026-11-01` | Creates the reminder Drafts due on that date, to try the whole loop before real dates come round |
 | `cargo run -- llm-costs --month 2026-11` | AI cost per Firm for that month |
 | `cargo run -- gen-key` | Makes a new key for encrypting uploaded files |

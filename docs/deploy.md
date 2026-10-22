@@ -143,6 +143,8 @@ Better Stack Free → a monitor on `https://app.getkompleto.com/health`, every 3
 
 ## 9. First firm, and checks before the first pilot
 
+Bookkeepers can ask for an account at `/signup`. Nothing opens until you approve it: list the requests with `kompleto requests`, then `kompleto requests approve ID` (the owner gets a welcome login link) or `kompleto requests decline ID`. Run them with the settings file loaded, as in step 1 below. `firm add` still works for someone you invite yourself.
+
 1. Add the firm with its settings loaded. Path A:
    ```
    sudo -u kompleto bash -c 'set -a; . /etc/kompleto/kompleto.env; /opt/kompleto/kompleto firm add --name "<Firm>" --email <their login address>'

@@ -19,6 +19,8 @@ If you are a bookkeeper's client and have a question about your data, ask your b
 
 ## 3. What we handle
 
+**About someone requesting an account:** the firm name and email address typed on the sign-up page, and when they accepted the terms. The request is deleted once it is approved or declined.
+
 **About the Firm:**
 
 - the Firm's name, and the email addresses of its owner and staff, who log in;
