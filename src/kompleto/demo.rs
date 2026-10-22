@@ -13,7 +13,7 @@ use sqlx::PgPool;
 use time::{Date, Duration, Time};
 
 use super::calendar::{CalendarError, TaxPeriod};
-use super::checklist::{ExtraItem, Recurs, owed_documents, payor_2307};
+use super::checklist::{ExtraItem, Recurs, is_received_2307, owed_documents, payor_2307};
 use super::clients::{ClientError, ClientId, ClientInput, Clients, NewClient, ScheduleSettings};
 use super::drafts::Drafts;
 use super::firms::{FirmError, FirmId, Firms};
@@ -23,7 +23,7 @@ use super::reminders::{Scheduler, SchedulerError};
 use super::replies::{Replies, ReplyError};
 use super::schedule::{MANILA, ReminderDays, ScheduleError};
 use super::upload_links::UploadLinks;
-use super::uploads::{Label, UploadError, Uploads, is_2307};
+use super::uploads::{Label, UploadError, Uploads};
 use crate::engine::clock::{Clock, FixedClock};
 use crate::engine::files::Files;
 use crate::engine::inbound::InboundEmail;
@@ -453,7 +453,7 @@ async fn upload(
     };
     for document in owed.iter().take(count) {
         // A listed Payor's 2307 names it; the general one names a customer.
-        let payor = is_2307(document).then(|| {
+        let payor = is_received_2307(document).then(|| {
             edits
                 .payors
                 .iter()

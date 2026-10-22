@@ -25,10 +25,10 @@ use serde::Deserialize;
 
 use super::{AppState, NotFoundPage, WebError, show_date};
 use crate::kompleto::calendar::TaxPeriod;
-use crate::kompleto::checklist::{ANOTHER_PAYOR_2307, owed_documents, payor_2307};
+use crate::kompleto::checklist::{ANOTHER_PAYOR_2307, is_received_2307, owed_documents, payor_2307};
 use crate::kompleto::clients::{Client, Language};
 use crate::kompleto::upload_links::{LinkError, OpenLink};
-use crate::kompleto::uploads::{Label, LabelProblem, MAX_FILE_BYTES, UploadError, is_2307, uploaded_documents};
+use crate::kompleto::uploads::{Label, LabelProblem, MAX_FILE_BYTES, UploadError, uploaded_documents};
 
 /// How many uploads are processed at once.
 pub const UPLOAD_SLOTS: usize = 4;
@@ -112,6 +112,8 @@ fn words(language: Language) -> &'static Words {
 struct Item {
     label: String,
     uploaded: bool,
+    /// A 2307 whose Payor the Contact must name.
+    asks_payor: bool,
 }
 
 #[derive(Template, WebTemplate)]
@@ -240,13 +242,14 @@ async fn render(state: &AppState, opened: &Opened, error: Option<String>, sent: 
             .map(|label| Item {
                 label: label.clone(),
                 uploaded: uploaded.contains(label),
+                asks_payor: is_received_2307(label) && opened.listed_payor(label).is_none(),
             })
             .collect(),
         another: opened.choices.get(opened.owed.len()).cloned(),
         asks_payor: opened
             .choices
             .iter()
-            .any(|document| is_2307(document) && opened.listed_payor(document).is_none()),
+            .any(|document| is_received_2307(document) && opened.listed_payor(document).is_none()),
         error,
         sent,
     })
@@ -285,7 +288,7 @@ async fn upload(State(state): State<AppState>, Path(token): Path<String>, multip
                 document: document.clone(),
                 payor: match opened.listed_payor(document) {
                     Some(payor) => Some(payor.clone()),
-                    None => is_2307(document).then_some(form.payor),
+                    None => is_received_2307(document).then_some(form.payor),
                 },
             },
             None => Label::Owed {

@@ -189,3 +189,24 @@ async fn f3_marking_an_upload_received_twice_at_once_records_it_once(pool: PgPoo
         .unwrap();
     assert_eq!(recorded, 1);
 }
+
+#[sqlx::test]
+async fn f1_copies_of_2307s_the_client_issued_need_no_payor(pool: PgPool) {
+    let (uploads, link) = setup(&pool).await;
+    let issued = "Copies of 2307s issued to suppliers, with payment vouchers";
+    let owed = [owed(), vec![issued.to_owned()]].concat();
+
+    let kept = uploads
+        .add(
+            &link,
+            &owed,
+            Label::Owed {
+                document: issued.to_owned(),
+                payor: None,
+            },
+            JPEG,
+        )
+        .await;
+
+    assert!(kept.is_ok(), "{kept:?}");
+}

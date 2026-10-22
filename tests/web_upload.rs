@@ -392,6 +392,16 @@ async fn h2_the_client_picks_a_listed_payors_2307_or_names_another_business(pool
     let page = app.request(axum::http::Method::GET, &link, None, None).await;
     assert!(page.body.contains(another), "{}", page.body);
     assert!(!page.body.contains("2307s received from customers"));
+    // The page's script shows the Payor box only for choices marked so.
+    assert!(
+        page.body.contains(&format!(r#"<option value="{jollibee}">"#)),
+        "{}",
+        page.body
+    );
+    assert!(
+        page.body
+            .contains(&format!(r#"<option value="{another}" data-asks-payor>"#))
+    );
     // The Firm lists another Payor while the Contact has the page open:
     // what they picked still means the same.
     payors.add(santos, client, "Ayala Land").await.unwrap();

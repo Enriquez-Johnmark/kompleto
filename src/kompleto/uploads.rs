@@ -141,11 +141,6 @@ impl Label {
     }
 }
 
-/// Whether an Owed document is a 2307, which must name its Payor.
-pub fn is_2307(document: &str) -> bool {
-    document.contains("2307")
-}
-
 /// Why an upload wasn't kept, in words for the Contact.
 #[derive(Debug, thiserror::Error)]
 pub enum UploadError {
@@ -570,7 +565,7 @@ fn checked(label: Label, owed: &[String]) -> Result<Label, UploadError> {
             if !owed.contains(&document) {
                 return Err(UploadError::Invalid(LabelProblem::NotOwed));
             }
-            let payor = if is_2307(&document) {
+            let payor = if is_received_2307(&document) {
                 Some(short(payor.as_deref().unwrap_or(""), LabelProblem::NoPayor)?)
             } else {
                 None
