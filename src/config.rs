@@ -67,6 +67,8 @@ pub struct Config {
     pub file_master_key: Option<SecretString>,
     /// Where encrypted Uploads are kept (`UPLOAD_DIR`, default `uploads`).
     pub upload_dir: PathBuf,
+    /// The built React app (`WEB_DIR`, default `web/dist`).
+    pub web_dir: PathBuf,
     /// Proves inbound email comes from our provider (`INBOUND_SECRET`);
     /// without it, no Replies are taken in.
     pub inbound_secret: Option<SecretString>,
@@ -128,6 +130,7 @@ impl Config {
             }),
             file_master_key: optional("FILE_MASTER_KEY").map(SecretString::from),
             upload_dir: optional("UPLOAD_DIR").map_or_else(|| PathBuf::from("uploads"), PathBuf::from),
+            web_dir: optional("WEB_DIR").map_or_else(|| PathBuf::from("web/dist"), PathBuf::from),
             inbound_secret: optional("INBOUND_SECRET").map(SecretString::from),
             resend_webhook_secret: optional("RESEND_WEBHOOK_SECRET").map(SecretString::from),
             support_email: optional("SUPPORT_EMAIL"),

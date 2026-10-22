@@ -19,6 +19,7 @@ mod login;
 mod payors;
 mod replies;
 mod settings;
+mod spa;
 mod tracker;
 mod upload;
 mod uploads;
@@ -91,6 +92,8 @@ pub struct AppState {
     inbound: Option<Arc<Inbound>>,
     /// The provider's delivery events, when `RESEND_WEBHOOK_SECRET` is set.
     delivery_events: Option<Arc<DeliveryEvents>>,
+    /// The built React app (`WEB_DIR`), when served by this server.
+    web_dir: Option<Arc<std::path::PathBuf>>,
 }
 
 /// Taking in Bounces and complaints.
@@ -146,7 +149,18 @@ impl AppState {
             origin,
             inbound: None,
             delivery_events: None,
+            web_dir: None,
         })
+    }
+
+    /// Serves the built React app from `dir` (`web/dist`).
+    #[must_use]
+    pub fn with_web_dir(mut self, dir: &std::path::Path) -> Self {
+        if !spa::is_built(dir) {
+            tracing::warn!(dir = %dir.display(), "the React app isn't built there; run `pnpm --dir web build`");
+        }
+        self.web_dir = Some(Arc::new(dir.to_owned()));
+        self
     }
 
     /// Where Firms write for help, e.g. to undo closing an account.
@@ -205,17 +219,20 @@ pub fn router(state: AppState) -> Router {
         .merge(export::routes())
         .route("/static/kompleto.js", get(script))
         .route("/health", get(health))
+        .fallback(spa::app)
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(middleware::from_fn_with_state(state.clone(), security_headers))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 
-/// What a page may load: our own script and nothing else from anywhere.
-/// Styles are inline in each page. The script is a file, not inline, so no
-/// injected script can run.
-const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; \
-     img-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+/// What a page may load: our own scripts, styles and fonts, and nothing
+/// from anywhere else. Scripts are files, never inline, so no injected
+/// script can run; inline styles stay allowed for the server-rendered
+/// pages and the components' positioning.
+const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+     img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; \
+     frame-ancestors 'none'; base-uri 'none'";
 
 /// Security headers on every response; HSTS only when served over HTTPS.
 async fn security_headers(State(state): State<AppState>, request: Request, next: Next) -> Response {

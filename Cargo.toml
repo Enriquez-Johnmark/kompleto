@@ -36,7 +36,7 @@ time = { version = "0.3.55", features = ["serde", "macros", "parsing", "formatti
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "signal", "time", "process", "io-util", "fs"] }
 toml = { version = "1.1.8", default-features = false, features = ["parse", "serde"] }
 tokio-util = { version = "0.7.20", features = ["io"] }
-tower-http = { version = "0.7.1", features = ["trace"] }
+tower-http = { version = "0.7.1", features = ["trace", "fs"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.28.0", features = ["v7", "serde"] }
@@ -44,6 +44,7 @@ zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 insta = "1.49.0"
+tempfile = "3.27.0"
 # TypeScript types for the React app, exported by `cargo test` (docs/frontend.md).
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "no-serde-warnings"] }
 tower = { version = "0.5.3", features = ["util"] }

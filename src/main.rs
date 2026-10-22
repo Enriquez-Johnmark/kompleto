@@ -155,7 +155,8 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         xlsx,
         &master,
         files.clone(),
-    )?;
+    )?
+    .with_web_dir(&config.web_dir);
     let state = match &config.resend_webhook_secret {
         Some(secret) => state.with_delivery_events(secret.clone()),
         None => state,

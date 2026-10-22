@@ -65,8 +65,17 @@ impl TestApp {
         Self::at(pool, BASE_URL)
     }
 
+    /// The app serving the built React app from `web_dir`.
+    pub fn with_web_dir(pool: PgPool, web_dir: &std::path::Path) -> Self {
+        Self::build(pool, BASE_URL, Some(web_dir))
+    }
+
     /// The app served at `base_url`, which may have a path.
     pub fn at(pool: PgPool, base_url: &str) -> Self {
+        Self::build(pool, base_url, None)
+    }
+
+    fn build(pool: PgPool, base_url: &str, web_dir: Option<&std::path::Path>) -> Self {
         let clock = super::clock();
         let xlsx = kompleto::kompleto::import::xlsx::XlsxReader::new(env!("CARGO_BIN_EXE_kompleto").into());
         let files = super::files(&pool, clock.clone());
@@ -82,6 +91,10 @@ impl TestApp {
         .with_inbound(INBOUND_SECRET.to_owned().into(), "getkompleto.test")
         .with_delivery_events(WEBHOOK_SECRET.to_owned().into())
         .with_support_email(SUPPORT_EMAIL);
+        let state = match web_dir {
+            Some(dir) => state.with_web_dir(dir),
+            None => state,
+        };
         Self {
             router: router(state),
             pool,

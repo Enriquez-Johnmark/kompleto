@@ -1,3 +1,7 @@
 # Local defaults; CI and production set these explicitly.
 [env]
 DATABASE_URL = "postgres://kompleto:kompleto@localhost:5432/kompleto"
+# `cargo test` writes the API's TypeScript types for the React app here
+# (docs/frontend.md). Counts are small, so 64-bit integers become numbers.
+TS_RS_EXPORT_DIR = { value = "web/src/api/generated", relative = true }
+TS_RS_LARGE_INT = "number"

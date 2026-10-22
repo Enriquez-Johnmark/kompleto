@@ -26,5 +26,8 @@ export default defineConfig({
   build: {
     // No source maps in production: the app's code stays readable only to us.
     sourcemap: false,
+    // Fonts and images stay files: the Content-Security-Policy allows no
+    // data: addresses.
+    assetsInlineLimit: 0,
   },
 })
