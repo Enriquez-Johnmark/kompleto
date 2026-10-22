@@ -53,4 +53,15 @@ async fn the_demo_firm_has_clients_history_and_drafts_waiting(pool: PgPool) {
         .await
         .unwrap();
     assert!(bounced >= 1, "one client's address bounces");
+    // The bookkeeper kept up, except with the last few days' uploads.
+    let (unchecked_earlier, unchecked_lately): (i64, i64) = sqlx::query_as(
+        "select count(*) filter (where uploaded_at < '2027-01-01 00:00+08'),
+                count(*) filter (where uploaded_at >= '2027-01-01 00:00+08')
+         from uploads where received_at is null",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(unchecked_earlier, 0);
+    assert!(unchecked_lately >= 1);
 }

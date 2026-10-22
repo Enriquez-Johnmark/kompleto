@@ -371,7 +371,8 @@ pub async fn seed(
                         *client,
                         &period,
                         demo.habit,
-                        login_email,
+                        // Checked at once, except while catching up.
+                        (!catching_up).then_some(login_email),
                     )
                     .await?;
                 }
@@ -417,6 +418,12 @@ async fn first_request_on(
 /// The Contact uploads every Owed document, or the first two, which the
 /// Firm then marks received. Returns how many were uploaded.
 #[expect(clippy::too_many_arguments, reason = "one call site, in the demo's replay")]
+/// A customer whose 2307 a Client without listed Payors uploads.
+fn customer(business_name: &str) -> &'static str {
+    const CUSTOMERS: [&str; 3] = ["Puregold Price Club", "Mercury Drug Corp", "Robinsons Supermarket"];
+    CUSTOMERS[business_name.len() % CUSTOMERS.len()]
+}
+
 async fn upload(
     clients: &Clients,
     uploads: &Uploads,
@@ -425,7 +432,7 @@ async fn upload(
     client: ClientId,
     period: &str,
     habit: Habit,
-    firm_login: &str,
+    received_by: Option<&str>,
 ) -> Result<usize, DemoError> {
     let Some(link) = links.find(firm, client, period).await? else {
         return Ok(0);
@@ -449,15 +456,15 @@ async fn upload(
                 .iter()
                 .find(|payor| payor_2307(payor) == *document)
                 .cloned()
-                .unwrap_or_else(|| "Puregold Price Club".to_owned())
+                .unwrap_or_else(|| customer(&details.business_name).to_owned())
         });
         let label = Label::Owed {
             document: document.clone(),
             payor,
         };
         let id = uploads.add(&link, &owed, label, SAMPLE_PDF).await?;
-        if habit == Habit::UploadsSome {
-            uploads.mark_received(firm, client, id, firm_login).await?;
+        if let Some(by) = received_by {
+            uploads.mark_received(firm, client, id, by).await?;
         }
     }
     Ok(count)
