@@ -70,6 +70,15 @@ List the businesses that give a client Form 2307 (its **Payors**) on the client'
 
 **From a sales export:** instead of typing the Payors, choose **From a sales export** under Payors and upload one quarter's sales, invoice or account-transactions export (.csv or .xlsx) from Xero, QuickBooks or your own spreadsheet. Kompleto lists the customers on rows that show tax withheld: a withholding or CWT column with an amount, or an account or description that says withholding, CWT, EWT or 2307. Tick the ones to add. If your file is a report of the CWT account alone, with no such column, tick **Every row is withholding** first. Kompleto reads only the customers' names: amounts, TINs and other columns are ignored, and the file isn't kept.
 
+## Payroll chasing
+
+For a client that runs payroll, turn on **Payroll chasing** on its **Schedule** tab and choose its paydays: twice a month (the 15th and the last day) or monthly (the last day).
+
+- **Before each payday,** Kompleto drafts a request for timesheets or DTRs, overtime and leave approvals, and new hires and resignations. The first request comes 8 days before payday, and the cut-off is 3 days before it.
+- **After each month's contribution due dates,** it asks for the SSS, PhilHealth and Pag-IBIG payment receipts, each only once its due date has passed. SSS is due the last day of the following month. PhilHealth and Pag-IBIG dates depend on the employer, so set each client's due days (the 20th and the last day unless you change them). The cut-off is 7 days after the last due date.
+
+These go through the same drafts, approval and upload link as the BIR reminders, and stop when the client replies or sends everything. Kompleto never computes pay, contributions or tax.
+
 ## BIR calendar
 
 The **BIR calendar** shows the deadlines Kompleto uses. It moves deadlines that fall on weekends and holidays, but the BIR sometimes extends them. You can enter an extended date for a client on its **Deadlines** tab. Always check against the BIR's own announcements.

@@ -33,7 +33,7 @@ If you are a bookkeeper's client and have a question about your data, ask your b
 - which BIR forms the client files and which documents it still owes;
 - names of the businesses that issue the client BIR Form 2307 ("Payors");
 - reminder emails the Firm approved, and whether they were delivered or bounced;
-- **files the client uploads**, such as receipts, invoices, bank and e-wallet statements and Form 2307s. These can contain sensitive personal information, such as tax identification numbers;
+- **files the client uploads**, such as receipts, invoices, bank and e-wallet statements, Form 2307s, and, for payroll, timesheets, leave and overtime approvals, new-hire and resignation papers and SSS, PhilHealth and Pag-IBIG payment receipts. These can contain sensitive personal information about the client's employees, such as tax identification numbers and government ID numbers;
 - replies the client sends to a reminder, and their photo and PDF attachments.
 
 We don't ask for or keep government ID numbers, passwords or payment card details. We don't sell personal data, show advertising or use anyone's data to train AI.

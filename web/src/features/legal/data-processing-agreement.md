@@ -11,8 +11,8 @@ For that data, the Firm is the **personal information controller** and we are it
 ## 1. What we process
 
 - **Purpose:** helping the Firm collect documents from its clients: keeping client contact details and checklists, sending reminders the Firm approves, receiving uploaded files and replies, and showing the Firm what is still missing.
-- **Whose data:** the contact people at the Firm's clients; people named in the documents those clients upload; and the Firm's own staff who log in.
-- **What data:** names, email addresses and business names; which BIR forms each client files; reminders and replies; and uploaded files such as receipts, invoices, bank and e-wallet statements and Form 2307s, which can contain sensitive personal information such as tax identification numbers.
+- **Whose data:** the contact people at the Firm's clients; people named in the documents those clients upload, including the clients' employees in payroll documents; and the Firm's own staff who log in.
+- **What data:** names, email addresses and business names; which BIR forms each client files; reminders and replies; and uploaded files such as receipts, invoices, bank and e-wallet statements, Form 2307s, timesheets and other payroll documents, and contribution payment receipts, which can contain sensitive personal information such as tax identification numbers and government ID numbers.
 - **How long:** while the Firm uses Kompleto, and until its data is deleted as section 7 describes.
 
 ## 2. Only on the Firm's instructions
