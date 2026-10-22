@@ -11,6 +11,7 @@ import type { ItemKey } from "@/api/generated/ItemKey"
 import type { NewItem } from "@/api/generated/NewItem"
 import type { NewPayor } from "@/api/generated/NewPayor"
 import type { NewPayors } from "@/api/generated/NewPayors"
+import type { Payroll } from "@/api/generated/Payroll"
 import type { PayorsAdded } from "@/api/generated/PayorsAdded"
 import type { ScheduleChange } from "@/api/generated/ScheduleChange"
 import { dashboardKeys } from "@/features/dashboard/queries"
@@ -81,6 +82,11 @@ export function useSetSchedule(id: string) {
   return useClientChange((change: ScheduleChange) =>
     api("PUT", `/api/clients/${id}/schedule`, change)
   )
+}
+
+/** P1, P2: turns payroll chasing on or off. */
+export function useSetPayroll(id: string) {
+  return useClientChange((payroll: Payroll) => api("PUT", `/api/clients/${id}/payroll`, payroll))
 }
 
 export function useSetDueDate(id: string) {

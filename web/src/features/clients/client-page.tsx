@@ -15,6 +15,7 @@ import { PayorsCard } from "@/features/clients/payors-card"
 import { PeriodsTab } from "@/features/clients/periods-tab"
 import { useClient } from "@/features/clients/queries"
 import { RepliesCard } from "@/features/clients/replies-card"
+import { PayrollCard } from "@/features/clients/payroll-card"
 import { ScheduleCard } from "@/features/clients/schedule-card"
 import { UploadsCard } from "@/features/clients/uploads-card"
 
@@ -90,12 +91,17 @@ function ClientContent({ client }: { client: ClientDetail }) {
         <TabsContent value="replies" className="pt-4">
           <RepliesCard replies={client.replies} />
         </TabsContent>
-        <TabsContent value="schedule" className="pt-4">
+        <TabsContent value="schedule" className="grid items-start gap-4 pt-4 lg:grid-cols-2">
           <ScheduleCard
             key={`${client.schedule.reminder_days.join()}-${client.paused}`}
             clientId={client.id}
             schedule={client.schedule}
             paused={client.paused}
+          />
+          <PayrollCard
+            key={`${client.payroll.pay_cycle}-${client.payroll.philhealth_due_day}-${client.payroll.pagibig_due_day}`}
+            clientId={client.id}
+            payroll={client.payroll}
           />
         </TabsContent>
       </Tabs>

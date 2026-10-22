@@ -154,6 +154,35 @@ test("d3 a batch shows every draft in full before any is approved", async ({ pag
   ).toBeVisible()
 })
 
+test("p1 payroll chasing drafts a request for payroll documents before payday", async ({
+  page,
+}) => {
+  await page.goto("/clients/new")
+  await page.getByLabel("Business name").fill(`Cafe Uno ${run}`)
+  await page.getByLabel("Contact's first name").fill("Uno")
+  await page.getByLabel("Email").fill("uno@example.test")
+  await page.getByRole("checkbox", { name: /1601-C/ }).click()
+  await page.getByRole("button", { name: "Add client" }).click()
+  await page.getByRole("tab", { name: "Schedule" }).click()
+  await page.getByLabel("Paydays").selectOption("twice-monthly")
+  await page.getByRole("button", { name: "Save payroll chasing" }).click()
+  await expect(page.getByText("Payroll chasing saved")).toBeVisible()
+  // Next month's 15th is a payday; its first request comes 8 days before.
+  kompleto("dev-schedule", "--date", firstOfNextMonth().replace(/-01$/, "-07"))
+
+  await page.goto("/drafts")
+  const card = page.locator("[data-slot=card]", { hasText: `Cafe Uno ${run}` }).filter({
+    hasText: "Timesheets or DTRs",
+  })
+  await expect(card.first()).toBeVisible()
+  await expect(
+    card
+      .first()
+      .getByText(/payroll on/)
+      .first()
+  ).toBeVisible()
+})
+
 test("f1 the upload page asks for a note only for something else", async ({ page }) => {
   await page.goto("/clients/new")
   await page.getByLabel("Business name").fill(`Cora Cafe ${run}`)
