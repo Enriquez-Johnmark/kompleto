@@ -46,25 +46,6 @@ async fn the_firms_default_cut_off_offset_applies_to_clients_without_their_own(p
 }
 
 #[sqlx::test]
-async fn b3_the_calendar_page_lists_every_due_date_for_the_next_12_months(pool: PgPool) {
-    let app = TestApp::new(pool);
-    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
-
-    let page = app.get("/calendar", &cookie).await;
-
-    assert_eq!(page.status, StatusCode::OK);
-    for expected in [
-        "Mon 26 Oct 2026",
-        "Tue 3 Nov 2026",
-        "1601-EQ",
-        "Mon 11 Oct 2027",
-        "September 2027",
-    ] {
-        assert!(page.body.contains(expected), "missing {expected:?} in {}", page.body);
-    }
-}
-
-#[sqlx::test]
 async fn j1_settings_show_the_firms_ai_cost_this_month(pool: PgPool) {
     use kompleto::engine::cost_log::{self, LlmCall, Outcome};
     use kompleto::engine::llm::Usage;

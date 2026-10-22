@@ -8,6 +8,8 @@
 //!   JSON body, which a cross-site form can't send.
 //! - Errors are JSON ([`ErrorBody`]) without internal details.
 
+mod activity;
+mod calendar;
 mod client_changes;
 mod client_page;
 mod clients;
@@ -18,6 +20,7 @@ mod import;
 mod login;
 mod me;
 mod replies;
+mod tracker;
 
 use axum::Json;
 use axum::Router;
@@ -34,6 +37,8 @@ use crate::kompleto::firms::{FirmError, FirmId};
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .merge(activity::routes())
+        .merge(calendar::routes())
         .merge(client_changes::routes())
         .merge(client_page::routes())
         .merge(clients::routes())
@@ -42,6 +47,7 @@ pub(super) fn routes() -> Router<AppState> {
         .merge(files::routes())
         .merge(import::routes())
         .merge(replies::routes())
+        .merge(tracker::routes())
         .merge(login::routes())
         .merge(me::routes())
         .route("/api/{*rest}", any(not_found))

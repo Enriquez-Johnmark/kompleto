@@ -1,16 +1,17 @@
-//! Seam 3 (M5): the 2307 tracker page in-process with the test clock (H2).
+//! The 2307 tracker through the API, with the test clock (H2).
 
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
 
 mod common;
 
-use axum::http::StatusCode;
+use axum::http::{Method, StatusCode};
 use common::nena;
 use common::web::TestApp;
 use kompleto::kompleto::checklist::ANOTHER_PAYOR_2307;
 use kompleto::kompleto::clients::Clients;
 use kompleto::kompleto::payors::Payors;
 use kompleto::kompleto::uploads::{Label, Uploads};
+use serde_json::json;
 use sqlx::PgPool;
 use time::macros::date;
 
@@ -44,42 +45,58 @@ async fn h2_the_tracker_page_shows_the_last_quarter_and_adds_an_unexpected_payor
         .unwrap();
 
     // 21 Oct 2026: the last quarter that ended is Q3.
-    let page = app.get("/tracker", &cookie).await;
+    let tracker = |quarter: &str| {
+        let path = if quarter.is_empty() {
+            "/api/tracker".to_owned()
+        } else {
+            format!("/api/tracker?quarter={quarter}")
+        };
+        call(&app, path, cookie.clone())
+    };
+    let page = tracker("").await;
 
-    assert_eq!(page.status, StatusCode::OK);
-    for expected in [
-        "Q3 2026",
-        "Nena&#39;s Sari-Sari Store",
-        "Jollibee Foods Corp",
-        "missing",
-        "Robinsons Land",
-        "unexpected",
-        r#"href="/tracker?quarter=2026-Q2""#,
-    ] {
-        assert!(page.body.contains(expected), "missing {expected:?} in {}", page.body);
-    }
+    assert_eq!(page.status, StatusCode::OK, "{}", page.body);
+    let page = page.json();
+    assert_eq!(page["quarter"], "Q3 2026");
+    assert_eq!(page["earlier"], "2026-Q2");
+    assert_eq!(page["later"], serde_json::Value::Null, "Q4 hasn't ended");
+    let nena = &page["clients"][0];
+    assert_eq!(nena["business_name"], "Nena's Sari-Sari Store");
+    assert_eq!(
+        nena["payors"],
+        json!([{"name": "Jollibee Foods Corp", "status": "missing"}])
+    );
+    assert_eq!(nena["unexpected"], json!(["Robinsons Land"]));
+
     let added = app
         .api(
-            axum::http::Method::POST,
+            Method::POST,
             &format!("/api/clients/{client}/payors"),
             Some(&cookie),
-            Some(serde_json::json!({"name": "Robinsons Land"})),
+            Some(json!({"name": "Robinsons Land"})),
         )
         .await;
     assert_eq!(added.status, StatusCode::CREATED);
-    let page = app.get("/tracker?quarter=2026-Q3", &cookie).await;
-    assert!(!page.body.contains("unexpected"), "listed now: {}", page.body);
-    assert!(page.body.contains("uploaded"), "{}", page.body);
-
-    let earlier = app.get("/tracker?quarter=2026-Q2", &cookie).await;
-    assert!(earlier.body.contains("Q2 2026"), "{}", earlier.body);
+    let page = tracker("2026-Q3").await.json();
+    assert_eq!(page["clients"][0]["unexpected"], json!([]), "listed now");
     assert!(
-        earlier.body.contains("Robinsons Land: <strong>missing"),
-        "{}",
-        earlier.body
+        page["clients"][0]["payors"]
+            .to_string()
+            .contains(r#"{"name":"Robinsons Land","status":"uploaded"}"#),
+        "{page}"
     );
-    assert_eq!(
-        app.get("/tracker?quarter=2026-Q5", &cookie).await.status,
-        StatusCode::NOT_FOUND
+
+    let earlier = tracker("2026-Q2").await.json();
+    assert_eq!(earlier["quarter"], "Q2 2026");
+    assert!(
+        earlier["clients"][0]["payors"]
+            .to_string()
+            .contains(r#"{"name":"Robinsons Land","status":"missing"}"#),
+        "{earlier}"
     );
+    assert_eq!(tracker("2026-Q5").await.status, StatusCode::NOT_FOUND);
+}
+
+async fn call(app: &TestApp, path: String, cookie: String) -> common::web::Response {
+    app.api(Method::GET, &path, Some(&cookie), None).await
 }

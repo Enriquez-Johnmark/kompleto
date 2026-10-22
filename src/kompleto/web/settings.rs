@@ -8,7 +8,6 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Form, Router};
 use serde::Deserialize;
-use time::Duration;
 
 use super::{AppState, CurrentFirm, SESSION_COOKIE, WebError, show_date};
 use crate::engine::cost_log;
@@ -21,7 +20,6 @@ pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/settings", get(settings_page).post(save_settings))
         .route("/settings/close", post(close_account))
-        .route("/calendar", get(calendar_page))
 }
 
 #[derive(Template, WebTemplate)]
@@ -118,37 +116,4 @@ async fn close_account(
         }
         Err(err) => Err(WebError::internal(err)),
     }
-}
-
-struct CalendarRow {
-    due: String,
-    form: &'static str,
-    period: String,
-    note: String,
-}
-
-#[derive(Template, WebTemplate)]
-#[template(path = "calendar.html")]
-struct CalendarPage {
-    rows: Vec<CalendarRow>,
-}
-
-async fn calendar_page(State(state): State<AppState>, _firm: CurrentFirm) -> CalendarPage {
-    let today = state.clock.now().to_offset(MANILA).date();
-    let rows = state
-        .calendar
-        .due_dates_between(today, today + Duration::days(365))
-        .into_iter()
-        .map(|(form, period, due)| CalendarRow {
-            note: match (&due.extension, due.date == due.statutory) {
-                (Some(extension), _) => format!("extended, {extension}"),
-                (None, false) => format!("moved from {}", show_date(due.statutory)),
-                (None, true) => String::new(),
-            },
-            due: show_date(due.date),
-            form: form.code(),
-            period: period.to_string(),
-        })
-        .collect();
-    CalendarPage { rows }
 }

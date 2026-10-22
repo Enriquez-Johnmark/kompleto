@@ -7,13 +7,11 @@
 //!   match the configured base URL. Together with `SameSite=Lax` cookies
 //!   this stops cross-site form posts.
 
-mod activity;
 mod api;
 mod export;
 mod hooks;
 mod settings;
 mod spa;
-mod tracker;
 mod upload;
 
 use std::collections::BTreeMap;
@@ -198,8 +196,6 @@ pub fn router(state: AppState) -> Router {
         .merge(settings::routes())
         .merge(upload::routes())
         .merge(hooks::routes())
-        .merge(tracker::routes())
-        .merge(activity::routes())
         .merge(export::routes())
         .route("/static/kompleto.js", get(script))
         .route("/health", get(health))
