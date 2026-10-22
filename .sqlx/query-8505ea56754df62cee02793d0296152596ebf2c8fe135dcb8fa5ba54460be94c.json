@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select m.reply_to, m.provider_message_id from outbox_messages m\n         join scheduled_drafts s on s.message_id = m.id and s.firm_id = m.tenant_id\n         where s.client_id = $1 and m.status = 'sent'\n         order by m.sent_at desc limit 1",
+  "query": "select m.reply_to, m.provider_message_id from outbox_messages m\n         join scheduled_drafts s on s.message_id = m.id and s.firm_id = m.tenant_id\n         where s.firm_id = $1 and s.client_id = $2 and m.status = 'sent'\n         order by m.sent_at desc limit 1",
   "describe": {
     "columns": [
       {
@@ -28,6 +28,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -36,5 +37,5 @@
       true
     ]
   },
-  "hash": "3ba55e30c9806818b0ba51e8f2bd0adb88b3513b29e6bf11a3d7d3117b0d88d2"
+  "hash": "8505ea56754df62cee02793d0296152596ebf2c8fe135dcb8fa5ba54460be94c"
 }

@@ -381,11 +381,11 @@ pub async fn seed(
                 }
                 Habit::Replies | Habit::AutoReplies => {
                     let automatic = demo.habit == Habit::AutoReplies;
-                    if reply(pool, &replies, *client, demo, automatic).await? {
+                    if reply(pool, &replies, firm, *client, demo, automatic).await? {
                         summary.replies += 1;
                     }
                 }
-                Habit::Bounces => bounce(pool, &bounces, *client).await?,
+                Habit::Bounces => bounce(pool, &bounces, firm, *client).await?,
                 Habit::Silent => {}
             }
         }
@@ -477,11 +477,15 @@ async fn upload(
 async fn reply(
     pool: &PgPool,
     replies: &Replies,
+    firm: FirmId,
     client: ClientId,
     demo: &DemoClient,
     automatic: bool,
 ) -> Result<bool, DemoError> {
-    let Some(reply_to) = latest_sent(pool, client).await?.and_then(|(reply_to, _)| reply_to) else {
+    let Some(reply_to) = latest_sent(pool, firm, client)
+        .await?
+        .and_then(|(reply_to, _)| reply_to)
+    else {
         return Ok(false);
     };
     let (subject, text) = if automatic {
@@ -517,8 +521,8 @@ async fn reply(
 }
 
 /// The Client's address bounces: the provider reports its latest Reminder.
-async fn bounce(pool: &PgPool, bounces: &Bounces, client: ClientId) -> Result<(), DemoError> {
-    if let Some((_, Some(provider_message_id))) = latest_sent(pool, client).await? {
+async fn bounce(pool: &PgPool, bounces: &Bounces, firm: FirmId, client: ClientId) -> Result<(), DemoError> {
+    if let Some((_, Some(provider_message_id))) = latest_sent(pool, firm, client).await? {
         let event = DeliveryEvent::Bounced {
             provider_message_id,
             permanent: true,
@@ -530,12 +534,17 @@ async fn bounce(pool: &PgPool, bounces: &Bounces, client: ClientId) -> Result<()
 }
 
 /// The reply address and provider ID of the latest Reminder sent to `client`.
-async fn latest_sent(pool: &PgPool, client: ClientId) -> Result<Option<(Option<String>, Option<String>)>, sqlx::Error> {
+async fn latest_sent(
+    pool: &PgPool,
+    firm: FirmId,
+    client: ClientId,
+) -> Result<Option<(Option<String>, Option<String>)>, sqlx::Error> {
     let row = sqlx::query!(
         "select m.reply_to, m.provider_message_id from outbox_messages m
          join scheduled_drafts s on s.message_id = m.id and s.firm_id = m.tenant_id
-         where s.client_id = $1 and m.status = 'sent'
+         where s.firm_id = $1 and s.client_id = $2 and m.status = 'sent'
          order by m.sent_at desc limit 1",
+        firm.as_uuid(),
         client.as_uuid(),
     )
     .fetch_optional(pool)
