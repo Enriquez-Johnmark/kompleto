@@ -18,6 +18,8 @@ For each client you give the business name, the contact's first name, their emai
 
 **Import** takes a `.csv` or `.xlsx` file with the columns Business name, Contact first name, Email, Language and Forms, up to 500 rows. Download the template on the Import page to start. You'll see which rows are fine and which have problems before anything is added.
 
+**From Xero or QuickBooks:** export your contacts (Xero) or customer list (QuickBooks Online) and import that file as it is. Those files have no language or BIR forms, so first choose them on the Import page under **For files without Language or Forms**; every client in the file gets them, and you can change any client afterwards. Kompleto reads only names and emails; other columns, such as TINs, are ignored.
+
 ## How reminders are scheduled
 
 Each client gets up to four emails for each month or quarter:

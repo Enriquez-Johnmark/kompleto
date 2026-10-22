@@ -34,7 +34,8 @@ Kompleto never keeps books, computes tax, files returns or produces BIR-format f
 | **M8** Demo Firm, virus scanning, help and privacy pages, screenshots, video | Done; the legal pages are drafts for the owner (`docs/legal.md`) |
 | **M9** Staff logins: an owner and up to 5 staff | Done |
 | **M10** "Request an account" page, approved by the operator | Done |
-| **M11–M13** Xero/QuickBooks import, 2307 matching, payroll chasing | **Next** |
+| **M11** Client import from Xero and QuickBooks export files | Done |
+| **M12–M13** 2307 matching, payroll chasing | **Next** |
 | Go live, then 3–5 free 4-week pilots | After M13, once the domain is bought and a bookkeeper says yes |
 
 All 28 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.
