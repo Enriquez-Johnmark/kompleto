@@ -1,10 +1,10 @@
-//! Seam 3 (M5): the dashboard in-process with the test clock (H1).
+//! The dashboard API in-process with the test clock (H1).
 
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
 
 mod common;
 
-use axum::http::StatusCode;
+use axum::http::{Method, StatusCode};
 use common::nena;
 use common::web::TestApp;
 use kompleto::kompleto::calendar::BirForm;
@@ -90,25 +90,27 @@ async fn h1_the_dashboard_lists_clients_nearest_cut_off_first_with_whats_missing
     .await
     .unwrap();
 
-    let page = app.get("/", &cookie).await;
+    let page = app.api(Method::GET, "/api/dashboard", Some(&cookie), None).await;
 
-    assert_eq!(page.status, StatusCode::OK);
-    let at = |text: &str| {
-        page.body
-            .find(text)
-            .unwrap_or_else(|| panic!("no {text:?} in {}", page.body))
-    };
-    assert!(at("Bravo Hardware") < at("Alpha Trading"), "nearest Cut-off first");
-    assert!(at("Alpha Trading") < at("Charlie Foods"), "paused last");
-    assert!(page.body.contains("Sun 1 Nov 2026") && page.body.contains("Thu 5 Nov 2026"));
-    let alpha_row = &page.body[at("Alpha Trading")..at("Charlie Foods")];
-    assert!(alpha_row.contains("Payroll register"), "{alpha_row}");
-    assert!(!alpha_row.contains("GCash, Maya"), "already uploaded: {alpha_row}");
-    let bravo_row = &page.body[at("Bravo Hardware")..at("Alpha Trading")];
-    assert!(bravo_row.contains("replied"), "{bravo_row}");
-    let charlie_row = &page.body[at("Charlie Foods")..];
-    assert!(charlie_row.contains("email bounced"), "g3: {charlie_row}");
-    assert!(!alpha_row.contains("email bounced"));
+    assert_eq!(page.status, StatusCode::OK, "{}", page.body);
+    let rows = page.json()["clients"].as_array().unwrap().clone();
+    let names: Vec<&str> = rows.iter().map(|row| row["business_name"].as_str().unwrap()).collect();
+    assert_eq!(
+        names,
+        ["Bravo Hardware", "Alpha Trading", "Charlie Foods"],
+        "nearest Cut-off first, paused last"
+    );
+    let (bravo_row, alpha_row, charlie_row) = (&rows[0], &rows[1], &rows[2]);
+    assert_eq!(bravo_row["cut_off"], "2026-11-01");
+    assert_eq!(alpha_row["cut_off"], "2026-11-05");
+    assert_eq!(alpha_row["period"], "October 2026");
+    let missing = alpha_row["missing"].to_string();
+    assert!(missing.contains("Payroll register"), "{missing}");
+    assert!(!missing.contains("GCash, Maya"), "already uploaded: {missing}");
+    assert_eq!(bravo_row["replied"], true);
+    assert_eq!(charlie_row["bouncing"], true, "g3");
+    assert_eq!(charlie_row["paused"], true);
+    assert_eq!(alpha_row["bouncing"], false);
 }
 
 #[sqlx::test]
@@ -139,17 +141,10 @@ async fn the_dashboard_says_when_approved_messages_are_waiting_to_go_out(pool: P
         .await
         .unwrap();
 
-    assert!(
-        !app.get("/", &cookie).await.body.contains("go out yet"),
-        "just approved"
-    );
+    let held = |page: common::web::Response| page.json()["held"].clone();
+    let dashboard = || app.api(Method::GET, "/api/dashboard", Some(&cookie), None);
+    assert_eq!(held(dashboard().await), 0, "just approved");
     app.clock.advance(time::Duration::minutes(30));
-    let page = app.get("/", &cookie).await;
 
-    assert!(
-        page.body.contains("1 approved reminder hasn't gone out yet"),
-        "{}",
-        page.body
-    );
-    assert!(page.body.contains("at most 90 reminders a day"));
+    assert_eq!(held(dashboard().await), 1);
 }

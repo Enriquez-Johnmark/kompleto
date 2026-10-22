@@ -8,6 +8,7 @@
 //!   JSON body, which a cross-site form can't send.
 //! - Errors are JSON ([`ErrorBody`]) without internal details.
 
+mod dashboard;
 mod login;
 mod me;
 
@@ -26,6 +27,7 @@ use crate::kompleto::firms::{FirmError, FirmId};
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .merge(dashboard::routes())
         .merge(login::routes())
         .merge(me::routes())
         .route("/api/{*rest}", any(not_found))

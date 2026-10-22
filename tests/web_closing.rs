@@ -76,7 +76,11 @@ async fn i2_closing_an_account_stops_everything_at_once(pool: PgPool) {
     );
     assert_eq!(waiting(&app, santos).await, ["cancelled"]);
     assert_eq!(waiting(&app, reyes).await, ["draft"], "another Firm's untouched");
-    assert_eq!(app.get("/", &cookie).await.status, StatusCode::SEE_OTHER, "logged out");
+    assert_eq!(
+        app.api(Method::GET, "/api/me", Some(&cookie), None).await.status,
+        StatusCode::UNAUTHORIZED,
+        "logged out"
+    );
     let before: i64 = sqlx::query_scalar("select count(*) from login_tokens")
         .fetch_one(&app.pool)
         .await
@@ -117,8 +121,8 @@ async fn i2_no_session_or_login_link_works_for_a_closed_account(pool: PgPool) {
         .unwrap();
 
     assert_eq!(
-        app.get("/", &cookie).await.status,
-        StatusCode::SEE_OTHER,
+        app.api(Method::GET, "/api/me", Some(&cookie), None).await.status,
+        StatusCode::UNAUTHORIZED,
         "session refused"
     );
     let login = app.request(Method::POST, &format!("/login/{token}"), None, None).await;

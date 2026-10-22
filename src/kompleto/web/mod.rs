@@ -10,7 +10,6 @@
 mod activity;
 mod api;
 mod clients;
-mod dashboard;
 mod drafts;
 mod export;
 mod hooks;
@@ -203,7 +202,6 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(api::routes())
-        .merge(dashboard::routes())
         .merge(login::routes())
         .merge(clients::routes())
         .merge(drafts::routes())
