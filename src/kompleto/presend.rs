@@ -2,8 +2,9 @@
 //! again just before sending, on top of the engine's own rules (length, at
 //! most one link).
 //!
-//! - A reminder goes only to its Client's stored email, and carries exactly
-//!   one link: the Client's own Upload link for the reminder's Period.
+//! - A reminder goes only to its Client's stored email, ends with the "Sent
+//!   via Kompleto" footer (E2), and carries exactly one link: the Client's
+//!   own Upload link for the reminder's Period.
 //! - A login email or a Reply notice goes only to its Firm's login address,
 //!   with exactly one link, to our own login page or Reply page.
 //! - Anything else isn't recognised, and never goes out.
@@ -12,6 +13,7 @@
 use sqlx::PgPool;
 
 use super::clients::{ClientId, Clients};
+use super::drafting::FOOTER;
 use super::firms::FirmId;
 use super::upload_links::UploadLinks;
 use crate::engine::clock::Clock;
@@ -72,6 +74,11 @@ impl KompletoChecks {
             if !same_address(&email.to_address, &client.details.email) {
                 return Err(CheckFailed::Refused(
                     "the recipient isn't the client's stored email".to_owned(),
+                ));
+            }
+            if !email.body_text.ends_with(FOOTER) {
+                return Err(CheckFailed::Refused(
+                    "it must end with the \"Sent via Kompleto\" footer".to_owned(),
                 ));
             }
             let own = self

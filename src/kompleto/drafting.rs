@@ -255,6 +255,10 @@ pub fn looks_sensitive(text: &str) -> bool {
     false
 }
 
+/// How every Reminder ends (E2), in both languages; the pre-send check
+/// refuses one edited to drop it.
+pub const FOOTER: &str = "\n--\nSent via Kompleto\n";
+
 fn owed_list(brief: &DraftBrief) -> String {
     brief.owed.iter().map(|item| format!("- {item}\n")).collect()
 }
@@ -276,7 +280,7 @@ fn assemble(firm_name: &str, brief: &DraftBrief, wording: &Wording) -> DraftText
     DraftText {
         subject: wording.subject.trim().to_owned(),
         body: format!(
-            "{}\n\n{}\n{}\n{deadline}\n\n{}\n{firm_name}\n",
+            "{}\n\n{}\n{}\n{deadline}\n\n{}\n{firm_name}\n{FOOTER}",
             wording.opening.trim(),
             owed_list(brief),
             upload_line(brief),
@@ -301,7 +305,7 @@ pub fn template(firm_name: &str, brief: &DraftBrief) -> DraftText {
             format!("Mga dokumento para sa {label}, bago {cut_off}"),
             format!(
                 "Hi {name},\n\n{}Para sa {label} BIR filings ninyo, paki-send po ang mga ito bago {cut_off}:\n\n\
-                 {list}\n{upload}\n\nSalamat po!\n{firm_name}\n",
+                 {list}\n{upload}\n\nSalamat po!\n{firm_name}\n{FOOTER}",
                 if reminder { "Paalala lang po. " } else { "" }
             ),
         ),
@@ -309,7 +313,7 @@ pub fn template(firm_name: &str, brief: &DraftBrief) -> DraftText {
             format!("Documents for {label}, by {cut_off}"),
             format!(
                 "Hi {name},\n\n{}For your {label} BIR filings, please send us these by {cut_off}:\n\n\
-                 {list}\n{upload}\n\nThank you!\n{firm_name}\n",
+                 {list}\n{upload}\n\nThank you!\n{firm_name}\n{FOOTER}",
                 if reminder { "A quick reminder. " } else { "" }
             ),
         ),
