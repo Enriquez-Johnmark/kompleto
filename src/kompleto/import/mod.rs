@@ -130,6 +130,11 @@ pub struct Preview {
 /// Reads a CSV file: UTF-8 (with or without a byte-order mark), or
 /// Windows-1252 as older Excel saves it.
 pub fn read_csv(bytes: &[u8]) -> Result<Sheet, ImportError> {
+    rows_from_records(csv_records(bytes)?)
+}
+
+/// A CSV file's records, each with its row number as a spreadsheet shows it.
+pub fn csv_records(bytes: &[u8]) -> Result<Vec<(usize, Vec<String>)>, ImportError> {
     if bytes.len() > MAX_BYTES {
         return Err(ImportError::TooLarge);
     }
@@ -166,7 +171,7 @@ pub fn read_csv(bytes: &[u8]) -> Result<Sheet, ImportError> {
         breaks_in_previous = record.iter().map(|cell| line_breaks(cell.as_bytes())).sum();
         records.push((line, record.iter().map(str::to_owned).collect()));
     }
-    rows_from_records(records)
+    Ok(records)
 }
 
 /// Line breaks in `bytes`, counting `\r\n` once.
@@ -182,7 +187,12 @@ fn line_breaks(bytes: &[u8]) -> usize {
 
 /// Turns a sheet's cells, header row first, into rows.
 pub fn rows_from_cells(cells: Vec<Vec<String>>) -> Result<Sheet, ImportError> {
-    rows_from_records(cells.into_iter().enumerate().map(|(i, row)| (i + 1, row)).collect())
+    rows_from_records(numbered(cells))
+}
+
+/// A sheet's rows numbered from 1, header first.
+pub fn numbered(cells: Vec<Vec<String>>) -> Vec<(usize, Vec<String>)> {
+    cells.into_iter().enumerate().map(|(i, row)| (i + 1, row)).collect()
 }
 
 /// Rows numbered as the bookkeeper sees them, header first.

@@ -38,8 +38,13 @@ impl XlsxReader {
         Self { program }
     }
 
-    /// The first sheet's rows.
+    /// The first sheet's rows, read as Clients.
     pub async fn read(&self, bytes: &[u8]) -> Result<Sheet, ImportError> {
+        rows_from_cells(self.cells(bytes).await?)
+    }
+
+    /// The first sheet's cells, header row first.
+    pub async fn cells(&self, bytes: &[u8]) -> Result<Vec<Vec<String>>, ImportError> {
         if bytes.len() > MAX_BYTES {
             return Err(ImportError::TooLarge);
         }
@@ -79,8 +84,7 @@ impl XlsxReader {
         if !status.success() {
             return Err(unreadable());
         }
-        let cells: Vec<Vec<String>> = serde_json::from_slice(&output).map_err(|_| unreadable())?;
-        rows_from_cells(cells)
+        serde_json::from_slice(&output).map_err(|_| unreadable())
     }
 }
 
