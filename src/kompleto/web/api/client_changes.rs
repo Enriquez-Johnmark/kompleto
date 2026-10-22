@@ -15,7 +15,7 @@ use crate::kompleto::checklist::{ExtraItem, Recurs};
 use crate::kompleto::clients::{ClientError, ClientId, ExtraItemId, ScheduleSettings};
 use crate::kompleto::import::payors::MAX_NAMES;
 use crate::kompleto::payors::PayorId;
-use crate::kompleto::payroll::{PAGIBIG_DEFAULT_DAY, PHILHEALTH_DEFAULT_DAY, PayCycle, PayrollSettings};
+use crate::kompleto::payroll::{PayCycle, PayrollChoice};
 use crate::kompleto::schedule::ReminderDays;
 use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
 
@@ -315,12 +315,12 @@ pub struct Payroll {
     pub pagibig_due_day: u8,
 }
 
-impl From<Option<PayrollSettings>> for Payroll {
-    fn from(settings: Option<PayrollSettings>) -> Self {
+impl From<PayrollChoice> for Payroll {
+    fn from(choice: PayrollChoice) -> Self {
         Self {
-            pay_cycle: settings.map(|s| s.cycle.as_str().to_owned()),
-            philhealth_due_day: settings.map_or(PHILHEALTH_DEFAULT_DAY, |s| s.philhealth_due_day),
-            pagibig_due_day: settings.map_or(PAGIBIG_DEFAULT_DAY, |s| s.pagibig_due_day),
+            pay_cycle: choice.cycle.map(|cycle| cycle.as_str().to_owned()),
+            philhealth_due_day: choice.philhealth_due_day,
+            pagibig_due_day: choice.pagibig_due_day,
         }
     }
 }
@@ -331,18 +331,19 @@ async fn set_payroll(
     ApiPath(id): ApiPath<Uuid>,
     ApiJson(change): ApiJson<Payroll>,
 ) -> Result<StatusCode, ApiError> {
-    let settings = match change.pay_cycle.as_deref() {
+    let cycle = match change.pay_cycle.as_deref() {
         None => None,
-        Some(cycle) => Some(PayrollSettings {
-            cycle: PayCycle::parse(cycle).ok_or_else(|| refused("Choose twice a month or monthly."))?,
-            philhealth_due_day: change.philhealth_due_day,
-            pagibig_due_day: change.pagibig_due_day,
-        }),
+        Some(cycle) => Some(PayCycle::parse(cycle).ok_or_else(|| refused("Choose twice a month or monthly."))?),
+    };
+    let choice = PayrollChoice {
+        cycle,
+        philhealth_due_day: change.philhealth_due_day,
+        pagibig_due_day: change.pagibig_due_day,
     };
     state
         .clients
         .by(&member.email)
-        .set_payroll(member.firm, ClientId::from(id), settings)
+        .set_payroll(member.firm, ClientId::from(id), choice)
         .await
         .map_err(client_refusal)?;
     Ok(StatusCode::NO_CONTENT)

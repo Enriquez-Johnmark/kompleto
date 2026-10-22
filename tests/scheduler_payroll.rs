@@ -8,7 +8,7 @@ use common::{clock, firm, nena};
 use kompleto::engine::clock::Clock;
 use kompleto::kompleto::calendar::BirForm;
 use kompleto::kompleto::clients::{Clients, Language, NewClient};
-use kompleto::kompleto::payroll::{PAGIBIG_DEFAULT_DAY, PHILHEALTH_DEFAULT_DAY, PayCycle, PayrollSettings};
+use kompleto::kompleto::payroll::{PayCycle, PayrollChoice};
 use kompleto::kompleto::reminders::Scheduler;
 use sqlx::PgPool;
 use time::macros::date;
@@ -28,12 +28,11 @@ async fn payroll_drafts(pool: &PgPool, until: Date) -> Vec<(String, Date, String
         ..nena()
     };
     let client = clients.create(santos, &employer).await.unwrap();
-    let settings = PayrollSettings {
-        cycle: PayCycle::Monthly,
-        philhealth_due_day: PHILHEALTH_DEFAULT_DAY,
-        pagibig_due_day: PAGIBIG_DEFAULT_DAY,
+    let monthly = PayrollChoice {
+        cycle: Some(PayCycle::Monthly),
+        ..PayrollChoice::default()
     };
-    clients.set_payroll(santos, client, Some(settings)).await.unwrap();
+    clients.set_payroll(santos, client, monthly).await.unwrap();
     let scheduler = Scheduler::new(pool.clone(), clock.clone(), common::upload_links(pool, clock.clone())).unwrap();
     while clock.now().date() < until {
         scheduler.run_once().await.unwrap();

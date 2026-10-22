@@ -6,26 +6,28 @@ mod common;
 
 use common::{clock, firm, nena};
 use kompleto::kompleto::clients::{ClientError, Clients};
-use kompleto::kompleto::payroll::{PayCycle, PayrollSettings};
+use kompleto::kompleto::payroll::{PayCycle, PayrollChoice};
 use sqlx::PgPool;
 
 #[sqlx::test]
-async fn p1_payroll_chasing_is_off_until_set_and_reads_back(pool: PgPool) {
+async fn p1_payroll_chasing_is_off_until_set_and_off_keeps_the_due_days(pool: PgPool) {
     let santos = firm(&pool, "Santos Bookkeeping").await;
     let clients = Clients::new(pool.clone(), clock());
     let client = clients.create(santos, &nena()).await.unwrap();
-    assert_eq!(clients.payroll(santos, client).await.unwrap(), None);
+    assert_eq!(clients.payroll(santos, client).await.unwrap(), PayrollChoice::default());
 
-    let settings = PayrollSettings {
-        cycle: PayCycle::TwiceMonthly,
+    let on = PayrollChoice {
+        cycle: Some(PayCycle::TwiceMonthly),
         philhealth_due_day: 15,
-        pagibig_due_day: 31,
+        pagibig_due_day: 24,
     };
-    clients.set_payroll(santos, client, Some(settings)).await.unwrap();
-    assert_eq!(clients.payroll(santos, client).await.unwrap(), Some(settings));
+    clients.set_payroll(santos, client, on).await.unwrap();
+    assert_eq!(clients.payroll(santos, client).await.unwrap(), on);
 
-    clients.set_payroll(santos, client, None).await.unwrap();
-    assert_eq!(clients.payroll(santos, client).await.unwrap(), None);
+    let off = PayrollChoice { cycle: None, ..on };
+    clients.set_payroll(santos, client, off).await.unwrap();
+    assert_eq!(clients.payroll(santos, client).await.unwrap(), off);
+    assert_eq!(off.settings(), None);
 }
 
 #[sqlx::test]
@@ -33,25 +35,25 @@ async fn p2_a_due_day_outside_the_month_is_refused_and_another_firms_client_is_n
     let (santos, reyes) = (firm(&pool, "Santos Bookkeeping").await, firm(&pool, "Reyes CPA").await);
     let clients = Clients::new(pool.clone(), clock());
     let client = clients.create(santos, &nena()).await.unwrap();
-    let settings = PayrollSettings {
-        cycle: PayCycle::Monthly,
+    let choice = PayrollChoice {
+        cycle: Some(PayCycle::Monthly),
         philhealth_due_day: 32,
         pagibig_due_day: 31,
     };
 
-    let refused = clients.set_payroll(santos, client, Some(settings)).await;
+    let refused = clients.set_payroll(santos, client, choice).await;
     let elsewhere = clients
         .set_payroll(
             reyes,
             client,
-            Some(PayrollSettings {
+            PayrollChoice {
                 philhealth_due_day: 20,
-                ..settings
-            }),
+                ..choice
+            },
         )
         .await;
 
     assert!(matches!(refused, Err(ClientError::Invalid(_))), "{refused:?}");
     assert!(matches!(elsewhere, Err(ClientError::NotFound)), "{elsewhere:?}");
-    assert_eq!(clients.payroll(santos, client).await.unwrap(), None);
+    assert_eq!(clients.payroll(santos, client).await.unwrap(), PayrollChoice::default());
 }

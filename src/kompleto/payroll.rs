@@ -77,6 +77,40 @@ pub struct PayrollSettings {
     pub pagibig_due_day: u8,
 }
 
+/// A Client's payroll chasing as stored: on or off, with the due days
+/// kept while it's off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PayrollChoice {
+    /// When employees are paid; `None` turns payroll chasing off.
+    pub cycle: Option<PayCycle>,
+    /// PhilHealth's due day of the following month, 1–31.
+    pub philhealth_due_day: u8,
+    /// Pag-IBIG's due day of the following month, 1–31.
+    pub pagibig_due_day: u8,
+}
+
+impl Default for PayrollChoice {
+    /// Off, with the default due days.
+    fn default() -> Self {
+        Self {
+            cycle: None,
+            philhealth_due_day: PHILHEALTH_DEFAULT_DAY,
+            pagibig_due_day: PAGIBIG_DEFAULT_DAY,
+        }
+    }
+}
+
+impl PayrollChoice {
+    /// The settings to chase with, or `None` when it's off.
+    pub fn settings(self) -> Option<PayrollSettings> {
+        self.cycle.map(|cycle| PayrollSettings {
+            cycle,
+            philhealth_due_day: self.philhealth_due_day,
+            pagibig_due_day: self.pagibig_due_day,
+        })
+    }
+}
+
 /// An agency whose contributions an employer remits each month.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Agency {

@@ -15,7 +15,7 @@ use crate::kompleto::activity::record_as;
 use crate::kompleto::calendar::{BirForm, TaxPeriod};
 use crate::kompleto::checklist::{ChecklistEdits, DEFAULT_ITEMS, ExtraItem, Recurs};
 use crate::kompleto::firms::FirmId;
-use crate::kompleto::payroll::{PAGIBIG_DEFAULT_DAY, PHILHEALTH_DEFAULT_DAY, PayCycle, PayrollSettings};
+use crate::kompleto::payroll::{PayCycle, PayrollChoice};
 use crate::kompleto::periods::DueOverrides;
 use crate::kompleto::schedule::ReminderDays;
 
@@ -229,8 +229,8 @@ impl Clients {
         Ok(())
     }
 
-    /// The Client's payroll chasing, or `None` when it's off (P1, P2).
-    pub async fn payroll(&self, firm: FirmId, id: ClientId) -> Result<Option<PayrollSettings>, ClientError> {
+    /// The Client's payroll chasing (P1, P2).
+    pub async fn payroll(&self, firm: FirmId, id: ClientId) -> Result<PayrollChoice, ClientError> {
         let row = sqlx::query!(
             "select pay_cycle, philhealth_due_day, pagibig_due_day from clients where firm_id = $1 and id = $2",
             firm.as_uuid(),
@@ -240,27 +240,16 @@ impl Clients {
         .await?
         .ok_or(ClientError::NotFound)?;
         let day = |day: i16| u8::try_from(day).unwrap_or(31);
-        Ok(row
-            .pay_cycle
-            .as_deref()
-            .and_then(PayCycle::parse)
-            .map(|cycle| PayrollSettings {
-                cycle,
-                philhealth_due_day: day(row.philhealth_due_day),
-                pagibig_due_day: day(row.pagibig_due_day),
-            }))
+        Ok(PayrollChoice {
+            cycle: row.pay_cycle.as_deref().and_then(PayCycle::parse),
+            philhealth_due_day: day(row.philhealth_due_day),
+            pagibig_due_day: day(row.pagibig_due_day),
+        })
     }
 
-    /// Turns payroll chasing on with `settings`, or off with `None`.
-    pub async fn set_payroll(
-        &self,
-        firm: FirmId,
-        id: ClientId,
-        settings: Option<PayrollSettings>,
-    ) -> Result<(), ClientError> {
-        let days = settings.map_or((PHILHEALTH_DEFAULT_DAY, PAGIBIG_DEFAULT_DAY), |s| {
-            (s.philhealth_due_day, s.pagibig_due_day)
-        });
+    /// Turns payroll chasing on or off and sets its due days.
+    pub async fn set_payroll(&self, firm: FirmId, id: ClientId, choice: PayrollChoice) -> Result<(), ClientError> {
+        let days = (choice.philhealth_due_day, choice.pagibig_due_day);
         if ![days.0, days.1].iter().all(|day| (1..=31).contains(day)) {
             return Err(ClientError::Invalid("due days are 1 to 31".to_owned()));
         }
@@ -270,7 +259,7 @@ impl Clients {
              where firm_id = $1 and id = $2",
             firm.as_uuid(),
             id.as_uuid(),
-            settings.map(|s| s.cycle.as_str()),
+            choice.cycle.map(PayCycle::as_str),
             i16::from(days.0),
             i16::from(days.1),
             self.clock.now(),
@@ -280,7 +269,7 @@ impl Clients {
         if updated.rows_affected() == 0 {
             return Err(ClientError::NotFound);
         }
-        let details = json!({ "pay_cycle": settings.map(|s| s.cycle.as_str()) });
+        let details = json!({ "pay_cycle": choice.cycle.map(PayCycle::as_str) });
         let subject = ("client", id.as_uuid());
         record_as(
             &mut tx,

@@ -155,7 +155,7 @@ impl Scheduler {
             })
             .collect();
         // P1, P2: payroll Periods, when the Client has them.
-        if let Some(payroll) = self.clients.payroll(firm, id).await? {
+        if let Some(payroll) = self.clients.payroll(firm, id).await?.settings() {
             chases.extend(payroll.upcoming(&self.calendar, today).into_iter().map(|period| Chase {
                 key: period.key.to_string(),
                 label: period.key.label(),
