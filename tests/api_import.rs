@@ -17,9 +17,20 @@ const CSV: &str = "Business name,Contact first name,Email,Language,Forms\n\
                    Lito Hardware,Lito,lito@example.test,English,2550Q; 0619-E\n";
 
 async fn upload(app: &TestApp, cookie: &str, filename: &str, bytes: &[u8]) -> Response {
+    upload_with(app, cookie, filename, bytes, &[]).await
+}
+
+/// Uploads `bytes` with extra form `fields`, e.g. the batch's defaults.
+async fn upload_with(app: &TestApp, cookie: &str, filename: &str, bytes: &[u8], fields: &[(&str, &str)]) -> Response {
     let boundary = "kompleto-test-boundary";
+    let mut body = String::new();
+    for (name, value) in fields {
+        body.push_str(&format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n"
+        ));
+    }
     let mut body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n\
+        "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n\
          Content-Type: application/octet-stream\r\n\r\n"
     )
     .into_bytes();
@@ -157,4 +168,27 @@ async fn b2_a_confirmation_over_the_row_limit_is_refused(pool: PgPool) {
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test]
+async fn b5_a_xero_export_uses_the_language_and_forms_chosen_for_the_batch(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let xero = b"*ContactName,EmailAddress,FirstName,LastName\n\
+                 Nena's Store,nena@example.test,Nena,Cruz\n\
+                 Lito Hardware,lito@example.test,Lito,Reyes\n";
+    let defaults = [
+        ("default_language", "taglish"),
+        ("default_forms", "2551Q"),
+        ("default_forms", "1701Q"),
+    ];
+
+    let checked = upload_with(&app, &cookie, "Contacts.csv", xero, &defaults).await;
+
+    assert_eq!(checked.status, StatusCode::OK, "{}", checked.body);
+    let preview = checked.json();
+    assert_eq!(preview["invalid"], serde_json::json!([]));
+    assert_eq!(preview["valid"][0]["contact_first_name"], "Nena");
+    assert_eq!(preview["valid"][0]["forms"], serde_json::json!(["2551Q", "1701Q"]));
+    assert_eq!(preview["rows"][1]["language"], "taglish", "confirmed as previewed");
 }

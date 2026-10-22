@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::{ApiError, ApiFirm, ApiJson, ApiMember};
 use crate::kompleto::clients::{ClientError, ClientInput, NewClient};
 use crate::kompleto::firms::FirmId;
-use crate::kompleto::import::{self, COLUMNS, ImportError, ImportRow, MAX_BYTES, MAX_ROWS};
+use crate::kompleto::import::{self, BatchDefaults, COLUMNS, ImportError, ImportRow, MAX_BYTES, MAX_ROWS};
 use crate::kompleto::web::AppState;
 
 pub(super) fn routes() -> Router<AppState> {
@@ -70,11 +70,19 @@ async fn check_upload(
     mut multipart: Multipart,
 ) -> Result<Json<ImportPreview>, ApiError> {
     let mut file = None;
+    // For files without Language or Forms columns, such as Xero's and
+    // QuickBooks' exports (B5).
+    let mut defaults = BatchDefaults::default();
     while let Ok(Some(field)) = multipart.next_field().await {
-        if field.name() == Some("file") {
-            let name = field.file_name().unwrap_or("").to_ascii_lowercase();
-            let bytes = field.bytes().await.map_err(|_| refused(ImportError::TooLarge))?;
-            file = Some((name, bytes));
+        match field.name() {
+            Some("file") => {
+                let name = field.file_name().unwrap_or("").to_ascii_lowercase();
+                let bytes = field.bytes().await.map_err(|_| refused(ImportError::TooLarge))?;
+                file = Some((name, bytes));
+            }
+            Some("default_language") => defaults.language = field.text().await.unwrap_or_default(),
+            Some("default_forms") => defaults.forms.push(field.text().await.unwrap_or_default()),
+            _ => {}
         }
     }
     let (name, bytes) = file.ok_or_else(|| refused("Choose a file to upload."))?;
@@ -85,7 +93,7 @@ async fn check_upload(
     } else {
         return Err(refused("Upload a .csv or .xlsx file."));
     };
-    let rows = rows.map_err(refused)?;
+    let rows = import::with_defaults(rows.map_err(refused)?, &defaults);
     Ok(Json(preview(&state, firm, rows).await?))
 }
 
