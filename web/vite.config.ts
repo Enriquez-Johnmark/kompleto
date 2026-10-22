@@ -19,6 +19,7 @@ export default defineConfig({
     proxy: {
       "/api": rust,
       "/u/": rust,
+      "/static/": rust,
       "/hooks": rust,
       "/health": rust,
     },

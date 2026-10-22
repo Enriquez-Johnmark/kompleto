@@ -6,30 +6,22 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="same-origin">
 <title>{{ w.title }}</title>
-<style>
-  body { font: 17px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 34rem; padding: 0 1rem 3rem; color: #1d2433; }
-  ul.owed { list-style: none; padding: 0; }
-  ul.owed li { padding: .5rem 0; border-bottom: 1px solid #e6e9ef; }
-  .done { color: #1c7c3a; font-weight: 600; }
-  .todo { color: #8a5a00; }
-  label { display: block; margin: 1rem 0 .3rem; font-weight: 600; }
-  select, input[type=text], input[type=file] { font: inherit; width: 100%; box-sizing: border-box; padding: .5rem; }
-  button { font: inherit; font-weight: 600; width: 100%; padding: .8rem; margin-top: 1.25rem; cursor: pointer; }
-  .error { color: #a3261a; font-weight: 600; }
-  .sent { color: #1c7c3a; font-weight: 600; }
-</style>
+<link rel="stylesheet" href="/static/kompleto.css">
 <script src="/static/kompleto.js" defer></script>
 </head>
 <body>
+<main>
 <h1>{{ w.title }}</h1>
 {% if sent %}<p class="sent">{{ w.sent }}</p>{% endif %}
+<section class="card">
 <p>{{ intro }}</p>
 <ul class="owed">
 {% for item in items %}
-  <li>{{ item.label }}<br>{% if item.uploaded %}<span class="done">✓ {{ w.uploaded }}</span>{% else %}<span class="todo">{{ w.not_yet }}</span>{% endif %}</li>
+  <li><span>{{ item.label }}</span>{% if item.uploaded %}<span class="chip done">✓ {{ w.uploaded }}</span>{% else %}<span class="chip todo">{{ w.not_yet }}</span>{% endif %}</li>
 {% endfor %}
 </ul>
-<form class="upload" method="post" enctype="multipart/form-data">
+</section>
+<form class="upload card" method="post" enctype="multipart/form-data">
   {% if let Some(error) = error %}<p class="error" id="error">{{ error }}</p>{% else %}<p class="error" id="error" hidden></p>{% endif %}
   <label for="document">{{ w.what }}</label>
   <select id="document" name="document" required>
@@ -46,7 +38,9 @@
   <label for="file">{{ w.file }}</label>
   <input type="file" id="file" name="file" accept="image/*,application/pdf" required>
   <button type="submit">{{ w.button }}</button>
-  <p id="progress" hidden>{{ w.sending }}</p>
+  <p id="progress" class="muted" hidden>{{ w.sending }}</p>
 </form>
+<p class="footer">Kompleto</p>
+</main>
 </body>
 </html>

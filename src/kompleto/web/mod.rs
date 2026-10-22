@@ -1,11 +1,13 @@
-//! Kompleto's server-rendered pages.
+//! Kompleto's web layer: the JSON API the React app calls (`api`), the
+//! built React app itself (`spa`), the Client's server-rendered upload
+//! page (`upload`) and the signed provider hooks (`hooks`).
 //!
-//! - Every Firm page takes a [`CurrentFirm`] from the session cookie and
-//!   passes its ID to the repositories, so another Firm's IDs are "not
+//! - Every Firm endpoint takes an [`api::ApiFirm`] from the session cookie
+//!   and passes its ID to the repositories, so another Firm's IDs are "not
 //!   found" (A2).
-//! - Form posts must come from our own pages: the `Origin` header has to
+//! - Changes must come from our own pages: the `Origin` header has to
 //!   match the configured base URL. Together with `SameSite=Lax` cookies
-//!   this stops cross-site form posts.
+//!   this stops cross-site posts.
 
 mod api;
 mod hooks;
@@ -18,11 +20,11 @@ use std::sync::Arc;
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::Router;
-use axum::extract::{FromRequestParts, Request, State};
+use axum::extract::{Request, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Redirect, Response};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{MethodRouter, get};
 use secrecy::SecretString;
 use sqlx::PgPool;
@@ -194,6 +196,7 @@ pub fn router(state: AppState) -> Router {
         .merge(upload::routes())
         .merge(hooks::routes())
         .route("/static/kompleto.js", get(script))
+        .route("/static/kompleto.css", get(stylesheet))
         .route("/health", get(health))
         .fallback(spa::app)
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
@@ -242,7 +245,15 @@ async fn health(State(state): State<AppState>) -> Response {
     }
 }
 
-/// Kompleto's one script (`static/kompleto.js`), built into the binary.
+/// The upload pages' stylesheet (`static/kompleto.css`), built into the binary.
+async fn stylesheet() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        include_str!("../../../static/kompleto.css"),
+    )
+}
+
+/// The upload page's script (`static/kompleto.js`), built into the binary.
 async fn script() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
@@ -299,26 +310,6 @@ fn scoped_router(pages: Vec<(ScopedRoute, MethodRouter<AppState>)>) -> Router<Ap
     by_path
         .into_iter()
         .fold(Router::new(), |router, (path, handler)| router.route(path, handler))
-}
-
-/// The logged-in Firm. Pages that take it send visitors without a live
-/// session to the login page.
-#[derive(Debug, Clone, Copy)]
-pub struct CurrentFirm(pub FirmId);
-
-impl FromRequestParts<AppState> for CurrentFirm {
-    type Rejection = Response;
-
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
-        let Some(session) = session_cookie(parts) else {
-            return Err(Redirect::to("/login").into_response());
-        };
-        match state.auth.firm_for_session(&session).await {
-            Ok(Some(firm)) => Ok(Self(firm)),
-            Ok(None) => Err(Redirect::to("/login").into_response()),
-            Err(err) => Err(WebError::internal(err).into_response()),
-        }
-    }
 }
 
 /// Who is acting, for the audit log: the Firm's login email.

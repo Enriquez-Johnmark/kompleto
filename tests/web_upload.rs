@@ -426,7 +426,7 @@ async fn h2_the_client_picks_a_listed_payors_2307_or_names_another_business(pool
     let item = page
         .body
         .split("<li>")
-        .find(|li| li.starts_with("BIR Form 2307 from PUREGOLD"))
+        .find(|li| li.starts_with("<span>BIR Form 2307 from PUREGOLD"))
         .unwrap();
     assert!(item.contains("Na-upload na"), "{item}");
 }

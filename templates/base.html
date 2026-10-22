@@ -3,27 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>{% block title %}Kompleto{% endblock %}</title>
-<script src="/static/kompleto.js" defer></script>
-<style>
-  body { font: 16px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 52rem; padding: 0 1rem 3rem; color: #1d2433; }
-  nav { display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: center; padding: .75rem 0; border-bottom: 1px solid #d8dde6; margin-bottom: 1rem; }
-  nav form { margin-left: auto; }
-  a { color: #1f5fbf; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: .4rem .5rem .4rem 0; border-bottom: 1px solid #e6e9ef; vertical-align: top; }
-  label { display: block; margin: .75rem 0 .25rem; font-weight: 600; }
-  input[type=text], input[type=email], input[type=number], input[type=date], select { font: inherit; padding: .4rem; width: 100%; max-width: 24rem; box-sizing: border-box; }
-  button { font: inherit; padding: .45rem 1rem; cursor: pointer; }
-  .forms label { display: inline-block; font-weight: normal; margin-right: 1rem; }
-  .error { color: #a3261a; }
-  .muted { color: #5b6476; }
-  .period { border: 1px solid #d8dde6; border-radius: 6px; padding: .5rem 1rem; margin: 1rem 0; }
-  .inline { display: inline; }
-  pre.message { white-space: pre-wrap; font: inherit; background: #f6f7f9; padding: .5rem .75rem; border-radius: 4px; }
-</style>
+<link rel="stylesheet" href="/static/kompleto.css">
 </head>
 <body>
+<main>
+<section class="card">
 {% block body %}{% endblock %}
+</section>
+<p class="footer">Kompleto</p>
+</main>
 </body>
 </html>

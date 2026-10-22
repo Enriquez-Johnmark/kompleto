@@ -1,26 +1,7 @@
-// Kompleto's only script, served from our own origin so the
+// The Client upload page's script, served from our own origin so the
 // Content-Security-Policy can refuse every inline script.
 (function () {
   "use strict";
-
-  // Drafts page: "Tick all" ticks every Draft's box.
-  document.addEventListener("change", function (event) {
-    var box = event.target;
-    if (box.matches && box.matches("[data-tick-all]")) {
-      document.querySelectorAll("input[name=ids]").forEach(function (each) {
-        each.checked = box.checked;
-      });
-    }
-  });
-
-  // Viber page: "Copy" copies the message beside it.
-  document.addEventListener("click", function (event) {
-    var button = event.target.closest && event.target.closest("[data-copy]");
-    if (button) {
-      var text = document.getElementById(button.dataset.copy);
-      if (text) navigator.clipboard.writeText(text.value);
-    }
-  });
 
   if (!document.querySelector("form.upload")) return;
   // Sends each chosen file as its own request, so several photos can go at
