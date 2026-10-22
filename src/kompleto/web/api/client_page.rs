@@ -11,6 +11,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
+use super::client_changes::Payroll;
 use super::clients::language;
 use super::{ApiError, ApiFirm, ApiPath};
 use crate::kompleto::checklist::{DEFAULT_ITEMS, Recurs, owed_documents};
@@ -48,6 +49,7 @@ pub struct ClientDetail {
     pub forms: Vec<String>,
     pub paused: bool,
     pub schedule: Schedule,
+    pub payroll: Payroll,
     /// The next 12 months, earliest first.
     pub periods: Vec<PeriodView>,
     pub checklist: Checklist,
@@ -198,7 +200,7 @@ async fn page(
     let id = ClientId::from(id);
     let client = state.clients.get(firm, id).await?;
     // The rest are independent: one round trip's wait, not eight.
-    let (overrides, edits, firm_details, extra_items, payor_list, upload_list, reply_list) = tokio::try_join!(
+    let (overrides, edits, firm_details, extra_items, payor_list, upload_list, reply_list, payroll) = tokio::try_join!(
         async { Ok::<_, ApiError>(state.clients.due_overrides(firm, id).await?) },
         async { Ok(state.clients.checklist_edits(firm, id).await?) },
         async { Ok(state.firms.get(firm).await?) },
@@ -206,6 +208,7 @@ async fn page(
         async { Ok(state.payors.list(firm, id).await?) },
         async { Ok(state.uploads.for_client(firm, id).await?) },
         async { Ok(state.replies.for_client(firm, id).await?) },
+        async { Ok(state.clients.payroll(firm, id).await?) },
     )?;
     let firm_offset = firm_details.cut_off_offset_days;
     let calendar = ClientCalendar {
@@ -303,6 +306,7 @@ async fn page(
             firm_offset_days: firm_offset,
             reminder_days: client.reminder_days.days().to_vec(),
         },
+        payroll: payroll.into(),
         periods,
         checklist: Checklist { defaults, extras },
         payors,

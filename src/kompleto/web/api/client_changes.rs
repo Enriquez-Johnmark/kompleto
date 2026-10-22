@@ -15,6 +15,7 @@ use crate::kompleto::checklist::{ExtraItem, Recurs};
 use crate::kompleto::clients::{ClientError, ClientId, ExtraItemId, ScheduleSettings};
 use crate::kompleto::import::payors::MAX_NAMES;
 use crate::kompleto::payors::PayorId;
+use crate::kompleto::payroll::{PAGIBIG_DEFAULT_DAY, PHILHEALTH_DEFAULT_DAY, PayCycle, PayrollSettings};
 use crate::kompleto::schedule::ReminderDays;
 use crate::kompleto::web::{AppState, ScopedRoute, scoped_router};
 
@@ -73,6 +74,14 @@ pub(in crate::kompleto::web) fn change_endpoints() -> Vec<(ScopedRoute, MethodRo
         (
             endpoint(Method::DELETE, "/api/clients/{id}/checklist/extras/{item}", ""),
             delete(delete_item),
+        ),
+        (
+            endpoint(
+                Method::PUT,
+                "/api/clients/{id}/payroll",
+                r#"{"pay_cycle": "monthly", "philhealth_due_day": 20, "pagibig_due_day": 31}"#,
+            ),
+            put(set_payroll),
         ),
         (
             endpoint(
@@ -292,6 +301,51 @@ async fn add_payor(
         .await
         .map_err(client_refusal)?;
     Ok(StatusCode::CREATED)
+}
+
+/// A Client's payroll chasing (P1, P2), as shown and as changed.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct Payroll {
+    /// `twice-monthly`, `monthly`, or `null` when it's off.
+    pub pay_cycle: Option<String>,
+    /// PhilHealth's due day of the following month, 1 to 31.
+    pub philhealth_due_day: u8,
+    /// Pag-IBIG's due day of the following month, 1 to 31 (31: the last day).
+    pub pagibig_due_day: u8,
+}
+
+impl From<Option<PayrollSettings>> for Payroll {
+    fn from(settings: Option<PayrollSettings>) -> Self {
+        Self {
+            pay_cycle: settings.map(|s| s.cycle.as_str().to_owned()),
+            philhealth_due_day: settings.map_or(PHILHEALTH_DEFAULT_DAY, |s| s.philhealth_due_day),
+            pagibig_due_day: settings.map_or(PAGIBIG_DEFAULT_DAY, |s| s.pagibig_due_day),
+        }
+    }
+}
+
+async fn set_payroll(
+    State(state): State<AppState>,
+    ApiMember(member): ApiMember,
+    ApiPath(id): ApiPath<Uuid>,
+    ApiJson(change): ApiJson<Payroll>,
+) -> Result<StatusCode, ApiError> {
+    let settings = match change.pay_cycle.as_deref() {
+        None => None,
+        Some(cycle) => Some(PayrollSettings {
+            cycle: PayCycle::parse(cycle).ok_or_else(|| refused("Choose twice a month or monthly."))?,
+            philhealth_due_day: change.philhealth_due_day,
+            pagibig_due_day: change.pagibig_due_day,
+        }),
+    };
+    state
+        .clients
+        .by(&member.email)
+        .set_payroll(member.firm, ClientId::from(id), settings)
+        .await
+        .map_err(client_refusal)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Names ticked from a sales export (H3).
