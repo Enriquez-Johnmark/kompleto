@@ -8,6 +8,7 @@
 //!   JSON body, which a cross-site form can't send.
 //! - Errors are JSON ([`ErrorBody`]) without internal details.
 
+mod client_changes;
 mod client_page;
 mod clients;
 mod dashboard;
@@ -30,6 +31,7 @@ use crate::kompleto::firms::{FirmError, FirmId};
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
+        .merge(client_changes::routes())
         .merge(client_page::routes())
         .merge(clients::routes())
         .merge(dashboard::routes())
@@ -45,6 +47,7 @@ pub(super) fn scoped_endpoints() -> Vec<(super::ScopedRoute, axum::routing::Meth
         .into_iter()
         .chain(clients::client_endpoints())
         .chain(client_page::page_endpoints())
+        .chain(client_changes::change_endpoints())
         .collect()
 }
 

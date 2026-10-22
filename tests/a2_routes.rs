@@ -28,11 +28,6 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
     let (_, reyes_cookie) = app.logged_in_firm("Reyes CPA").await;
     let clients = Clients::new(pool.clone(), app.clock.clone());
     let client = clients.create(santos, &nena()).await.unwrap();
-    let extra = ExtraItem {
-        label: "Lazada payout reports".to_owned(),
-        recurs: Recurs::EveryPeriod,
-    };
-    let item = clients.add_extra_item(santos, client, &extra).await.unwrap();
     // An Upload from the Client's Contact.
     let links = common::upload_links(&pool, app.clock.clone());
     let url = links
@@ -49,11 +44,7 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
         .add(&link, &owed, label, b"%PDF-1.7 statement")
         .await
         .unwrap();
-    // A Payor of the Client.
-    let payor = kompleto::kompleto::payors::Payors::new(pool.clone(), app.clock.clone())
-        .add(santos, client, "Jollibee Foods Corp")
-        .await
-        .unwrap();
+    let payors = kompleto::kompleto::payors::Payors::new(pool.clone(), app.clock.clone());
     // A Reply from the Client's Contact.
     let reply = uuid::Uuid::now_v7();
     sqlx::query(
@@ -91,7 +82,18 @@ async fn a2_every_client_draft_and_upload_page_is_not_found_for_another_firm(poo
     let routes = scoped_routes();
     assert!(routes.len() >= 3, "{routes:?}");
 
-    for route in routes {
+    for (n, route) in routes.into_iter().enumerate() {
+        // A fresh checklist item and Payor for each route, since a route
+        // may delete the one before it.
+        let extra = ExtraItem {
+            label: format!("Lazada payout reports {n}"),
+            recurs: Recurs::EveryPeriod,
+        };
+        let item = clients.add_extra_item(santos, client, &extra).await.unwrap();
+        let payor = payors
+            .add(santos, client, &format!("Jollibee Foods Corp {n}"))
+            .await
+            .unwrap();
         let uri = route
             .path
             .replace("{id}", &client.to_string())
