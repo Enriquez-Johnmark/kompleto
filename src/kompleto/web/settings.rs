@@ -84,6 +84,7 @@ async fn save_settings(
 #[template(path = "closed.html")]
 struct ClosedPage {
     erase_on: String,
+    support_email: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +103,7 @@ async fn close_account(
         Ok(erase_after) => {
             let page = ClosedPage {
                 erase_on: show_date(erase_after.to_offset(MANILA).date()),
+                support_email: state.support_email.clone(),
             };
             let cookie = format!("{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
             Ok(([(header::SET_COOKIE, cookie)], page).into_response())

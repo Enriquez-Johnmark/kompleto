@@ -70,6 +70,10 @@ async fn i2_closing_an_account_stops_everything_at_once(pool: PgPool) {
         "deleted 7 days later: {}",
         closed.body
     );
+    assert!(
+        closed.body.contains("help@getkompleto.test"),
+        "whom to write to undo it"
+    );
     assert_eq!(waiting(&app, santos).await, ["cancelled"]);
     assert_eq!(waiting(&app, reyes).await, ["draft"], "another Firm's untouched");
     assert_eq!(app.get("/", &cookie).await.status, StatusCode::SEE_OTHER, "logged out");

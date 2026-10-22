@@ -73,6 +73,9 @@ pub struct Config {
     /// Verifies Resend's delivery events (`RESEND_WEBHOOK_SECRET`,
     /// `whsec_…`); without it, Bounces aren't taken in.
     pub resend_webhook_secret: Option<SecretString>,
+    /// Where Firms write for help (`SUPPORT_EMAIL`), shown when an account
+    /// closes. Route it to a person, not to the reply Worker.
+    pub support_email: Option<String>,
 }
 
 /// Where and which model drafts.
@@ -127,6 +130,7 @@ impl Config {
             upload_dir: optional("UPLOAD_DIR").map_or_else(|| PathBuf::from("uploads"), PathBuf::from),
             inbound_secret: optional("INBOUND_SECRET").map(SecretString::from),
             resend_webhook_secret: optional("RESEND_WEBHOOK_SECRET").map(SecretString::from),
+            support_email: optional("SUPPORT_EMAIL"),
         })
     }
 

@@ -3,5 +3,5 @@
 {% block body %}
 <h1>Your account is closed</h1>
 <p>Nothing more will be sent, and your upload links no longer work.</p>
-<p>All your data and files will be deleted on {{ erase_on }}. To undo this before then, contact Kompleto.</p>
+<p>All your data and files will be deleted on {{ erase_on }}. To undo this before then, {% if let Some(address) = support_email %}email <a href="mailto:{{ address }}">{{ address }}</a>{% else %}contact Kompleto{% endif %}.</p>
 {% endblock %}

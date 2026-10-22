@@ -14,6 +14,9 @@ use tower::ServiceExt;
 
 pub const BASE_URL: &str = "http://kompleto.test";
 /// The secret the test app's delivery events are signed with.
+/// Where the closed-account page tells a Firm to write.
+pub const SUPPORT_EMAIL: &str = "help@getkompleto.test";
+
 pub const WEBHOOK_SECRET: &str = "whsec_c2VjcmV0LWtleS1mb3ItdGVzdHM=";
 /// The secret the test app's inbound email is signed with.
 pub const INBOUND_SECRET: &str = "test-inbound-secret";
@@ -72,7 +75,8 @@ impl TestApp {
         )
         .unwrap()
         .with_inbound(INBOUND_SECRET.to_owned().into(), "getkompleto.test")
-        .with_delivery_events(WEBHOOK_SECRET.to_owned().into());
+        .with_delivery_events(WEBHOOK_SECRET.to_owned().into())
+        .with_support_email(SUPPORT_EMAIL);
         Self {
             router: router(state),
             pool,

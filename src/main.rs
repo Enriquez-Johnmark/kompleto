@@ -160,6 +160,10 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
         Some(secret) => state.with_delivery_events(secret.clone()),
         None => state,
     };
+    let state = match &config.support_email {
+        Some(address) => state.with_support_email(address),
+        None => state,
+    };
     let state = match &config.inbound_secret {
         Some(secret) => state.with_inbound(secret.clone(), config.reply_domain()),
         None => {

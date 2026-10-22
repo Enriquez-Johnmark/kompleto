@@ -84,6 +84,8 @@ pub struct AppState {
     origin: String,
     /// Mark cookies `Secure` (when served over HTTPS).
     secure_cookies: bool,
+    /// Where Firms write for help (`SUPPORT_EMAIL`), if set.
+    support_email: Option<String>,
     /// Inbound email, when `INBOUND_SECRET` is set.
     inbound: Option<Arc<Inbound>>,
     /// The provider's delivery events, when `RESEND_WEBHOOK_SECRET` is set.
@@ -139,10 +141,18 @@ impl AppState {
             xlsx,
             wake_sender: Arc::new(Notify::new()),
             secure_cookies: base_url.starts_with("https://"),
+            support_email: None,
             origin,
             inbound: None,
             delivery_events: None,
         })
+    }
+
+    /// Where Firms write for help, e.g. to undo closing an account.
+    #[must_use]
+    pub fn with_support_email(mut self, address: &str) -> Self {
+        self.support_email = Some(address.trim().to_owned());
+        self
     }
 
     /// Takes in the provider's delivery events signed with `secret`
