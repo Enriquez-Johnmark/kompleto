@@ -97,6 +97,8 @@ pub fn describe(action: &str) -> &str {
         "checklist.item_deleted" => "Deleted a checklist item",
         "payor.added" => "Added a Payor",
         "payor.removed" => "Removed a Payor",
+        "reply.received" => "A reply arrived",
+        "firm.logged_in" => "Logged in",
         "file.deleted" => "Deleted an uploaded file",
         other => other,
     }

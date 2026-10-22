@@ -57,3 +57,20 @@ async fn j2_the_firm_sees_its_last_90_days_of_activity_newest_first(pool: PgPool
     assert!(!page.body.contains("Cancelled"), "another Firm's");
     assert!(page.body.contains(r#"href="/activity""#), "in the menu");
 }
+
+#[sqlx::test]
+async fn j2_a_login_is_logged(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (santos, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+
+    let page = app.get("/activity", &cookie).await;
+
+    let actors: Vec<String> =
+        sqlx::query_scalar("select actor from audit_events where tenant_id = $1 and action = 'firm.logged_in'")
+            .bind(santos.as_uuid())
+            .fetch_all(&app.pool)
+            .await
+            .unwrap();
+    assert_eq!(actors, ["santos.bookkeeping@firm.test"]);
+    assert!(page.body.contains("Logged in"), "{}", page.body);
+}

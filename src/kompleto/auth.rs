@@ -15,6 +15,9 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use time::Duration;
 
+use serde_json::json;
+
+use super::activity::record_by_firm;
 use super::firms::{FirmError, FirmId, Firms};
 use super::presend::KompletoChecks;
 use crate::engine::clock::Clock;
@@ -137,6 +140,7 @@ impl Auth {
     /// secret for the cookie. `None` if the link is unknown, used or expired.
     pub async fn log_in(&self, token: &str) -> Result<Option<String>, AuthError> {
         let now = self.clock.now();
+        let mut tx = self.pool.begin().await?;
         let firm = sqlx::query_scalar!(
             "update login_tokens set used_at = $2
              where token_hash = $1 and used_at is null and expires_at > $2
@@ -144,7 +148,7 @@ impl Auth {
             &hash(token)[..],
             now,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?;
         let Some(firm) = firm else {
             return Ok(None);
@@ -157,8 +161,19 @@ impl Auth {
             now,
             now + SESSION_LIFETIME,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        let firm = FirmId::from(firm);
+        record_by_firm(
+            &mut tx,
+            firm,
+            now,
+            "firm.logged_in",
+            ("firm", firm.as_uuid()),
+            json!({}),
+        )
+        .await?;
+        tx.commit().await?;
         Ok(Some(session))
     }
 

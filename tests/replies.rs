@@ -101,6 +101,23 @@ async fn g1_after_a_human_reply_no_later_reminder_is_drafted_for_the_period(pool
 }
 
 #[sqlx::test]
+async fn j2_a_reply_is_logged_once(pool: PgPool) {
+    let (santos, clock, reply_to) = reminded(&pool).await;
+    let email = parse(&common::inbound("human_reply", &reply_to)).unwrap();
+
+    replies(&pool, clock.clone()).receive(&email).await.unwrap();
+    replies(&pool, clock).receive(&email).await.unwrap();
+
+    let logged: Vec<String> =
+        sqlx::query_scalar("select actor from audit_events where tenant_id = $1 and action = 'reply.received'")
+            .bind(santos.as_uuid())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(logged, ["system:replies"]);
+}
+
+#[sqlx::test]
 async fn g1_an_automatic_reply_is_noted_but_reminders_continue(pool: PgPool) {
     let (_, clock, reply_to) = reminded(&pool).await;
 

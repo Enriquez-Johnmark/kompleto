@@ -22,6 +22,7 @@ use super::firms::{FirmId, Firms};
 use super::presend::KompletoChecks;
 use super::upload_links::{OpenLink, UploadLinks};
 use super::uploads::{Label, UploadError, Uploads};
+use crate::engine::audit::{self, AuditEvent};
 use crate::engine::clock::Clock;
 use crate::engine::ids::id_type;
 use crate::engine::inbound::InboundEmail;
@@ -155,6 +156,7 @@ impl Replies {
             return Ok(Received::Unmatched);
         };
         let new = ReplyId::new();
+        let mut tx = self.pool.begin().await?;
         let inserted = sqlx::query_scalar!(
             "insert into replies
                  (id, firm_id, client_id, period, from_address, subject, body_text, automatic, received_at, message_key, signed)
@@ -173,8 +175,21 @@ impl Replies {
             email.key,
             signed,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?;
+        if inserted.is_some() {
+            let event = AuditEvent {
+                tenant: link.firm,
+                at: self.clock.now(),
+                actor: NOTICE_APPROVER,
+                action: "reply.received",
+                subject_type: "reply",
+                subject_id: new.as_uuid(),
+                details: serde_json::json!({ "signed": signed, "automatic": email.automatic }),
+            };
+            audit::record(&mut *tx, &event).await?;
+        }
+        tx.commit().await?;
         // A redelivery: the provider retries when an earlier attempt failed
         // part way, so finish what's left, but never keep anything twice.
         let (id, handled) = match inserted {
