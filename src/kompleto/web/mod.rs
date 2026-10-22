@@ -8,6 +8,7 @@
 //!   this stops cross-site form posts.
 
 mod activity;
+mod api;
 mod clients;
 mod dashboard;
 mod drafts;
@@ -187,6 +188,7 @@ impl AppState {
 /// The web app.
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .merge(api::routes())
         .merge(dashboard::routes())
         .merge(login::routes())
         .merge(clients::routes())

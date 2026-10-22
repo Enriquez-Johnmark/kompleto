@@ -1,0 +1,70 @@
+//! The JSON API's shared behaviour: errors are JSON, and every Firm
+//! endpoint needs a session.
+
+#![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
+
+mod common;
+
+use axum::http::{Method, StatusCode, header};
+use common::web::TestApp;
+use serde_json::json;
+use sqlx::PgPool;
+
+#[sqlx::test]
+async fn an_unknown_api_path_is_a_json_not_found(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+
+    let response = app.api(Method::GET, "/api/nothing-here", Some(&cookie), None).await;
+
+    assert_eq!(response.status, StatusCode::NOT_FOUND);
+    assert_eq!(response.json()["message"], "Not found.");
+}
+
+#[sqlx::test]
+async fn without_a_session_the_api_answers_not_logged_in(pool: PgPool) {
+    let app = TestApp::new(pool);
+
+    let response = app.api(Method::GET, "/api/me", None, None).await;
+
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.headers[header::CONTENT_TYPE],
+        "application/json",
+        "{}",
+        response.body
+    );
+    assert_eq!(response.json()["message"], "Log in first.");
+}
+
+#[sqlx::test]
+async fn me_names_the_logged_in_firm(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+
+    let response = app.api(Method::GET, "/api/me", Some(&cookie), None).await;
+
+    assert_eq!(response.status, StatusCode::OK, "{}", response.body);
+    assert_eq!(
+        response.json(),
+        json!({"firm_name": "Santos Bookkeeping", "login_email": "santos.bookkeeping@firm.test"})
+    );
+}
+
+#[sqlx::test]
+async fn an_api_change_from_another_site_is_refused(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let request = axum::http::Request::builder()
+        .method(Method::POST)
+        .uri("/api/logout")
+        .header(header::COOKIE, &cookie)
+        .header(header::ORIGIN, "https://evil.example")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(axum::body::Body::from("{}"))
+        .unwrap();
+
+    let response = app.send(request).await;
+
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+}

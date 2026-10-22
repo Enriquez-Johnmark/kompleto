@@ -37,6 +37,11 @@ pub struct Response {
 }
 
 impl Response {
+    /// The body as JSON.
+    pub fn json(&self) -> serde_json::Value {
+        serde_json::from_slice(&self.bytes).unwrap_or_else(|_| panic!("not JSON: {}", self.body))
+    }
+
     pub fn location(&self) -> &str {
         self.headers
             .get(header::LOCATION)
@@ -145,6 +150,31 @@ impl TestApp {
             .body(Body::from(body))
             .unwrap();
         self.send(request).await
+    }
+
+    /// Sends `json` as an API request, from our own origin unless it's a GET.
+    pub async fn api(
+        &self,
+        method: Method,
+        uri: &str,
+        cookie: Option<&str>,
+        json: Option<serde_json::Value>,
+    ) -> Response {
+        let mut request = Request::builder().method(method.clone()).uri(uri);
+        if let Some(cookie) = cookie {
+            request = request.header(header::COOKIE, cookie);
+        }
+        if method != Method::GET {
+            request = request.header(header::ORIGIN, BASE_URL);
+        }
+        let body = match json {
+            Some(json) => {
+                request = request.header(header::CONTENT_TYPE, "application/json");
+                Body::from(json.to_string())
+            }
+            None => Body::empty(),
+        };
+        self.send(request.body(body).unwrap()).await
     }
 
     pub async fn get(&self, uri: &str, cookie: &str) -> Response {
