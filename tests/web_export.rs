@@ -110,3 +110,63 @@ async fn i1_the_firm_downloads_all_its_data_as_one_zip(pool: PgPool) {
             .unwrap();
     assert_eq!(logged, 1);
 }
+
+/// Removes the stored file named `id` somewhere under `dir`.
+fn remove_stored(dir: &std::path::Path, id: &str) -> bool {
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() && remove_stored(&path, id) {
+            return true;
+        }
+        if path.file_name().is_some_and(|name| name == id) {
+            std::fs::remove_file(&path).unwrap();
+            return true;
+        }
+    }
+    false
+}
+
+#[sqlx::test]
+async fn i1_an_export_survives_clients_whose_files_share_a_name_and_a_missing_file(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (santos, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let clients = Clients::new(app.pool.clone(), app.clock.clone());
+    let links = common::upload_links(&app.pool, app.clock.clone());
+    let uploads = Uploads::new(app.pool.clone(), app.clock.clone(), app.files.clone());
+    // Both names make the same file name: apostrophes are dropped.
+    let mut ids = Vec::new();
+    for name in ["Nena's Store", "Nenas Store", "Lost File Store"] {
+        let client = NewClient {
+            business_name: name.to_owned(),
+            ..nena()
+        };
+        let id = clients.create(santos, &client).await.unwrap();
+        let url = links
+            .for_period(santos, id, "2026-09", date!(2026 - 10 - 26))
+            .await
+            .unwrap();
+        let link = links.open(url.rsplit('/').next().unwrap()).await.unwrap();
+        let label = Label::SomethingElse {
+            note: "resibo".to_owned(),
+        };
+        ids.push(uploads.add(&link, &[], label, JPEG).await.unwrap());
+    }
+    // The deletion sweep removed this one's file but hasn't marked it yet.
+    remove_stored(
+        &std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")),
+        &ids[2].to_string(),
+    );
+
+    let export = app.get("/settings/export", &cookie).await;
+
+    assert_eq!(export.status, StatusCode::OK);
+    let zip = zip::ZipArchive::new(std::io::Cursor::new(export.bytes)).unwrap();
+    let files: Vec<String> = zip
+        .file_names()
+        .filter_map(Result::ok)
+        .filter(|name| name.starts_with("files/"))
+        .map(|name| name.into_owned())
+        .collect();
+    assert_eq!(files.len(), 2, "{files:?}");
+    assert_ne!(files[0], files[1]);
+}

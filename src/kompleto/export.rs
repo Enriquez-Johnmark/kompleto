@@ -7,6 +7,7 @@
 //!   `+`, `-`, `@`, a tab or a return) gets a leading `'`: Contacts' text
 //!   is untrusted.
 
+use std::collections::HashSet;
 use std::io::{Seek, Write};
 
 use sqlx::PgPool;
@@ -192,17 +193,29 @@ pub async fn write_zip<W: Write + Seek>(
 
     // Uploads, and each file still held under the name a download gets.
     let mut rows = Vec::new();
+    let mut names = HashSet::new();
     for client in &list {
         for upload in uploads.for_client(firm, client.id).await? {
-            let file = if upload.deleted {
-                String::new()
+            let download = if upload.deleted {
+                None
             } else {
-                let download = uploads
+                match uploads
                     .download(firm, client.id, upload.id, &client.details.business_name)
-                    .await?;
-                let name = format!("files/{}", download.name);
-                add(&mut zip, &name, &download.bytes)?;
-                name
+                    .await
+                {
+                    Ok(download) => Some(download),
+                    // Deleted by the sweep a moment ago: listed, not included.
+                    Err(UploadError::NotFound) => None,
+                    Err(err) => return Err(err.into()),
+                }
+            };
+            let file = match download {
+                Some(download) => {
+                    let name = unique(&mut names, &format!("files/{}", download.name));
+                    add(&mut zip, &name, &download.bytes)?;
+                    name
+                }
+                None => String::new(),
             };
             rows.push(vec![
                 client.details.business_name.clone(),
@@ -307,6 +320,20 @@ pub async fn write_zip<W: Write + Seek>(
     add(&mut zip, "activity.csv", &csv(&header, rows)?)?;
 
     Ok(zip.finish()?)
+}
+
+/// `name`, or with " (2)", " (3)"… before its extension if already taken:
+/// two Clients' names can make the same file name, and a zip can't hold two
+/// files with one name.
+fn unique(taken: &mut HashSet<String>, name: &str) -> String {
+    let (stem, extension) = name.rsplit_once('.').unwrap_or((name, ""));
+    let mut candidate = name.to_owned();
+    let mut number = 1;
+    while !taken.insert(candidate.clone()) {
+        number += 1;
+        candidate = format!("{stem} ({number}).{extension}");
+    }
+    candidate
 }
 
 /// `at` in Manila time.
