@@ -43,6 +43,7 @@ use super::members::Members;
 use super::payors::Payors;
 use super::presend::KompletoChecks;
 use super::replies::Replies;
+use super::signups::Signups;
 use super::upload_links::UploadLinks;
 use super::uploads::Uploads;
 use crate::engine::clock::Clock;
@@ -62,6 +63,7 @@ pub struct AppState {
     auth: Auth,
     firms: Firms,
     members: Members,
+    signups: Signups,
     clients: Clients,
     drafts: Drafts,
     outbox: Outbox,
@@ -132,6 +134,7 @@ impl AppState {
             auth: Auth::new(pool.clone(), clock.clone(), base_url, checks.clone()),
             firms: Firms::new(pool.clone(), clock.clone()),
             members: Members::new(pool.clone(), clock.clone()),
+            signups: Signups::new(pool.clone(), clock.clone()),
             clients: Clients::new(pool.clone(), clock.clone()),
             drafts: Drafts::new(pool.clone(), clock.clone()),
             outbox: Outbox::new(pool.clone(), clock.clone()),

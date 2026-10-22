@@ -22,6 +22,7 @@ mod login;
 mod me;
 mod replies;
 mod settings;
+mod signup;
 mod staff;
 mod tracker;
 
@@ -56,6 +57,7 @@ pub(super) fn routes() -> Router<AppState> {
         .merge(import::routes())
         .merge(replies::routes())
         .merge(settings::routes())
+        .merge(signup::routes())
         .merge(staff::routes())
         .merge(tracker::routes())
         .merge(login::routes())
