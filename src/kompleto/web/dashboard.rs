@@ -39,7 +39,13 @@ struct Row {
 #[template(path = "dashboard.html")]
 struct DashboardPage {
     rows: Vec<Row>,
+    /// Approved Reminders still unsent after [`HELD_AFTER`]: held by the
+    /// daily send budget, or the sender is down.
+    held: i64,
 }
+
+/// How long an approved Reminder normally takes to go out, at most.
+const HELD_AFTER: time::Duration = time::Duration::minutes(15);
 
 async fn dashboard(State(state): State<AppState>, CurrentFirm(firm): CurrentFirm) -> Result<DashboardPage, WebError> {
     let clients = state.clients.list(firm).await?;
@@ -98,7 +104,17 @@ async fn dashboard(State(state): State<AppState>, CurrentFirm(firm): CurrentFirm
         ));
     }
     rows.sort_by_key(|(order, _)| *order);
+    let held = sqlx::query_scalar!(
+        r#"select count(*) as "count!" from outbox_messages
+           where tenant_id = $1 and status = 'approved' and expires_at is not null and approved_at < $2"#,
+        firm.as_uuid(),
+        state.clock.now() - HELD_AFTER,
+    )
+    .fetch_one(&state.pool)
+    .await
+    .map_err(WebError::internal)?;
     Ok(DashboardPage {
         rows: rows.into_iter().map(|(_, row)| row).collect(),
+        held,
     })
 }

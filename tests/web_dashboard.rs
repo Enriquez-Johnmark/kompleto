@@ -110,3 +110,46 @@ async fn h1_the_dashboard_lists_clients_nearest_cut_off_first_with_whats_missing
     assert!(charlie_row.contains("email bounced"), "g3: {charlie_row}");
     assert!(!alpha_row.contains("email bounced"));
 }
+
+#[sqlx::test]
+async fn the_dashboard_says_when_approved_messages_are_waiting_to_go_out(pool: PgPool) {
+    use kompleto::engine::clock::Clock;
+    use kompleto::engine::outbox::{NoExtraChecks, Outbox};
+
+    let app = TestApp::new(pool);
+    let (santos, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let outbox = Outbox::new(app.pool.clone(), app.clock.clone());
+    let email = kompleto::engine::mail::Email {
+        to_address: "nena@example.test".to_owned(),
+        from_name: "Santos Bookkeeping".to_owned(),
+        reply_to: None,
+        subject: "Documents for October".to_owned(),
+        body_text: "Hi Nena".to_owned(),
+    };
+    let mut tx = app.pool.begin().await.unwrap();
+    let deadline = app.clock.now() + time::Duration::days(5);
+    let id = outbox
+        .create_draft_in(&mut tx, santos, &email, Some(deadline))
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let seen = outbox.get(santos, id).await.unwrap().content_hash();
+    outbox
+        .approve(santos, id, "a@firm.test", &seen, &NoExtraChecks)
+        .await
+        .unwrap();
+
+    assert!(
+        !app.get("/", &cookie).await.body.contains("go out yet"),
+        "just approved"
+    );
+    app.clock.advance(time::Duration::minutes(30));
+    let page = app.get("/", &cookie).await;
+
+    assert!(
+        page.body.contains("1 approved reminder hasn't gone out yet"),
+        "{}",
+        page.body
+    );
+    assert!(page.body.contains("at most 90 reminders a day"));
+}

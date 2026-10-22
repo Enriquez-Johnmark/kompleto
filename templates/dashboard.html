@@ -3,6 +3,7 @@
 {% block body %}
 {% include "nav.html" %}
 <h1>Dashboard</h1>
+{% if held > 0 %}<p class="error">{{ held }} approved reminder{% if held == 1 %} hasn't{% else %}s haven't{% endif %} gone out yet. Kompleto sends at most 90 reminders a day; the rest go out as the allowance frees up, nearest cut-off first.</p>{% endif %}
 {% if rows.is_empty() %}
 <p class="muted">No clients yet. <a href="/clients/new">Add a client</a> or <a href="/import">import a file</a>.</p>
 {% else %}
