@@ -11,6 +11,7 @@ mod activity;
 mod clients;
 mod dashboard;
 mod drafts;
+mod export;
 mod hooks;
 mod import;
 mod login;
@@ -189,6 +190,7 @@ pub fn router(state: AppState) -> Router {
         .merge(payors::routes())
         .merge(tracker::routes())
         .merge(activity::routes())
+        .merge(export::routes())
         .layer(middleware::from_fn_with_state(state.clone(), same_origin_posts))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

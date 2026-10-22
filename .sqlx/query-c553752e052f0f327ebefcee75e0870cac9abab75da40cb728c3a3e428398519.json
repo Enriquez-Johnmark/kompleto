@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select c.business_name, d.form, d.period, d.due_date from due_date_overrides d\n         join clients c on c.id = d.client_id and c.firm_id = d.firm_id\n         where d.firm_id = $1 order by lower(c.business_name), d.period, d.form",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "business_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "business_name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "form",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "due_date_overrides",
+            "name": "form"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "period",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "due_date_overrides",
+            "name": "period"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "due_date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "due_date_overrides",
+            "name": "due_date"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c553752e052f0f327ebefcee75e0870cac9abab75da40cb728c3a3e428398519"
+}

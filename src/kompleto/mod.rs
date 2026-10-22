@@ -11,6 +11,7 @@ pub mod dashboard;
 pub mod dates;
 pub mod drafting;
 pub mod drafts;
+pub mod export;
 pub mod firms;
 pub mod import;
 pub mod payors;

@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select c.business_name, r.period, r.from_address, r.subject, r.body_text, r.automatic, r.signed, r.received_at\n         from replies r join clients c on c.id = r.client_id and c.firm_id = r.firm_id\n         where r.firm_id = $1 order by r.received_at, r.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "business_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "business_name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "period",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "period"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "from_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "from_address"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "subject",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "body_text",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "body_text"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "automatic",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "automatic"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "signed",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "signed"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "received_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "replies",
+            "name": "received_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3d827f74aad613dfc701468461b0f9bb96a9d4f9d29c53c55fd91decf0a9fb31"
+}

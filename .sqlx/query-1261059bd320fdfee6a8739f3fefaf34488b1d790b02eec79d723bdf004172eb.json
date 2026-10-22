@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select c.business_name as \"client!\", 'removed default item' as \"change!\", r.item_key as \"item!\", '' as \"recurs!\"\n           from client_removed_items r join clients c on c.id = r.client_id and c.firm_id = r.firm_id\n           where r.firm_id = $1\n           union all\n           select c.business_name, 'added item', e.label, e.recurs\n           from client_extra_items e join clients c on c.id = e.client_id and c.firm_id = e.firm_id\n           where e.firm_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "change!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "item!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "recurs!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "1261059bd320fdfee6a8739f3fefaf34488b1d790b02eec79d723bdf004172eb"
+}

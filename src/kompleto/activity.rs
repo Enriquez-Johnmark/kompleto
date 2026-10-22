@@ -99,6 +99,7 @@ pub fn describe(action: &str) -> &str {
         "payor.removed" => "Removed a Payor",
         "reply.received" => "A reply arrived",
         "firm.logged_in" => "Logged in",
+        "firm.exported" => "Downloaded all data",
         "file.deleted" => "Deleted an uploaded file",
         other => other,
     }

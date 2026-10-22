@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select c.business_name, p.name from payors p\n         join clients c on c.id = p.client_id and c.firm_id = p.firm_id\n         where p.firm_id = $1 order by lower(c.business_name), lower(p.name)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "business_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "business_name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payors",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "5fb0986403f8aa76ba629e5c5c7a46124ecd126b7f044e3cf5c5f5c98d4f5200"
+}
