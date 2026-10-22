@@ -15,7 +15,10 @@ async fn kompleto(pool: &PgPool, args: &[&str]) -> Output {
     cmd.args(args)
         .env("DATABASE_URL", common::database_url(pool).await)
         .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
-        .env("RUST_LOG", "warn");
+        .env("RUST_LOG", "warn")
+        // Empty, so a developer's .env can't fill them in.
+        .env("CLAMD_ADDR", "")
+        .env("DEMO_DATE", "");
     tokio::task::spawn_blocking(move || cmd.output().unwrap())
         .await
         .unwrap()
@@ -161,7 +164,8 @@ async fn dev_schedule_only_runs_against_the_local_test_mailbox(pool: PgPool) {
         .env("MAIL_FROM_ADDRESS", "reminders@getkompleto.test")
         .env("MAIL_PROVIDER", "resend")
         .env("RESEND_API_KEY", "re_test")
-        .env("FILE_MASTER_KEY", "ab".repeat(32));
+        .env("FILE_MASTER_KEY", "ab".repeat(32))
+        .env("DEMO_DATE", "");
 
     let out = tokio::task::spawn_blocking(move || cmd.output().unwrap())
         .await
@@ -181,7 +185,9 @@ async fn f1_the_live_server_wont_start_without_a_virus_scanner(pool: PgPool) {
         .env("RESEND_API_KEY", "re_test")
         .env("FILE_MASTER_KEY", "ab".repeat(32))
         .env("BIND_ADDR", "127.0.0.1:0")
-        .env_remove("CLAMD_ADDR");
+        // Empty rather than removed, so a developer's .env can't fill them in.
+        .env("CLAMD_ADDR", "")
+        .env("DEMO_DATE", "");
 
     let out = tokio::task::spawn_blocking(move || cmd.output().unwrap())
         .await

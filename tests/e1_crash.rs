@@ -130,6 +130,8 @@ fn resend_env(provider: &MockServer) -> Vec<(&'static str, String)> {
         ("MAIL_PROVIDER", "resend".to_owned()),
         ("RESEND_BASE_URL", provider.uri()),
         ("RESEND_API_KEY", "re_test".to_owned()),
+        // A developer's .env may set it, and it's refused with Resend.
+        ("DEMO_DATE", String::new()),
     ]
 }
 
