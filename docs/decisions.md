@@ -4,12 +4,23 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-22
 
+- **Deferred-features round.** The owner wants the five deferred features built now, before pilots, and accepted all ten recommendations ("yes"). Supersedes item 5 of the showcase round below:
+  1. **build them now,** in this order: **M9** staff logins, **M10** sign-up, **M11** Xero/QuickBooks import, **M12** 2307 matching, **M13** payroll chasing; each milestone ends with tests, a code review and a note on how to try it;
+  2. **staff logins:** each Firm has one owner and up to 5 staff, invited by email from Settings, each logging in with their own email link;
+  3. **staff permissions:** staff do the daily work (Clients, Drafts, approving, Uploads, Replies); only the owner exports data, closes the account or manages staff; the activity log names the person;
+  4. **sign-up:** a public "Request an account" page (firm name, email, accepting the terms and data agreement); the account opens only after the owner approves it with a command, since every Firm sends from our domain and shares the daily send budget;
+  5. **new Firms** get the same free 4 weeks; no billing in the app (GCash by hand);
+  6. **Xero/QuickBooks import** reads the files they export (customer or contact lists, CSV or Excel), not their APIs; the bookkeeper picks default BIR forms for the batch;
+  7. **2307 matching, rule-safe:** import a sales or invoice export and keep only the names of customers who withheld tax that quarter, as each Client's Payors; no PDFs read, no amounts, no TINs. The AI version stays out: it would break the BIR-format, model-input (ADR 0003) and no-TIN rules;
+  8. **payroll chasing:** a per-Client switch with a pay cycle (twice a month on the 15th and month-end, or monthly); before each payday Kompleto asks for timesheets or DTRs, overtime and leave approvals, and new hires and resignations, through the usual draft, approve, send, upload loop; it never computes pay;
+  9. **remittance receipts:** after each SSS, PhilHealth and Pag-IBIG due date, Kompleto asks for proof of payment; the due-date rules are researched with sources first, and any rule that can't be confirmed is set per Client by the bookkeeper.
+
 - **Showcase round.** The owner wants Kompleto complete before showing it to any bookkeeper, and accepted all six recommendations ("yes"), with React for the first:
   1. **React for the bookkeeper's pages:** a Vite single-page app with shadcn/ui, served by the Rust binary through a JSON API; the Client's upload page stays server-rendered and is restyled to match (`docs/adr/0005-react-app-served-by-the-rust-binary.md`, conventions in `docs/frontend.md`). Supersedes "server-rendered pages; no React in the first version";
   2. **a demo Firm:** one command fills Kompleto with a realistic pretend firm (about 15 Clients, Drafts, Uploads, Replies, 2307s);
   3. **screenshots and a 2–3 minute walkthrough video,** made by Claude from the demo Firm, for outreach;
   4. **free items a finished product needs:** virus scanning of Uploads with ClamAV (supersedes "no virus scanning in M4"), a help page for bookkeepers, and the privacy notice, terms and data processing agreement (brought forward from "before the first pilot");
-  5. **the large later features wait for pilot feedback:** public sign-up, staff logins, payroll chasing, Xero/QuickBooks import, 2307 matching;
+  5. ~~**the large later features wait for pilot feedback:**~~ *Superseded the same day by the deferred-features round above.* public sign-up, staff logins, payroll chasing, Xero/QuickBooks import, 2307 matching;
   6. **no public "try it" demo link** for now.
 
   Unchanged, because they need money: real email from the domain, AI-worded Drafts (templates until an API key is paid for) and always-on hosting.

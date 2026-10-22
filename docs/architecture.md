@@ -171,6 +171,11 @@ Each milestone ends with its acceptance tests passing; the owner can demo after 
 | **M6** | Data export, account closure, real email domain, daily send budget, hosting, hardening | I1–I2, E2, J2 → pilot-ready |
 | **M7** (2026-10-22) | The bookkeeper's pages as a React app over a JSON API; the upload page restyled to match | Every criterion's test still passes against the API |
 | **M8** (2026-10-22) | Demo Firm, ClamAV scanning of Uploads, help page, privacy notice, terms and data agreement, screenshots and walkthrough video | **showcase-ready** |
+| **M9** (2026-10-22) | Staff logins: an owner and up to 5 staff per Firm, owner-only export, closing and staff management | K1–K3 |
+| **M10** | "Request an account" page; the operator approves | L1 |
+| **M11** | Client import from Xero and QuickBooks export files | B5 |
+| **M12** | Payors filled from a sales export (names only) | H3 |
+| **M13** | Payroll-input chasing and SSS/PhilHealth/Pag-IBIG receipt chasing | P1–P2 |
 
 ### Hosting (2026-10-21)
 

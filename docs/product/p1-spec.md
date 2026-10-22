@@ -18,20 +18,20 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 
 | In | Later |
 |---|---|
-| Client list, added by form or CSV/Excel upload | Payroll-input and remittance chasing |
-| BIR forms each client files | Matching 2307s against invoices |
-| Deadline calendar | Xero / QuickBooks import |
+| Client list, added by form or CSV/Excel upload | ~~Payroll-input and remittance chasing~~ (built at M13) |
+| BIR forms each client files | ~~Matching 2307s against invoices~~ (M12, names only) |
+| Deadline calendar | ~~Xero / QuickBooks import~~ (M11, from export files) |
 | Checklist of documents owed per month or quarter | SMS (link-free reminders only) |
 | Reminder drafts the bookkeeper approves | |
 | Sending by email with a private upload link | In-app billing (pilots pay by GCash, by hand) |
-| Phone-friendly upload page | Staff logins; public sign-up |
+| Phone-friendly upload page | ~~Staff logins; public sign-up~~ (M9, M10) |
 | Received / missing tracker for 2307s | |
 | "What's still missing" dashboard | |
 | Data export and account closure | |
 
 ### Accounts and login (2026-10-21)
 
-- **No public sign-up during pilots.** We invite each bookkeeper and create their account.
+- ~~**No public sign-up during pilots.** We invite each bookkeeper and create their account.~~ Superseded 2026-10-22: a public "Request an account" page, opened only after the operator approves (M10).
 - **Login by one-time email link**, so there are no passwords to store.
 - **One login per firm.**
 - **Details (M2 round, 2026-10-21):**
