@@ -34,6 +34,13 @@ export const router = createBrowserRouter([
     lazy: async () => ({ Component: (await import("@/features/legal/terms-page")).TermsPage }),
   },
   {
+    path: "/data-processing",
+    HydrateFallback: PageLoading,
+    lazy: async () => ({
+      Component: (await import("@/features/legal/data-processing-page")).DataProcessingPage,
+    }),
+  },
+  {
     Component: AppShell,
     HydrateFallback: PageLoading,
     children: [

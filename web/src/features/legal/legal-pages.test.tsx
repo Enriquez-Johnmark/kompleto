@@ -3,6 +3,7 @@ import type { ComponentType } from "react"
 import { createMemoryRouter, RouterProvider } from "react-router"
 import { expect, it } from "vitest"
 
+import { DataProcessingPage } from "@/features/legal/data-processing-page"
 import { PrivacyPage } from "@/features/legal/privacy-page"
 import { TermsPage } from "@/features/legal/terms-page"
 
@@ -14,6 +15,7 @@ function show(path: string, Page: ComponentType) {
 it.each([
   ["/privacy", PrivacyPage, "Privacy notice", "Privacy"],
   ["/terms", TermsPage, "Terms of service", "Terms"],
+  ["/data-processing", DataProcessingPage, "Data processing agreement", "Data processing"],
 ])("%s opens without logging in, marked as a draft", (path, Page, title, link) => {
   show(path, Page)
 
