@@ -10,7 +10,8 @@ Every month, bookkeepers chase each client for receipts, bank statements, GCash 
 - a **private upload link** that clients open on their phone, with no app and no login; every file is scanned for viruses before it is kept;
 - reminders that **stop** once the client uploads everything or replies;
 - a **2307 tracker** showing which Payors have sent their 2307s and which are still missing;
-- a **dashboard** of what's missing, nearest cut-off first.
+- a **dashboard** of what's missing, nearest cut-off first;
+- **staff logins:** the owner invites up to 5 staff, and the activity log names who did what.
 
 ![The dashboard of a demo firm: what each client still owes, nearest cut-off first](docs/showcase/desktop-1-dashboard.png)
 
@@ -31,6 +32,8 @@ Kompleto never keeps books, computes tax, files returns or produces BIR-format f
 | **M6** Export, account closing, activity log, send budget, hardening | Built; going live waits for the domain |
 | **M7** The bookkeeper's pages as a React app | Done |
 | **M8** Demo Firm, virus scanning, help and privacy pages, screenshots, video | Done; the legal pages are drafts for the owner (`docs/legal.md`) |
+| **M9** Staff logins: an owner and up to 5 staff | Done |
+| **M10–M13** Sign-up, Xero/QuickBooks import, 2307 matching, payroll chasing | **Next** |
 | Go live, then 3–5 free 4-week pilots | **Next**, once the domain is bought and a bookkeeper says yes |
 
 All 28 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pass. One part of E2, passing SPF, DKIM and DMARC, can only be checked on the real domain.

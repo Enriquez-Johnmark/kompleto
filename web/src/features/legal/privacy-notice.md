@@ -21,7 +21,7 @@ If you are a bookkeeper's client and have a question about your data, ask your b
 
 **About the Firm:**
 
-- the Firm's name and login email address;
+- the Firm's name, and the email addresses of its owner and staff, who log in;
 - when someone logged in, and a record of what was done in the account (the activity log);
 - settings such as reminder days and cut-offs.
 

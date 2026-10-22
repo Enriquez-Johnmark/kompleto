@@ -74,9 +74,15 @@ The **BIR calendar** shows the deadlines Kompleto uses. It moves deadlines that 
 
 The **Activity** page lists everything done in your account over the last 90 days: approvals, emails sent, uploads, replies, logins and changes to clients.
 
+## Staff
+
+The person who signed up is the firm's **owner**. In **Settings → Staff**, the owner invites up to 5 staff by email. Each gets their own login link and works on the same clients and drafts. The activity log shows who did what.
+
+Staff do the daily work: clients, drafts, approving, uploads and replies. Only the owner can invite or remove staff, download all data or close the account. Removing someone logs them out at once.
+
 ## Your data and your account
 
-- **Download all data** in **Settings** gives you a zip file with your clients, messages, uploads, replies and activity.
+- **Download all data** in **Settings** (owner only) gives you a zip file with your clients, messages, uploads, replies and activity.
 - **Close your account** in Settings stops all sending at once and deletes everything 7 days later. Write to us within those 7 days if you closed it by mistake.
 
 See the [privacy notice](/privacy) for how your clients' data is protected.
