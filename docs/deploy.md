@@ -64,7 +64,10 @@ Known limit: the free Worker plan allows about 10 ms of CPU per email. Signing a
    sudo apt install -y postgresql-17 gnupg rclone build-essential pkg-config
    sudo -u postgres createuser kompleto --pwprompt     # the Postgres password
    sudo -u postgres createdb kompleto --owner kompleto
-   curl https://sh.rustup.rs -sSf | sh                 # then, in a copy of this repository:
+   curl https://sh.rustup.rs -sSf | sh
+   # then, in a clone of this (private) repository: `gh auth login` first,
+   # or a read-only deploy key added on GitHub
+   git clone https://github.com/Enriquez-Johnmark/kompleto && cd kompleto
    cargo build --release
    sudo useradd --system --home /var/lib/kompleto --create-home kompleto
    sudo mkdir -p /opt/kompleto /etc/kompleto
@@ -130,7 +133,11 @@ Better Stack Free → a monitor on `https://app.getkompleto.com/health`, every 3
 
 ## 9. First firm, and checks before the first pilot
 
-1. `kompleto firm add --name "<Firm>" --email <their login address>` (path A: `sudo -u kompleto env $(cat /etc/kompleto/kompleto.env | xargs) /opt/kompleto/kompleto firm add …`).
+1. Add the firm with its settings loaded. Path A:
+   ```
+   sudo -u kompleto bash -c 'set -a; . /etc/kompleto/kompleto.env; /opt/kompleto/kompleto firm add --name "<Firm>" --email <their login address>'
+   ```
+   Path B: the same with `~/kompleto/kompleto.env` and `~/kompleto/kompleto`.
 2. Make a test firm with your own address as a Client, approve one Reminder, and check:
    - it arrives; in Gmail, **Show original** says SPF, DKIM and DMARC **PASS** (E2);
    - replying to it shows the reply in Kompleto and emails the firm a notice (G1);
