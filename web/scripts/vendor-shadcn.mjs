@@ -32,7 +32,13 @@ for (const [, name, classes] of css.matchAll(/\.(cn-[a-z0-9-]+)\s*\{\s*@apply\s+
 const unknown = new Set()
 
 // Markers shadcn keeps for other tools (transform-style-map.ts ALLOWLIST).
-const keep = new Set(["cn-menu-target", "cn-menu-translucent", "cn-logical-sides", "cn-rtl-flip", "cn-font-heading"])
+const keep = new Set([
+  "cn-menu-target",
+  "cn-menu-translucent",
+  "cn-logical-sides",
+  "cn-rtl-flip",
+  "cn-font-heading",
+])
 
 function transform(source) {
   let out = source
