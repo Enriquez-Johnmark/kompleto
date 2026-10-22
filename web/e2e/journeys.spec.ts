@@ -220,6 +220,8 @@ test("k1 the owner invites staff, who log in without the owner's settings", asyn
   const theirPage = await theirs.newPage()
   await theirPage.goto(await loginLink(email))
   await theirPage.getByRole("button", { name: "Log in" }).click()
+  // Logged in only once the dashboard shows, so the session cookie is set.
+  await theirPage.getByRole("heading", { name: "Dashboard" }).waitFor()
   await theirPage.goto("/settings")
   await expect(theirPage.getByText("Only the firm's owner")).toBeVisible()
   await expect(theirPage.getByRole("link", { name: "Download all data" })).toHaveCount(0)
