@@ -36,6 +36,15 @@ export async function api<T>(method: Method, path: string, body?: unknown): Prom
   return (await response.json()) as T
 }
 
+/** Sends a file to the API as a form, the one request that isn't JSON. */
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData()
+  form.set("file", file)
+  const response = await fetch(path, { method: "POST", credentials: "same-origin", body: form })
+  if (!response.ok) throw new ApiError(response.status, await errorBody(response))
+  return (await response.json()) as T
+}
+
 async function errorBody(response: Response): Promise<ErrorBody> {
   try {
     const body = (await response.json()) as Partial<ErrorBody>

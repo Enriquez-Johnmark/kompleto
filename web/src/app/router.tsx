@@ -64,6 +64,12 @@ export const router = createBrowserRouter([
           Component: (await import("@/features/replies/reply-page")).ReplyPage,
         }),
       },
+      {
+        path: "import",
+        lazy: async () => ({
+          Component: (await import("@/features/import/import-page")).ImportPage,
+        }),
+      },
       { path: "*", Component: NotFoundPage },
     ],
   },
