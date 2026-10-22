@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into firm_members (id, firm_id, email, role, created_at) values ($1, $2, $3, 'owner', $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5e1f3ab3da2c0b869334dec145d66754d4282fe6e689c415533d4c3d5bc4ded2"
+}

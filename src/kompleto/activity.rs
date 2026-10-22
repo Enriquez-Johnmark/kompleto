@@ -48,8 +48,31 @@ pub async fn since(pool: &PgPool, firm: FirmId, since: OffsetDateTime) -> Result
         .collect())
 }
 
+/// Records a change `actor` (a member's address) made to `firm`, in the
+/// caller's transaction.
+pub(crate) async fn record_by(
+    tx: &mut PgConnection,
+    firm: FirmId,
+    actor: &str,
+    at: OffsetDateTime,
+    action: &str,
+    subject: (&str, Uuid),
+    details: serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    let event = AuditEvent {
+        tenant: firm,
+        at,
+        actor,
+        action,
+        subject_type: subject.0,
+        subject_id: subject.1,
+        details,
+    };
+    audit::record(&mut *tx, &event).await
+}
+
 /// Records a change the Firm made, in the caller's transaction, naming the
-/// Firm's login address as the actor (a Firm has one login).
+/// Firm's login address as the actor.
 pub(crate) async fn record_by_firm(
     tx: &mut PgConnection,
     firm: FirmId,
@@ -102,6 +125,8 @@ pub fn describe(action: &str) -> &str {
         "firm.exported" => "Downloaded all data",
         "firm.cut_off_changed" => "Changed the default cut-off",
         "firm.closed" => "Closed the account",
+        "member.added" => "Added a staff member",
+        "member.removed" => "Removed a staff member",
         "firm.reopened" => "Reopened the account",
         "file.deleted" => "Deleted an uploaded file",
         other => other,

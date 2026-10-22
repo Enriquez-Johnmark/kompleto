@@ -16,6 +16,7 @@ pub mod drafts;
 pub mod export;
 pub mod firms;
 pub mod import;
+pub mod members;
 pub mod payors;
 pub mod periods;
 pub mod presend;

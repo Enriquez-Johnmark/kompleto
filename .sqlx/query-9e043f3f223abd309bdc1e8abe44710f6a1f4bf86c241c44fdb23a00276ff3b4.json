@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select role from firm_members where firm_id = $1 and id = $2 for update",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "firm_members",
+            "name": "role"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9e043f3f223abd309bdc1e8abe44710f6a1f4bf86c241c44fdb23a00276ff3b4"
+}

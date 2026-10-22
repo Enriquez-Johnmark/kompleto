@@ -263,6 +263,12 @@ Kompleto's first version is done when every criterion below passes. Each criteri
 - **J1.** Every AI call is recorded with model, tokens, cost and request ID; we can see LLM cost per firm per month.
 - **J2.** Every approval, edit, send, reply and deletion is recorded in an audit log with time and actor.
 
+### Staff logins (M9, owner-approved 2026-10-22)
+
+- **K1.** A Firm has one owner and at most 5 staff. The owner invites staff by email; each person logs in with their own one-time link and works on the same Firm's data. An address belongs to one Firm only. Removing a member ends their sessions and links at once.
+- **K2.** Staff can do the daily work (Clients, Drafts, approving, Uploads, Replies). Only the owner can export the Firm's data, close the account, or invite and remove staff; the API refuses staff.
+- **K3.** The activity log names the person who did each thing.
+
 ## Open
 
 1. Blind Taglish test result: confirms Haiku 5.5, or switches to Sonnet 5.5. It doesn't affect the architecture, since the model is a configuration value behind our own client.

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use sqlx::PgPool;
 
 use super::activity::record_by_firm;
+use super::members::MemberId;
 use crate::engine::clock::Clock;
 use crate::engine::ids::TenantId;
 use crate::engine::outbox::links;
@@ -73,19 +74,34 @@ impl Firms {
             return Err(FirmError::Invalid(format!("{login_email:?} is not an email address")));
         }
         let id = FirmId::new();
+        let now = self.clock.now();
+        let taken = |err: sqlx::Error| match err.as_database_error().and_then(|db| db.constraint()) {
+            Some("firms_login_email" | "firm_members_email") => FirmError::LoginEmailTaken,
+            _ => FirmError::Database(err),
+        };
+        let mut tx = self.pool.begin().await?;
         sqlx::query!(
             "insert into firms (id, name, login_email, created_at) values ($1, $2, $3, $4)",
             id.as_uuid(),
             name,
             login_email,
-            self.clock.now(),
+            now,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
-        .map_err(|err| match err.as_database_error().and_then(|db| db.constraint()) {
-            Some("firms_login_email") => FirmError::LoginEmailTaken,
-            _ => FirmError::Database(err),
-        })?;
+        .map_err(taken)?;
+        // Its login address is its owner's.
+        sqlx::query!(
+            "insert into firm_members (id, firm_id, email, role, created_at) values ($1, $2, $3, 'owner', $4)",
+            MemberId::new().as_uuid(),
+            id.as_uuid(),
+            login_email,
+            now,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(taken)?;
+        tx.commit().await?;
         Ok(id)
     }
 
