@@ -4,6 +4,29 @@
   "use strict";
 
   if (!document.querySelector("form.upload")) return;
+  // Asks for a Payor only for a 2307, and for a note only for "something
+  // else". Without this script both are shown, and the server checks either way.
+  var choice = document.getElementById("document");
+  function showWhen(id, relevant) {
+    var field = document.getElementById(id);
+    var label = document.querySelector('label[for="' + id + '"]');
+    return function () {
+      if (!field) return;
+      var show = relevant(choice.value);
+      field.hidden = !show;
+      if (label) label.hidden = !show;
+      if (!show) field.value = "";
+    };
+  }
+  var updates = [
+    showWhen("payor", function (value) { return value.indexOf("2307") !== -1; }),
+    showWhen("note", function (value) { return value === "other"; }),
+  ];
+  function showRelevant() {
+    updates.forEach(function (update) { update(); });
+  }
+  choice.addEventListener("change", showRelevant);
+  showRelevant();
   // Sends each chosen file as its own request, so several photos can go at
   // once without one large request. Without this script, one file per submit.
   var form = document.querySelector("form.upload");

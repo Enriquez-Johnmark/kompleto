@@ -99,3 +99,24 @@ test("d3 a batch shows every draft in full before any is approved", async ({ pag
     page.locator("section", { hasText: "Approved this week" }).getByText(`Ben Bakery ${run}`)
   ).toBeVisible()
 })
+
+test("f1 the upload page asks for a note only for something else", async ({ page }) => {
+  await page.goto("/clients/new")
+  await page.getByLabel("Business name").fill(`Cora Cafe ${run}`)
+  await page.getByLabel("Contact's first name").fill("Cora")
+  await page.getByLabel("Email").fill("cora@example.test")
+  await page.getByRole("checkbox", { name: /1601-C/ }).click()
+  await page.getByRole("button", { name: "Add client" }).click()
+  await expect(page.getByRole("heading", { name: `Cora Cafe ${run}` })).toBeVisible()
+  kompleto("dev-schedule", "--date", firstOfNextMonth())
+  await page.goto("/drafts")
+  const card = page.locator("[data-slot=card]", { hasText: `Cora Cafe ${run}` }).first()
+  const link = (await card.getByText(/\/u\/[0-9a-f]+/).textContent())?.match(/\/u\/[0-9a-f]+/)
+
+  await page.goto(link![0])
+  const note = page.getByLabel(/^(Kung iba pa|If something else)/)
+  await expect(note).toBeHidden()
+  await page.getByRole("combobox").selectOption("other")
+
+  await expect(note).toBeVisible()
+})
