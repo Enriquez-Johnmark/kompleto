@@ -14,4 +14,4 @@ pub mod outbox;
 pub use loopwright::scan;
 pub mod signed;
 pub mod tenants;
-pub mod webhooks;
+pub use loopwright::webhooks;
