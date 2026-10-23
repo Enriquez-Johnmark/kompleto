@@ -3,7 +3,7 @@
 
 pub mod audit;
 pub use loopwright::clock;
-pub mod cost_log;
+pub use loopwright::cost_log;
 pub mod files;
 pub use loopwright::ids;
 pub use loopwright::inbound;
