@@ -1,5 +1,5 @@
-/** One client's documents for a month, set like a printed receipt, with the
- *  labels the client's own upload page uses. Example data only. */
+/** One client's documents for a month, set like a printed receipt. Example
+ *  data only. */
 const items = [
   { document: "Sales invoices issued", uploaded: true },
   { document: "Purchase receipts", uploaded: true },
@@ -11,7 +11,7 @@ const items = [
 export function ChecklistSample() {
   return (
     <figure
-      aria-label="Example: Dela Cruz Pharmacy's December 2026 documents, two uploaded and three still missing, cut-off Sunday 10 January 2027"
+      aria-label="Example: Dela Cruz Pharmacy's December 2026 documents, two uploaded and three not yet, cut-off Sunday 10 January 2027"
       className="relative min-w-0 rotate-1 rounded-sm border bg-card px-6 pt-6 pb-7 font-mono text-[0.8rem] leading-relaxed shadow-[0_18px_40px_-24px_rgb(0_0_0/0.35)] transition-transform duration-300 hover:rotate-0 motion-reduce:transition-none max-md:rotate-0"
     >
       <div className="border-b border-dashed pb-3 text-center">
@@ -29,7 +29,7 @@ export function ChecklistSample() {
                   : "shrink-0 rounded-full bg-amber-100 px-2 text-[0.7rem] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300"
               }
             >
-              {item.uploaded ? "Na-upload na" : "Wala pa"}
+              {item.uploaded ? "Uploaded" : "Not yet"}
             </span>
           </li>
         ))}

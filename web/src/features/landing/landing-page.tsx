@@ -4,7 +4,7 @@ import dashboard from "../../../../docs/showcase/desktop-1-dashboard.png"
 import payroll from "../../../../docs/showcase/desktop-10-payroll-chasing.png"
 import payorImport from "../../../../docs/showcase/desktop-11-payors-from-a-sales-export.png"
 import review from "../../../../docs/showcase/desktop-3-review-before-approving.png"
-import uploadPage from "../../../../docs/showcase/phone-3-client-upload-page.png"
+import uploadPage from "../../../../docs/showcase/phone-4-client-upload-page-english.png"
 import walkthrough from "../../../../docs/showcase/walkthrough.mp4"
 import { Logo } from "@/components/logo"
 import { Button } from "@/components/ui/button"
@@ -202,9 +202,6 @@ export function LandingPage() {
               Every month it's the same: Viber threads, one spreadsheet per client, and the same
               message sent dozens of times.
             </p>
-            <p className="font-mono text-sm opacity-70">
-              "Hi po, paki-send na po ng receipts for December..."
-            </p>
           </div>
         </section>
 
@@ -265,12 +262,12 @@ export function LandingPage() {
               <figure className="grid content-start gap-2">
                 <img
                   src={uploadPage}
-                  alt="The client's upload page on a phone, in Taglish"
+                  alt="The client's upload page on a phone"
                   loading="lazy"
                   className="mx-auto w-full max-w-56 rounded-lg border bg-card"
                 />
                 <figcaption className="text-sm text-muted-foreground">
-                  What your client sees: their list, in their language.
+                  What your client sees: what's still missing, and an upload button.
                 </figcaption>
               </figure>
             </div>
