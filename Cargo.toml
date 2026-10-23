@@ -23,6 +23,9 @@ dotenvy = "0.15.7"
 encoding_rs = "0.8.42"
 getrandom = "0.4.3"
 hmac = "0.13.0"
+# The engine: draft, approve, send exactly once, stop on reply, track.
+# Pinned to the commit tagged v0.1.0 (ADR 0006).
+loopwright = { version = "0.1.0", git = "https://github.com/Enriquez-Johnmark/loopwright", rev = "649a774efb417bf579d288b7892cbf10b065ae2f" }
 mail-parser = "0.11.9"
 reqwest = { version = "0.13.5", features = ["json"] }
 rustix = { version = "1.1.5", features = ["process"] }
