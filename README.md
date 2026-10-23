@@ -136,3 +136,7 @@ docs/             spec, architecture, decisions, research, deploy guide, outreac
 | `docs/deploy.md` | Going live, step by step |
 | `AGENTS.md` | The rules for working on this repository |
 | `GLOSSARY.md` | The project's words: Firm, Client, Payor, Cut-off… |
+
+## Licence
+
+All rights reserved ([LICENSE](LICENSE)). The source is published to be read, not reused: copying, running or hosting it needs the author's written permission. The engine, [Loopwright](https://github.com/Enriquez-Johnmark/loopwright), is open source under AGPL-3.0-only.

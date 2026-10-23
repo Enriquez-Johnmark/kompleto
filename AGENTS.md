@@ -30,6 +30,7 @@ Record every approved decision, dated, in `docs/decisions.md`, and update the su
 - **First product:** Kompleto (P1) for PH bookkeepers. Payroll chasing comes later as an add-on; S1 (seller tax helper) is the fallback.
 - **P1 first version:** scope, channels, files, AI and web stack are decided round by round in `docs/product/p1-spec.md`. That file is the single source for spec decisions.
 - **Engine:** our own design, borrowing Harvey's ideas but copying none of its code. Built inside P1, then moved (2026-10-23) to its own public repository, **Loopwright** (AGPL-3.0-only), which every product uses at a pinned release (ADR 0006).
+- **Licences (2026-10-23):** products are all rights reserved (source readable, not reusable); only the engine, Loopwright, is open source (AGPL-3.0-only).
 - **Build first:** build the whole product, core loop first; the owner chooses when to demo.
 - **Showcase before pilots (2026-10-22):** Kompleto is finished before any bookkeeper sees it: the bookkeeper's pages become a React app (M7), then a demo Firm, ClamAV scanning, help and privacy pages, screenshots and a walkthrough video (M8). Then, by the owner's later decision the same day, the five deferred features are built before pilots too: staff logins (M9), approved sign-up (M10), Xero/QuickBooks file import (M11), rule-safe 2307 matching (M12) and payroll chasing (M13).
 - **Go-to-market:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.

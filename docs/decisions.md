@@ -4,6 +4,7 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-23
 
+- **Product licences.** Kompleto, and by default each later product, is **all rights reserved**: the public repository may be read but not copied, run or hosted without the owner's written permission. Only the engine, Loopwright, is open source (AGPL-3.0-only). Loopwright accepts no outside contributions without a contributor agreement, so the owner stays free to use it in closed products (owner: "go ahead" to the recommendation).
 - **Engine licence and split.** The engine moves, with its history, to its own public repository, Loopwright, licensed **AGPL-3.0-only** (owner: "use AGPL-3.0"). The owner holds its copyright, so using it in Kompleto needs no licence from anyone. Kompleto pins a release by its exact commit (ADR 0006).
 - **Product portfolio and names (provisional).** The owner wants six full products, each as complete as Kompleto, each in its own public GitHub repository under the owner's account, all built on one shared engine kept in its own repository and used by a pinned version tag. Names, chosen as one Filipino family in Kompleto's style (a Filipino spelling a foreigner can guess, with an English subtitle):
   1. engine (developer-facing): **Loopwright** (backup Cairnpost);
