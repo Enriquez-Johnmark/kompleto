@@ -1,8 +1,8 @@
 //! Seam 5: architecture rules that a grep can enforce.
-//! - The engine never depends on the product (ADR 0001).
-//! - Only the outbox sends email (AGENTS.md "Sending"): calling
-//!   `Mailer::send` needs the `Mailer` trait in scope, so no other module
-//!   may name it.
+//! - Only the engine's outbox sends email (AGENTS.md "Sending"): calling
+//!   `Mailer::send` needs the `Mailer` trait in scope, so no Kompleto module
+//!   may name it. (The engine lives in Loopwright, whose own CI checks that
+//!   it names no product; ADR 0006.)
 
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]
 
@@ -12,22 +12,8 @@ use std::path::{Path, PathBuf};
 const SRC: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
 
 #[test]
-fn engine_never_uses_the_kompleto_product_module() {
-    // `crate::kompleto`, `super::kompleto`, `kompleto::kompleto`: any path
-    // into the product module contains `::kompleto`.
-    let violations = find(&format!("{SRC}/engine"), &[], |code| code.contains("::kompleto"));
-
-    assert!(
-        violations.is_empty(),
-        "src/engine must not use the product module:\n{}",
-        violations.join("\n")
-    );
-}
-
-#[test]
 fn only_the_outbox_can_send_email() {
-    let allowed = [format!("{SRC}/engine/mail"), format!("{SRC}/engine/outbox")];
-    let violations = find(SRC, &allowed, names_the_mailer_trait);
+    let violations = find(SRC, &[], names_the_mailer_trait);
 
     assert!(
         violations.is_empty(),
