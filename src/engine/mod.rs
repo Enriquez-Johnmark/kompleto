@@ -13,5 +13,5 @@ pub use loopwright::mail;
 pub use loopwright::outbox;
 pub use loopwright::scan;
 pub use loopwright::signed;
-pub mod tenants;
+pub use loopwright::tenants;
 pub use loopwright::webhooks;
