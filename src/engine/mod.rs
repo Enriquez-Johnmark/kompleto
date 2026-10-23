@@ -8,7 +8,7 @@ pub mod files;
 pub use loopwright::ids;
 pub use loopwright::inbound;
 pub mod jobs;
-pub mod llm;
+pub use loopwright::llm;
 pub mod mail;
 pub mod outbox;
 pub mod scan;
