@@ -219,12 +219,12 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// What a page may load: our own scripts, styles and fonts, and nothing
+/// What a page may load: our own scripts, styles, fonts and media, and nothing
 /// from anywhere else. Scripts are files, never inline, so no injected
 /// script can run; inline styles stay allowed for the server-rendered
 /// pages and the components' positioning.
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
-     img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; \
+     img-src 'self'; media-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; \
      frame-ancestors 'none'; base-uri 'none'";
 
 /// Security headers on every response; HSTS only when served over HTTPS.

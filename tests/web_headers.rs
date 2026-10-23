@@ -24,6 +24,8 @@ async fn every_page_carries_the_security_headers(pool: PgPool) {
             "script-src 'self'",
             "frame-ancestors 'none'",
             "form-action 'self'",
+            // The landing page's walkthrough video, from our own files only.
+            "media-src 'self'",
         ] {
             assert!(csp.contains(directive), "{directive} missing from {csp}");
         }
