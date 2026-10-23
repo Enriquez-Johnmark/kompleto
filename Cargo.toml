@@ -8,7 +8,7 @@ description = "Document and BIR-deadline chaser for Philippine bookkeepers, on a
 
 [features]
 # Test-only crash points for the E1 test; never enabled in production builds.
-failpoints = []
+failpoints = ["loopwright/failpoints"]
 
 [dependencies]
 anyhow = "1.0.104"

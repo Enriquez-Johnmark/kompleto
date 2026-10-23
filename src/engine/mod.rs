@@ -10,7 +10,7 @@ pub use loopwright::inbound;
 pub use loopwright::jobs;
 pub use loopwright::llm;
 pub use loopwright::mail;
-pub mod outbox;
+pub use loopwright::outbox;
 pub use loopwright::scan;
 pub mod signed;
 pub mod tenants;
