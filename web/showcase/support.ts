@@ -22,6 +22,34 @@ export const RECEIPT = {
   buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(" receipt")]),
 }
 
+/** A quarter's sales from Xero, as the Payor import reads it (H3). */
+export const SALES_EXPORT = {
+  name: "lito-hardware-q4-sales.csv",
+  mimeType: "text/csv",
+  buffer: Buffer.from(
+    "*ContactName,*InvoiceNumber,*Description,*UnitAmount\n" +
+      "Ayala Land Inc,INV-0412,Steel bars and cement,250000\n" +
+      "Ayala Land Inc,INV-0412,Less: CWT 1%,-2500\n" +
+      "Megaworld Corp,INV-0418,Roofing materials,120000\n" +
+      "Megaworld Corp,INV-0418,Less: CWT 1%,-1200\n" +
+      "Juan's Sari-Sari,INV-0420,Paint,3500\n" +
+      "DMCI Homes,INV-0431,Plumbing fixtures,86000\n" +
+      "DMCI Homes,INV-0431,Less: CWT 1%,-860\n"
+  ),
+}
+
+/** A contact list exported from Xero (B5). */
+export const XERO_CONTACTS = {
+  name: "xero-contacts.csv",
+  mimeType: "text/csv",
+  buffer: Buffer.from(
+    "*ContactName,EmailAddress,FirstName,LastName,TaxNumber\n" +
+      "Ocampo Water Refilling,joy@ocampowater.example.test,Joy,Ocampo,123-456-789-000\n" +
+      "Pascual Laundry Hub,ben@pascuallaundry.example.test,Ben,Pascual,\n" +
+      "Torres Milk Tea,ana@torresmilktea.example.test,Ana,Torres,\n"
+  ),
+}
+
 declare global {
   interface Window {
     showCaption?: (text: string) => void

@@ -1,6 +1,16 @@
 import { test, type Page } from "@playwright/test"
 
-import { addOverlay, OUT, pointAt, press, RECEIPT, record, say, SESSION } from "./support.ts"
+import {
+  addOverlay,
+  OUT,
+  pointAt,
+  press,
+  RECEIPT,
+  record,
+  SALES_EXPORT,
+  say,
+  SESSION,
+} from "./support.ts"
 
 const size = { width: 1280, height: 720 }
 
@@ -8,7 +18,7 @@ function visibleLink(page: Page, name: string) {
   return page.getByRole("link", { name }).filter({ visible: true }).first()
 }
 
-/** About two and a half minutes through a bookkeeper's week, with captions;
+/** About three minutes through a bookkeeper's week, with captions;
  *  saved as docs/showcase/walkthrough.mp4. It approves the waiting drafts
  *  and uploads a file, so it runs after the screenshots. */
 test("walkthrough", async ({ browser }, testInfo) => {
@@ -44,6 +54,12 @@ test("walkthrough", async ({ browser }, testInfo) => {
   await say(page, "Each one carries the client's own private upload link.")
   await pointAt(page, card.getByRole("button", { name: "Copy for Viber" }))
   await say(page, "Prefer Viber? Copy the same message into your own chat.", 4500)
+  const payroll = page.locator("[data-slot=card]", { hasText: "Timesheets or DTRs" }).first()
+  await pointAt(page, payroll.getByText("Timesheets or DTRs"))
+  await say(
+    page,
+    "Payroll too: timesheets before each payday, and SSS, PhilHealth and Pag-IBIG receipts after each due date."
+  )
   await press(page, page.getByText("Select all"))
   await press(page, page.getByRole("button", { name: /^Review \d+ selected$/ }))
   const review = page.getByRole("dialog")
@@ -92,6 +108,18 @@ test("walkthrough", async ({ browser }, testInfo) => {
     page,
     "The 2307 tracker shows which Payors' certificates have come in, and which haven't."
   )
+  await page.goto("/clients")
+  await press(page, visibleLink(page, "Lito Hardware & Construction Supply"))
+  await press(page, page.getByRole("tab", { name: "Documents" }))
+  await press(page, page.getByRole("button", { name: "From a sales export" }))
+  const payorImport = page.getByRole("dialog", { name: "Payors from a sales export" })
+  await payorImport.locator("input[type=file]").setInputFiles(SALES_EXPORT)
+  await payorImport.getByText("Megaworld Corp").waitFor()
+  await say(
+    page,
+    "Fill a client's Payors from a Xero or QuickBooks sales export: only the customers who withheld tax, names only."
+  )
+  await press(page, payorImport.getByRole("button", { name: "Cancel" }))
 
   await press(page, visibleLink(page, "BIR calendar"))
   await page.getByRole("heading").first().waitFor()
@@ -99,10 +127,12 @@ test("walkthrough", async ({ browser }, testInfo) => {
 
   await press(page, visibleLink(page, "Activity"))
   await page.getByRole("heading").first().waitFor()
-  await say(page, "Everything done in your account is logged.")
+  await say(page, "Everything done in your account is logged, with who did it.")
 
   await press(page, visibleLink(page, "Settings"))
   await page.getByRole("heading", { name: "Settings" }).waitFor()
+  await pointAt(page, page.getByText(/^carlo@/).first())
+  await say(page, "Invite up to 5 staff, each with their own login.")
   await say(page, "Download all your data at any time, or close your account.")
 
   await page.goto("/help")

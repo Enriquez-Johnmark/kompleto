@@ -1,6 +1,6 @@
 import { test, type Page } from "@playwright/test"
 
-import { OUT } from "./support.ts"
+import { OUT, SALES_EXPORT, XERO_CONTACTS } from "./support.ts"
 
 async function shot(page: Page, name: string) {
   await page.waitForLoadState("networkidle")
@@ -64,6 +64,68 @@ test.describe("desktop", () => {
       await page.getByRole("heading").first().waitFor()
       await shot(page, name)
     }
+
+    // M9–M13.
+    await page.goto("/clients")
+    await page
+      .getByRole("link", { name: "Bautista Bakeshop" })
+      .filter({ visible: true })
+      .first()
+      .click()
+    await page.getByRole("tab", { name: "Schedule" }).click()
+    await page.getByText("Payroll chasing", { exact: true }).waitFor()
+    await shot(page, "desktop-10-payroll-chasing")
+
+    await page.goto("/clients")
+    await page
+      .getByRole("link", { name: "Lito Hardware & Construction Supply" })
+      .filter({ visible: true })
+      .first()
+      .click()
+    await page.getByRole("tab", { name: "Documents" }).click()
+    await page.getByRole("button", { name: "From a sales export" }).click()
+    const dialog = page.getByRole("dialog", { name: "Payors from a sales export" })
+    await dialog.locator("input[type=file]").setInputFiles(SALES_EXPORT)
+    await dialog.getByText("Megaworld Corp").waitFor()
+    await shot(page, "desktop-11-payors-from-a-sales-export")
+    await dialog.getByRole("button", { name: "Cancel" }).click()
+
+    await page.goto("/import")
+    const defaults = page.locator("[data-slot=card]", { hasText: "For files without" })
+    await defaults
+      .getByRole("checkbox", { name: "My file has no Language or Forms columns" })
+      .click()
+    await defaults.getByRole("checkbox", { name: /2551Q/ }).click()
+    await defaults.getByRole("checkbox", { name: /1701Q/ }).click()
+    await page.locator("input[type=file]").setInputFiles(XERO_CONTACTS)
+    await page.getByRole("cell", { name: "Pascual Laundry Hub" }).waitFor()
+    await page.getByText(/clients? ready to add/).scrollIntoViewIfNeeded()
+    await page.mouse.wheel(0, 300)
+    await shot(page, "desktop-12-import-from-xero")
+
+    await page.goto("/settings")
+    await page
+      .getByText(/^carlo@/)
+      .first()
+      .waitFor()
+    await page
+      .getByText(/^carlo@/)
+      .first()
+      .scrollIntoViewIfNeeded()
+    await shot(page, "desktop-13-staff")
+  })
+
+  test("request an account", async ({ browser }, testInfo) => {
+    const context = await browser.newContext({
+      baseURL: testInfo.project.use.baseURL,
+      storageState: undefined,
+      viewport: { width: 1440, height: 900 },
+    })
+    const page = await context.newPage()
+    await page.goto("/signup")
+    await page.getByRole("button").first().waitFor()
+    await shot(page, "desktop-14-request-an-account")
+    await context.close()
   })
 })
 
