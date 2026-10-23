@@ -1,7 +1,7 @@
 //! The reusable engine. It must never depend on `crate::kompleto`
 //! (ADR 0001); `tests/engine_boundary.rs` enforces this.
 
-pub mod audit;
+pub use loopwright::audit;
 pub use loopwright::clock;
 pub use loopwright::cost_log;
 pub mod files;
