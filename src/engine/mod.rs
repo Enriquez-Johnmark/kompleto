@@ -9,7 +9,7 @@ pub use loopwright::ids;
 pub use loopwright::inbound;
 pub mod jobs;
 pub use loopwright::llm;
-pub mod mail;
+pub use loopwright::mail;
 pub mod outbox;
 pub use loopwright::scan;
 pub mod signed;
