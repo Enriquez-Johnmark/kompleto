@@ -13,7 +13,6 @@ use std::sync::Arc;
 
 use sqlx::PgPool;
 use time::OffsetDateTime;
-use uuid::Uuid;
 
 use super::clients::{ClientId, Clients};
 use super::drafts::Drafts;

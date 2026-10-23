@@ -7,7 +7,6 @@ use std::sync::Arc;
 use serde_json::json;
 use sqlx::PgPool;
 use time::OffsetDateTime;
-use uuid::Uuid;
 
 use super::activity::record_by;
 use super::firms::FirmId;
