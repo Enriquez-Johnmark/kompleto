@@ -20,7 +20,8 @@ Screenshots and a two-and-a-half-minute captioned walkthrough of a demo Firm, Sa
 | `desktop-13-staff.png` | The owner and a staff member in Settings |
 | `desktop-14-request-an-account.png` | The public "Request an account" page |
 | `phone-1-dashboard.png`, `phone-2-drafts.png` | The same pages on a phone |
-| `phone-3-client-upload-page.png` | What the client sees when they open their link |
+| `phone-3-client-upload-page.png` | What the client sees when they open their link, in Taglish |
+| `phone-4-client-upload-page-english.png` | The same page for a client who reads English (used on the landing page) |
 
 Everything here is made-up data: the businesses, people and `.example.test` addresses don't exist.
 

@@ -8,10 +8,12 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${OUT}/${name}.png` })
 }
 
-/** The Dela Cruz Pharmacy's upload link, read from its waiting Draft. */
-async function uploadLink(page: Page) {
+/** A client's upload link, read from its first waiting Draft. */
+async function uploadLink(page: Page, client: string) {
   await page.goto("/drafts")
   const text = await page
+    .locator("[data-slot=card]", { hasText: client })
+    .first()
     .getByText(/\/u\/[0-9a-f]+/)
     .first()
     .textContent()
@@ -140,8 +142,12 @@ test.describe("phone", () => {
     await page.getByText("Select all").waitFor()
     await shot(page, "phone-2-drafts")
     // What the client sees: no login, in their language.
-    await page.goto(await uploadLink(page))
+    await page.goto(await uploadLink(page, "Dela Cruz Pharmacy"))
     await page.getByRole("button", { name: "I-upload" }).waitFor()
     await shot(page, "phone-3-client-upload-page")
+    // The same page for a client who reads English, for the landing page.
+    await page.goto(await uploadLink(page, "Dr. Reyes Dental Clinic"))
+    await page.getByRole("button", { name: "Upload" }).waitFor()
+    await shot(page, "phone-4-client-upload-page-english")
   })
 })
