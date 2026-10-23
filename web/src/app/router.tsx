@@ -29,6 +29,13 @@ export const router = createBrowserRouter([
     lazy: async () => ({ Component: (await import("@/features/settings/closed-page")).ClosedPage }),
   },
   {
+    path: "/welcome",
+    HydrateFallback: PageLoading,
+    lazy: async () => ({
+      Component: (await import("@/features/landing/landing-page")).LandingPage,
+    }),
+  },
+  {
     path: "/help",
     HydrateFallback: PageLoading,
     lazy: async () => ({ Component: (await import("@/features/help/help-page")).HelpPage }),
