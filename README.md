@@ -16,7 +16,7 @@ Every month, bookkeepers chase each client for receipts, bank statements, GCash 
 
 ![The dashboard of a demo firm: what each client still owes, nearest cut-off first](docs/showcase/desktop-1-dashboard.png)
 
-**See it working:** a [2-minute walkthrough video](docs/showcase/walkthrough.mp4) and more screenshots in [`docs/showcase/`](docs/showcase/), all of a made-up demo firm.
+**See it working:** a [2½-minute walkthrough video](docs/showcase/walkthrough.mp4) and more screenshots in [`docs/showcase/`](docs/showcase/), all of a made-up demo firm.
 
 Kompleto never keeps books, computes tax, files returns or produces BIR-format files (`docs/adr/0004-stay-outside-bir-accounting-system-rules.md`). It only chases documents.
 
