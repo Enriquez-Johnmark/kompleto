@@ -2,6 +2,19 @@
 
 Every owner-approved decision, newest first, with the date it was made. Decisions that a later one replaced stay here, marked **superseded**, so the reasoning trail survives. `AGENTS.md` lists only the decisions in force.
 
+## 2026-10-23
+
+- **Product portfolio and names (provisional).** The owner wants six full products, each as complete as Kompleto, each in its own public GitHub repository under the owner's account, all built on one shared engine kept in its own repository and used by a pinned version tag. Names, chosen as one Filipino family in Kompleto's style (a Filipino spelling a foreigner can guess, with an English subtitle):
+  1. engine (developer-facing): **Loopwright** (backup Cairnpost);
+  2. bookkeeper document chaser: **Kompleto** ("complete"), kept;
+  3. polite payment follow-up: **Balanse** ("balance"; backup Sakto);
+  4. quotation follow-up: **Kotasyon** ("quotation"; backup Kontrata);
+  5. tour inquiry follow-up: **Biyahe** ("trip"; backup Turista);
+  6. clinic and dental reminders: **Iskedyul** ("schedule"; backup Klinika); "Konsulta" avoided because PhilHealth runs a programme by that name;
+  7. online seller records and BIR deadlines: **Resibo** ("receipt"; backup Rekord). It never computes or files tax.
+
+  Checked 2026-10-23: all free on crates.io, npm and PyPI except `rekord` (npm). GitHub accounts named balanse, sakto, kontrata, biyahe, turista, iskedyul, klinika, resibo, rekord, kompleto and hearback exist (mostly empty); this doesn't block repos under the owner's account. **Not yet checked** (blocked from the build environment): `.com`/`.ph` domains and IPOPHL/WIPO trademarks. A name is final only after the owner's domain and IPOPHL checks; a clash falls back to its backup. Order of work: split the engine into its own repo, then build the products one at a time.
+
 ## 2026-10-22
 
 - **Deferred-features round.** The owner wants the five deferred features built now, before pilots, and accepted all ten recommendations ("yes"). Supersedes item 5 of the showcase round below:
