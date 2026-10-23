@@ -7,7 +7,7 @@ pub use loopwright::cost_log;
 pub mod files;
 pub use loopwright::ids;
 pub use loopwright::inbound;
-pub mod jobs;
+pub use loopwright::jobs;
 pub use loopwright::llm;
 pub use loopwright::mail;
 pub mod outbox;
