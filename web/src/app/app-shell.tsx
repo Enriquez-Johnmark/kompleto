@@ -50,10 +50,12 @@ const navigation: NavItem[] = [
 /** The logged-in frame: navigation beside (or, on a phone, above) the page. */
 export function AppShell() {
   const me = useMe()
+  const { pathname } = useLocation()
   // Only an ended session means logging in again; anything else (a deploy, a
   // dropped connection) is retried while the bookkeeper stays where they are.
+  // A visitor to the home address sees what Kompleto is first.
   if (me.error instanceof ApiError && me.error.isNotLoggedIn)
-    return <Navigate to="/login" replace />
+    return <Navigate to={pathname === "/" ? "/welcome" : "/login"} replace />
   return (
     <SidebarProvider>
       <Sidebar>

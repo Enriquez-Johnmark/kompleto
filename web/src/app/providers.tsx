@@ -10,10 +10,12 @@ function createQueryClient() {
     queryCache: new QueryCache({
       onError(error) {
         // A session that ends while the app is open: back to the login page.
+        // At the home address the app shell shows the landing page instead.
         if (
           error instanceof ApiError &&
           error.isNotLoggedIn &&
-          !location.pathname.startsWith("/login")
+          !location.pathname.startsWith("/login") &&
+          location.pathname !== "/"
         ) {
           location.assign("/login")
         }
