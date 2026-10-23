@@ -74,6 +74,39 @@ async fn the_demo_firm_has_clients_history_and_drafts_waiting(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn the_demo_firm_has_staff_and_chases_payroll(pool: PgPool) {
+    let (summary, _) = seed(&pool, datetime!(2026-10-21 09:00 UTC)).await;
+    let firm = summary.firm.unwrap();
+
+    let staff: i64 = sqlx::query_scalar("select count(*) from firm_members where firm_id = $1 and role = 'staff'")
+        .bind(firm.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let by_staff: i64 =
+        sqlx::query_scalar("select count(*) from audit_events where tenant_id = $1 and actor like 'carlo@%'")
+            .bind(firm.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let (payroll, receipts, payroll_uploads): (i64, i64, i64) = sqlx::query_as(
+        "select (select count(*) from scheduled_drafts where period like 'payroll-%'),
+                (select count(*) from scheduled_drafts where period like 'remit-%'),
+                (select count(*) from uploads where period like 'payroll-%' or period like 'remit-%')",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(staff, 1);
+    assert!(by_staff >= 1, "the staff member approves some drafts");
+    assert!(
+        payroll >= 3 && receipts >= 1,
+        "{payroll} payroll, {receipts} receipts drafts"
+    );
+    assert!(payroll_uploads >= 1);
+}
+
+#[sqlx::test]
 async fn the_demo_firm_gets_its_history_even_when_made_after_its_date(pool: PgPool) {
     // As with `DEMO_DATE` set, or a demo date that has passed.
     let (summary, _) = seed(&pool, datetime!(2027-02-01 09:00 UTC)).await;

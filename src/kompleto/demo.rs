@@ -17,7 +17,9 @@ use super::checklist::{ExtraItem, Recurs, is_received_2307, owed_documents, payo
 use super::clients::{ClientError, ClientId, ClientInput, Clients, NewClient, ScheduleSettings};
 use super::drafts::Drafts;
 use super::firms::{FirmError, FirmId, Firms};
+use super::members::{MemberError, Members};
 use super::payors::Payors;
+use super::payroll::{PayCycle, PayrollChoice, PayrollKey};
 use super::presend::KompletoChecks;
 use super::reminders::{Scheduler, SchedulerError};
 use super::replies::{Replies, ReplyError};
@@ -50,6 +52,7 @@ pub enum DemoError {
     Reply(#[from] ReplyError),
     Bounce(#[from] BounceError),
     Schedule(#[from] ScheduleError),
+    Member(#[from] MemberError),
     Database(#[from] sqlx::Error),
     /// A built-in demo Client didn't pass the client checks.
     #[error("demo client {0:?} was refused")]
@@ -333,6 +336,26 @@ pub async fn seed(
         paused: true,
     };
     clients.set_schedule(firm, caterer, &paused).await?;
+    // Payroll chasing for three employers (P1, P2).
+    for (index, cycle) in [
+        (3, PayCycle::TwiceMonthly),
+        (8, PayCycle::Monthly),
+        (10, PayCycle::TwiceMonthly),
+    ] {
+        let choice = PayrollChoice {
+            cycle: Some(cycle),
+            ..PayrollChoice::default()
+        };
+        clients.set_payroll(firm, added[index].0, choice).await?;
+    }
+    // A staff member who shares the approving (K1, K3).
+    let domain = login_email
+        .rsplit_once('@')
+        .map_or("example.test", |(_, domain)| domain);
+    let staff = format!("carlo@{domain}");
+    Members::new(pool.clone(), shared.clone())
+        .add_staff(firm, &staff, login_email)
+        .await?;
 
     // Replay each day: Drafts at 07:30, the Firm approves at 09:00, and the
     // Contacts act on the first requests sent two days before.
@@ -354,8 +377,9 @@ pub async fn seed(
             if catching_up || index % 7 == 6 {
                 continue;
             }
+            let approver = if index % 2 == 1 { staff.as_str() } else { login_email };
             outbox
-                .approve(firm, draft.id, login_email, &draft.content_hash(), &checks)
+                .approve(firm, draft.id, approver, &draft.content_hash(), &checks)
                 .await?;
         }
         summary.sent += send().await?.sent;
@@ -440,12 +464,15 @@ async fn upload(
     let Some(link) = links.find(firm, client, period).await? else {
         return Ok(0);
     };
-    let Some(month) = TaxPeriod::parse_key(period).map(|p| p.last_month().1) else {
-        return Ok(0);
-    };
     let details = clients.get(firm, client).await?.details;
     let edits = clients.checklist_edits(firm, client).await?;
-    let owed = owed_documents(&details.forms, month, &edits);
+    let owed = if let Some(payroll) = PayrollKey::parse(period) {
+        payroll.documents()
+    } else if let Some(period) = TaxPeriod::parse_key(period) {
+        owed_documents(&details.forms, period.last_month().1, &edits)
+    } else {
+        return Ok(0);
+    };
     let count = if habit == Habit::UploadsAll {
         owed.len()
     } else {
