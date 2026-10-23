@@ -4,7 +4,7 @@
 pub use loopwright::audit;
 pub use loopwright::clock;
 pub use loopwright::cost_log;
-pub mod files;
+pub use loopwright::files;
 pub use loopwright::ids;
 pub use loopwright::inbound;
 pub use loopwright::jobs;
