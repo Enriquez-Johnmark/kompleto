@@ -6,7 +6,7 @@ pub use loopwright::clock;
 pub mod cost_log;
 pub mod files;
 pub use loopwright::ids;
-pub mod inbound;
+pub use loopwright::inbound;
 pub mod jobs;
 pub mod llm;
 pub mod mail;
