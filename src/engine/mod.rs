@@ -11,7 +11,7 @@ pub mod jobs;
 pub use loopwright::llm;
 pub mod mail;
 pub mod outbox;
-pub mod scan;
+pub use loopwright::scan;
 pub mod signed;
 pub mod tenants;
 pub mod webhooks;
