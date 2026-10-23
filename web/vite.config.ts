@@ -1,7 +1,7 @@
 import { resolve } from "node:path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
-import { defineConfig } from "vite"
+import { defineConfig, searchForWorkspaceRoot } from "vite"
 
 // In development the app runs on Vite's server and passes these paths to
 // the Rust server (`cargo run -- serve`). Set PUBLIC_BASE_URL in .env to
@@ -16,6 +16,13 @@ export default defineConfig({
     },
   },
   server: {
+    // The landing page shows the showcase's screenshots and video.
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        resolve(import.meta.dirname, "../docs/showcase"),
+      ],
+    },
     proxy: {
       "/api": rust,
       "/u/": rust,

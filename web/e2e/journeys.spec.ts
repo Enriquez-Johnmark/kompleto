@@ -229,6 +229,22 @@ test("k1 the owner invites staff, who log in without the owner's settings", asyn
   await theirs.close()
 })
 
+test("a visitor to the home address sees what Kompleto is and can request an account", async ({
+  browser,
+  baseURL,
+}) => {
+  const visitor = await browser.newContext({ baseURL, storageState: undefined })
+  const page = await visitor.newPage()
+  await page.goto("/")
+
+  await expect(page).toHaveURL(/\/welcome$/)
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("You stop chasing")
+  await expect(page.locator("video")).toHaveAttribute("src", /\.mp4$/)
+  await page.getByRole("button", { name: "Request an account" }).first().click()
+  await expect(page).toHaveURL(/\/signup$/)
+  await visitor.close()
+})
+
 test("l1 a visitor requests an account, which waits for the operator", async ({
   browser,
   baseURL,
