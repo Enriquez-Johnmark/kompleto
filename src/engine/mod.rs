@@ -2,7 +2,7 @@
 //! (ADR 0001); `tests/engine_boundary.rs` enforces this.
 
 pub mod audit;
-pub mod clock;
+pub use loopwright::clock;
 pub mod cost_log;
 pub mod files;
 pub mod ids;
