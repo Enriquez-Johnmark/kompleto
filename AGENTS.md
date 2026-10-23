@@ -29,7 +29,7 @@ Record every approved decision, dated, in `docs/decisions.md`, and update the su
 
 - **First product:** Kompleto (P1) for PH bookkeepers. Payroll chasing comes later as an add-on; S1 (seller tax helper) is the fallback.
 - **P1 first version:** scope, channels, files, AI and web stack are decided round by round in `docs/product/p1-spec.md`. That file is the single source for spec decisions.
-- **Engine:** our own design, borrowing Harvey's ideas but copying none of its code. Built inside P1, with engine and product modules kept separate.
+- **Engine:** our own design, borrowing Harvey's ideas but copying none of its code. Built inside P1, then moved (2026-10-23) to its own public repository, **Loopwright** (AGPL-3.0-only), which every product uses at a pinned release (ADR 0006).
 - **Build first:** build the whole product, core loop first; the owner chooses when to demo.
 - **Showcase before pilots (2026-10-22):** Kompleto is finished before any bookkeeper sees it: the bookkeeper's pages become a React app (M7), then a demo Firm, ClamAV scanning, help and privacy pages, screenshots and a walkthrough video (M8). Then, by the owner's later decision the same day, the five deferred features are built before pilots too: staff logins (M9), approved sign-up (M10), Xero/QuickBooks file import (M11), rule-safe 2307 matching (M12) and payroll chasing (M13).
 - **Go-to-market:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.
@@ -66,7 +66,7 @@ Each rule protects an acceptance criterion in `docs/product/p1-spec.md`. Where a
   - login and sign-up, which look up a member by the address typed in before any Firm is known; account requests belong to no Firm and only the operator's command reads them.
 - **Time:** read time only through the injected `Clock`. Direct system-clock calls are banned with clippy `disallowed-methods`. UUIDv7 IDs embed wall-clock time; they are identifiers only, never used to decide anything about time.
 - **Untrusted input:** model output, inbound email and Uploads are untrusted. Parse them into strict types, and never echo them into commands or SQL. Model requests carry only the fields allowed by `docs/adr/0003-the-model-never-sees-documents-or-tax-data.md` (D6).
-- **Engine boundary:** `src/engine` never depends on `src/kompleto`; a CI check fails the build otherwise (`docs/adr/0001-engine-and-product-in-one-crate.md`).
+- **Engine:** the engine is Loopwright (github.com/Enriquez-Johnmark/loopwright), a git dependency pinned to a release and re-exported as `crate::engine`. An engine change is made, tested and released there, then this repo moves to the new release; it is never patched here (`docs/adr/0006-the-engine-is-loopwright-pinned-to-a-release.md`).
 - **BIR limits:** no feature may keep books, compute tax, produce BIR-format files or archive documents (`docs/adr/0004-stay-outside-bir-accounting-system-rules.md`).
 - **Tests:** every acceptance criterion has a test whose name starts with its ID, e.g. `e1_crash_mid_send_never_sends_twice`.
 - **Local only in development:** `docker compose` runs Postgres 17 and Mailpit (and ClamAV with `--profile scan`); no real email leaves a dev machine.

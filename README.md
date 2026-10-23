@@ -44,12 +44,12 @@ All 36 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pas
 
 ## How it's built
 
-One Rust program, in two parts:
+One Rust program on a reusable engine:
 
-- **`src/engine/`** is reusable for later products: jobs and scheduler, the approval outbox, pre-send checks, the LLM client, sending and receiving email, the audit and cost logs.
-- **`src/kompleto/`** is the product: Firms and Clients, the BIR calendar, the document checklist, the 2307 tracker, the upload page and the web API.
+- **[Loopwright](https://github.com/Enriquez-Johnmark/loopwright)** is the engine, in its own repository: the approval outbox, sending each email exactly once, pre-send checks, receiving replies and bounces, encrypted files and virus scanning, the AI client, jobs, the audit and cost logs. It was built here and moved out when the next products needed it; Kompleto uses a pinned release.
+- **`src/kompleto/`** is the product: Firms and Clients, the BIR calendar, the document checklist, the 2307 tracker, payroll chasing, the upload page and the web API.
 
-`engine` never depends on `kompleto`; CI fails the build otherwise. Safety rules live in code, not prompts: nothing is sent without an approval that matches the exact text, and each email is sent at most once, even after a crash.
+Safety rules live in code, not prompts: nothing is sent without an approval that matches the exact text, and each email is sent at most once, even after a crash.
 
 | Part | Technology |
 |---|---|
@@ -113,7 +113,6 @@ pnpm --dir web e2e            # browser tests, against a running `cargo run -- s
 ## Project layout
 
 ```
-src/engine/       reusable engine
 src/kompleto/     the product, including its JSON API (src/kompleto/web/api/)
 web/              the React app; web/e2e/ holds the browser tests
 templates/        the Client's server-rendered upload page
