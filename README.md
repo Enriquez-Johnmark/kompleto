@@ -1,5 +1,7 @@
 # Kompleto
 
+*Filipino for "complete"*
+
 **A document and BIR-deadline chaser for Philippine bookkeepers.**
 
 Every month, bookkeepers chase each client for receipts, bank statements, GCash screenshots and BIR Form 2307s, usually by hand in Viber threads and one Excel file per client. Kompleto does the chasing:
