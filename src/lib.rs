@@ -4,5 +4,5 @@
 pub mod config;
 pub mod kompleto;
 
-/// The engine, Loopwright, under the name the code has always used.
-pub use loopwright as engine;
+/// The engine, Nudgewright, under the name the code has always used.
+pub use nudgewright as engine;

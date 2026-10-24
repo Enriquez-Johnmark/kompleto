@@ -151,8 +151,8 @@ async fn drain(pool: &PgPool, env: &[(&'static str, String)], failpoint: Option<
         .env("RUST_LOG", "warn")
         .envs(env.iter().map(|(k, v)| (*k, v.as_str())));
     match failpoint {
-        Some(name) => cmd.env("LOOPWRIGHT_FAILPOINT", name),
-        None => cmd.env_remove("LOOPWRIGHT_FAILPOINT"),
+        Some(name) => cmd.env("NUDGEWRIGHT_FAILPOINT", name),
+        None => cmd.env_remove("NUDGEWRIGHT_FAILPOINT"),
     };
     tokio::task::spawn_blocking(move || cmd.status().unwrap())
         .await

@@ -9,7 +9,7 @@ description = "Document and BIR-deadline chaser for Philippine bookkeepers, on a
 
 [features]
 # Test-only crash points for the E1 test; never enabled in production builds.
-failpoints = ["loopwright/failpoints"]
+failpoints = ["nudgewright/failpoints"]
 
 [dependencies]
 anyhow = "1.0.104"
@@ -26,7 +26,7 @@ getrandom = "0.4.3"
 hmac = "0.13.0"
 # The engine: draft, approve, send exactly once, stop on reply, track.
 # Pinned to the commit tagged v0.1.0 (ADR 0006).
-loopwright = { version = "0.1.0", git = "https://github.com/Enriquez-Johnmark/loopwright", rev = "649a774efb417bf579d288b7892cbf10b065ae2f" }
+nudgewright = { version = "0.2.0", git = "https://github.com/Enriquez-Johnmark/loopwright", rev = "82c5ab83b630d4d7b7e6029272a9daf35f13922e" }
 mail-parser = "0.11.9"
 reqwest = { version = "0.13.5", features = ["json"] }
 rustix = { version = "1.1.5", features = ["process"] }

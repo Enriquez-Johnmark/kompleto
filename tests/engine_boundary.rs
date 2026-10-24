@@ -1,7 +1,7 @@
 //! Seam 5: architecture rules that a grep can enforce.
 //! - Only the engine's outbox sends email (AGENTS.md "Sending"): calling
 //!   `Mailer::send` needs the `Mailer` trait in scope, so no Kompleto module
-//!   may name it. (The engine lives in Loopwright, whose own CI checks that
+//!   may name it. (The engine lives in Nudgewright, whose own CI checks that
 //!   it names no product; ADR 0006.)
 
 #![allow(clippy::unwrap_used, reason = "test code: a failed unwrap is a failed test")]

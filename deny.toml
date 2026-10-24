@@ -9,7 +9,7 @@ yanked = "deny"
 [licenses]
 confidence-threshold = 0.9
 # Our own crates are unpublished and skipped: Kompleto, and its engine
-# Loopwright (AGPL-3.0-only; the owner holds its copyright, ADR 0006).
+# Nudgewright (AGPL-3.0-only; the owner holds its copyright, ADR 0006).
 private = { ignore = true }
 allow = [
     "MIT",

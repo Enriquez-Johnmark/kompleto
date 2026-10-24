@@ -1337,8 +1337,8 @@ dependencies = [
  "getrandom 0.4.3",
  "hmac",
  "insta",
- "loopwright",
  "mail-parser",
+ "nudgewright",
  "reqwest",
  "rustix",
  "secrecy",
@@ -1410,29 +1410,6 @@ name = "log"
 version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
-
-[[package]]
-name = "loopwright"
-version = "0.1.0"
-source = "git+https://github.com/Enriquez-Johnmark/loopwright?rev=649a774efb417bf579d288b7892cbf10b065ae2f#649a774efb417bf579d288b7892cbf10b065ae2f"
-dependencies = [
- "base64 0.22.1",
- "chacha20poly1305",
- "getrandom 0.4.3",
- "hmac",
- "mail-parser",
- "reqwest",
- "secrecy",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "sqlx",
- "thiserror",
- "time",
- "tokio",
- "tracing",
- "uuid",
-]
 
 [[package]]
 name = "lru-slab"
@@ -1549,6 +1526,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "nudgewright"
+version = "0.2.0"
+source = "git+https://github.com/Enriquez-Johnmark/loopwright?rev=82c5ab83b630d4d7b7e6029272a9daf35f13922e#82c5ab83b630d4d7b7e6029272a9daf35f13922e"
+dependencies = [
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "getrandom 0.4.3",
+ "hmac",
+ "mail-parser",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sqlx",
+ "thiserror",
+ "time",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
