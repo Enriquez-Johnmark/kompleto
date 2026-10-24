@@ -195,6 +195,7 @@ Each milestone ends with its acceptance tests passing; the owner can demo after 
 - Pilots send through **Resend's free tier**, with an `Idempotency-Key` per send (E1).
 - ~~The owner applies for Amazon SES in pilot week 1.~~ Dropped 2026-10-22: SES's free tier closed to new accounts and sign-up needs a card. If 90 a day isn't enough, Resend Pro comes out of the first payment (`docs/research/domain-and-email-at-zero.md`).
 - The app enforces a **daily send budget of 90**, under Resend's 100/day cap. When more reminders are due, the nearest deadlines go first, the rest wait until the next day, and the dashboard shows what's waiting.
+- **Update (2026-10-24):** the Resend account is shared with Balanse, so once both products run live Kompleto's budget is **60** (Balanse 30), set in configuration. Making the budget configurable is a small change made before then (`docs/decisions.md`).
 
 ### Crate stack (2026-10-21)
 
