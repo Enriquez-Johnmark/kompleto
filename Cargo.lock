@@ -1531,7 +1531,7 @@ dependencies = [
 [[package]]
 name = "nudgewright"
 version = "0.2.0"
-source = "git+https://github.com/Enriquez-Johnmark/loopwright?rev=82c5ab83b630d4d7b7e6029272a9daf35f13922e#82c5ab83b630d4d7b7e6029272a9daf35f13922e"
+source = "git+https://github.com/Enriquez-Johnmark/nudgewright?rev=82c5ab83b630d4d7b7e6029272a9daf35f13922e#82c5ab83b630d4d7b7e6029272a9daf35f13922e"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",

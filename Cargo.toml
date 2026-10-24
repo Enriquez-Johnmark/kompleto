@@ -26,7 +26,7 @@ getrandom = "0.4.3"
 hmac = "0.13.0"
 # The engine: draft, approve, send exactly once, stop on reply, track.
 # Pinned to the commit tagged v0.1.0 (ADR 0006).
-nudgewright = { version = "0.2.0", git = "https://github.com/Enriquez-Johnmark/loopwright", rev = "82c5ab83b630d4d7b7e6029272a9daf35f13922e" }
+nudgewright = { version = "0.2.0", git = "https://github.com/Enriquez-Johnmark/nudgewright", rev = "82c5ab83b630d4d7b7e6029272a9daf35f13922e" }
 mail-parser = "0.11.9"
 reqwest = { version = "0.13.5", features = ["json"] }
 rustix = { version = "1.1.5", features = ["process"] }
