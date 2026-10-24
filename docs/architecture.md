@@ -18,7 +18,7 @@ src/
 
 **Rule:** `engine` never depends on `kompleto`; only `kompleto` calls into `engine`. An automated check fails the build if the rule is broken, so the engine stays reusable for later products (S1, add-ons).
 
-**Update (2026-10-23):** the engine now lives in its own repository, [Loopwright](https://github.com/Enriquez-Johnmark/loopwright), and Kompleto uses a pinned release re-exported as `crate::engine` (ADR 0006). The layout below shows where it began.
+**Update (2026-10-23):** the engine now lives in its own repository, [Nudgewright](https://github.com/Enriquez-Johnmark/nudgewright) (released as Loopwright, renamed 2026-10-24), and Kompleto uses a pinned release re-exported as `crate::engine` (ADR 0006). The layout below shows where it began.
 
 ### Outbox lifecycle (2026-10-21)
 

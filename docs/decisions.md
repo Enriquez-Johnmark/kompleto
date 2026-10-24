@@ -4,6 +4,9 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-10-24
 
+- **Engine renamed Nudgewright.** A US trademark application for "LOOPWRIGHT" (Gradera, Inc., serial 99942826, filed 2026-07-15, class 42) covers software for governing business processes run by people and AI, close to the engine's own purpose; 19 GitHub repositories also use the name. The backup, Cairnpost, is an unreleased small-business CRM that owns cairnpost.com. The engine becomes **Nudgewright** ("nudge": a polite reminder; nudgewright.com and the crate name free, no marks found), released as v0.2.0 with behaviour and schema unchanged (owner: "go ahead please" to the names round; `docs/research/product-names.md`).
+- **Resibo becomes Rekord.** resibo.com.ph has sold BIR e-invoicing to Shopee and TikTok sellers since about June 2026, and two other PH invoicing products use the name, so the agreed backup takes over (domains getrekord.com, rekord.ph; caution: a REKKORD music-software mark).
+- **Other names.** Kompleto, Kotasyon and Iskedyul stay. Balanse stays at balanseapp.com, and Sakto is dropped as its backup. Biyahe stays for now and is re-checked before its build starts, with Reserbasyon as the new backup (Turista is taken by Turista.ph's registered travel-software marks). No trademarks are filed while the budget is ₱0; each product gets an IPOPHL search report or a lawyer's view before its first paid launch.
 - **Signed commits, history kept.** Commits made in cloud sessions are signed with the owner's SSH signing key (`GIT_SIGNING_KEY_B64`, set up by `scripts/cloud-session-start.sh` in Kompleto and Loopwright), so GitHub shows them as Verified. Loopwright's earlier, unsigned history is **not** rewritten to add signatures: that would move the released `v0.1.0` tag and break Kompleto's pinned commit for a cosmetic gain. Instead, Loopwright's release tags are signed from the next release on (owner: "yes" to the recommendation).
 
 ## 2026-10-23
@@ -19,7 +22,7 @@ Every owner-approved decision, newest first, with the date it was made. Decision
   6. clinic and dental reminders: **Iskedyul** ("schedule"; backup Klinika); "Konsulta" avoided because PhilHealth runs a programme by that name;
   7. online seller records and BIR deadlines: **Resibo** ("receipt"; backup Rekord). It never computes or files tax.
 
-  Checked 2026-10-23: all free on crates.io, npm and PyPI except `rekord` (npm). GitHub accounts named balanse, sakto, kontrata, biyahe, turista, iskedyul, klinika, resibo, rekord, kompleto and hearback exist (mostly empty); this doesn't block repos under the owner's account. **Not yet checked** (blocked from the build environment): `.com`/`.ph` domains and IPOPHL/WIPO trademarks. A name is final only after the owner's domain and IPOPHL checks; a clash falls back to its backup. Order of work: split the engine into its own repo, then build the products one at a time.
+  Checked 2026-10-23: all free on crates.io, npm and PyPI except `rekord` (npm). GitHub accounts named balanse, sakto, kontrata, biyahe, turista, iskedyul, klinika, resibo, rekord, kompleto and hearback exist (mostly empty); this doesn't block repos under the owner's account. **Not yet checked** (blocked from the build environment): `.com`/`.ph` domains and IPOPHL/WIPO trademarks. A name is final only after the owner's domain and IPOPHL checks; a clash falls back to its backup. Order of work: split the engine into its own repo, then build the products one at a time. **Partly superseded** 2026-10-24: the engine is Nudgewright and Resibo is Rekord (above).
 
 ## 2026-10-22
 

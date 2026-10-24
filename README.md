@@ -48,7 +48,7 @@ All 36 acceptance criteria in `docs/product/p1-spec.md` have tests, and they pas
 
 One Rust program on a reusable engine:
 
-- **[Loopwright](https://github.com/Enriquez-Johnmark/loopwright)** is the engine, in its own repository: the approval outbox, sending each email exactly once, pre-send checks, receiving replies and bounces, encrypted files and virus scanning, the AI client, jobs, the audit and cost logs. It was built here and moved out when the next products needed it; Kompleto uses a pinned release.
+- **[Nudgewright](https://github.com/Enriquez-Johnmark/nudgewright)** is the engine, in its own repository: the approval outbox, sending each email exactly once, pre-send checks, receiving replies and bounces, encrypted files and virus scanning, the AI client, jobs, the audit and cost logs. It was built here and moved out when the next products needed it; Kompleto uses a pinned release.
 - **`src/kompleto/`** is the product: Firms and Clients, the BIR calendar, the document checklist, the 2307 tracker, payroll chasing, the upload page and the web API.
 
 Safety rules live in code, not prompts: nothing is sent without an approval that matches the exact text, and each email is sent at most once, even after a crash.
@@ -141,4 +141,4 @@ docs/             spec, architecture, decisions, research, deploy guide, outreac
 
 ## Licence
 
-All rights reserved ([LICENSE](LICENSE)). The source is published to be read, not reused: copying, running or hosting it needs the author's written permission. The engine, [Loopwright](https://github.com/Enriquez-Johnmark/loopwright), is open source under AGPL-3.0-only.
+All rights reserved ([LICENSE](LICENSE)). The source is published to be read, not reused: copying, running or hosting it needs the author's written permission. The engine, [Nudgewright](https://github.com/Enriquez-Johnmark/nudgewright), is open source under AGPL-3.0-only.
