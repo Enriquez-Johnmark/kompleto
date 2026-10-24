@@ -2,6 +2,10 @@
 
 Every owner-approved decision, newest first, with the date it was made. Decisions that a later one replaced stay here, marked **superseded**, so the reasoning trail survives. `AGENTS.md` lists only the decisions in force.
 
+## 2026-10-24
+
+- **Signed commits, history kept.** Commits made in cloud sessions are signed with the owner's SSH signing key (`GIT_SIGNING_KEY_B64`, set up by `scripts/cloud-session-start.sh` in Kompleto and Loopwright), so GitHub shows them as Verified. Loopwright's earlier, unsigned history is **not** rewritten to add signatures: that would move the released `v0.1.0` tag and break Kompleto's pinned commit for a cosmetic gain. Instead, Loopwright's release tags are signed from the next release on (owner: "yes" to the recommendation).
+
 ## 2026-10-23
 
 - **Product licences.** Kompleto, and by default each later product, is **all rights reserved**: the public repository may be read but not copied, run or hosted without the owner's written permission. Only the engine, Loopwright, is open source (AGPL-3.0-only). Loopwright accepts no outside contributions without a contributor agreement, so the owner stays free to use it in closed products (owner: "go ahead" to the recommendation).

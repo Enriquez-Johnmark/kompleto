@@ -35,6 +35,7 @@ Record every approved decision, dated, in `docs/decisions.md`, and update the su
 - **Showcase before pilots (2026-10-22):** Kompleto is finished before any bookkeeper sees it: the bookkeeper's pages become a React app (M7), then a demo Firm, ClamAV scanning, help and privacy pages, screenshots and a walkthrough video (M8). Then, by the owner's later decision the same day, the five deferred features are built before pilots too: staff logins (M9), approved sign-up (M10), Xero/QuickBooks file import (M11), rule-safe 2307 matching (M12) and payroll chasing (M13).
 - **Go-to-market:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.
 - **Budget:** ₱0 until pilots; the first spend is the domain, just before pilots. Pilots run on free hosting (Oracle Always Free, or the owner's Mac behind Cloudflare Tunnel) and Resend Free; paid hosting starts with the first payment. No customer data goes to free LLM tiers that train on inputs, and the app never runs on a Claude subscription (API key only).
+- **Signed commits (2026-10-24):** cloud-session commits are signed with the owner's SSH key; Loopwright's earlier history stays as it is, and its release tags are signed from the next release.
 - **Owner constraints:** no network, no interviews or sales calls, no paid ads. Written, asynchronous contact is fine.
 
 ## Evidence
