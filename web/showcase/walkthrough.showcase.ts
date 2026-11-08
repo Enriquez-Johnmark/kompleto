@@ -46,6 +46,10 @@ test("walkthrough", async ({ browser }, testInfo) => {
     page,
     "Every morning Kompleto drafts the reminders that are due, in Taglish or English."
   )
+  await say(
+    page,
+    "Claude writes the subject, greeting and closing; Kompleto adds the exact documents, cut-off and link."
+  )
   const card = page.locator("[data-slot=card]", { hasText: "Dela Cruz Pharmacy" }).first()
   const linkText = await card.getByText(/\/u\/[0-9a-f]+/).textContent()
   const uploadPath = linkText?.match(/\/u\/[0-9a-f]+/)?.[0]

@@ -23,6 +23,8 @@ Screenshots and a two-and-a-half-minute captioned walkthrough of a demo Firm, Sa
 | `phone-3-client-upload-page.png` | What the client sees when they open their link, in Taglish |
 | `phone-4-client-upload-page-english.png` | The same page for a client who reads English (used on the landing page) |
 
+The drafts' wording is Claude's (Haiku, with the owner's API key, made on 2026-11-08): the demo's 45 days of history were drafted the way the live scheduler drafts, and each Draft says "AI". Kompleto itself inserts the documents, the cut-off and the upload link. Without a key, the same demo uses the fixed templates.
+
 Everything here is made-up data: the businesses, people and `.example.test` addresses don't exist.
 
 ## Making them again
@@ -37,6 +39,7 @@ DEMO_DATE=2027-01-07 cargo run -- serve
 # in another terminal; the address must be new to this database:
 SHOWCASE_EMAIL=hello@santos.example pnpm --dir web showcase
 # or run against a fresh database, with DATABASE_URL set for both commands
+# with the API key in .env (or OWNER_ANTHROPIC_API_KEY), Claude words the drafts
 ```
 
 The first step makes the demo Firm (`kompleto demo-firm`) and logs in; then come the screenshots, then the video. The video is recorded with Chromium's screencast and assembled with `ffmpeg`, which must be installed.
