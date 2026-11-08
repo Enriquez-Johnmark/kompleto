@@ -17,6 +17,15 @@ use time::macros::{date, datetime};
 
 /// Seeds the demo Firm as of 4 January 2027, with the clock starting at `now`.
 async fn seed(pool: &PgPool, now: OffsetDateTime) -> (DemoSummary, RecordingMailer) {
+    seed_with(pool, now, None).await
+}
+
+/// The same, with `model` writing the Drafts' wording.
+async fn seed_with(
+    pool: &PgPool,
+    now: OffsetDateTime,
+    model: Option<kompleto::engine::llm::AnthropicClient>,
+) -> (DemoSummary, RecordingMailer) {
     let clock = Arc::new(FixedClock::new(now));
     let mailer = RecordingMailer::idempotent();
     let checks = Arc::new(common::kompleto_checks(pool, clock.clone()));
@@ -27,6 +36,7 @@ async fn seed(pool: &PgPool, now: OffsetDateTime) -> (DemoSummary, RecordingMail
         links: common::upload_links(pool, clock.clone()),
         files: common::files(pool, clock.clone()),
         base_url: "http://kompleto.test".to_owned(),
+        model,
     };
     let summary = demo::seed(
         &services,
@@ -113,4 +123,37 @@ async fn the_demo_firm_gets_its_history_even_when_made_after_its_date(pool: PgPo
 
     assert!(summary.sent >= 10, "{summary:?}");
     assert!(summary.uploads >= 10, "{summary:?}");
+}
+
+#[sqlx::test]
+async fn with_a_model_the_demo_firms_drafts_are_worded_by_it(pool: PgPool) {
+    use serde_json::json;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    let wording =
+        json!({"subject": "Paalala po", "opening": "Hi po! Kailangan pa po namin ito:", "closing": "Salamat po!"});
+    Mock::given(wiremock::matchers::method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "type": "message", "model": "claude-haiku-5-5",
+            "content": [{"type": "text", "text": wording.to_string()}],
+            "stop_reason": "end_turn", "usage": {"input_tokens": 10, "output_tokens": 10}
+        })))
+        .mount(&server)
+        .await;
+    let model = kompleto::engine::llm::AnthropicClient::new(
+        &server.uri(),
+        secrecy::SecretString::from("k"),
+        "claude-haiku-5-5",
+        std::time::Duration::from_secs(2),
+    )
+    .unwrap();
+
+    seed_with(&pool, datetime!(2026-10-21 09:00 UTC), Some(model)).await;
+
+    let sources: Vec<String> = sqlx::query_scalar("select distinct source from scheduled_drafts")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(sources, ["ai"], "every Draft worded by the model");
 }

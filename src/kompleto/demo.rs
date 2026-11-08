@@ -29,6 +29,7 @@ use super::uploads::{Label, UploadError, Uploads};
 use crate::engine::clock::{Clock, FixedClock};
 use crate::engine::files::Files;
 use crate::engine::inbound::InboundEmail;
+use crate::engine::llm::AnthropicClient;
 use crate::engine::outbox::{DrainReport, Outbox, OutboxError};
 use crate::engine::webhooks::DeliveryEvent;
 use crate::kompleto::bounces::{BounceError, Bounces};
@@ -84,6 +85,9 @@ pub struct DemoServices {
     pub files: Files,
     /// Where links point, e.g. `http://127.0.0.1:3000`.
     pub base_url: String,
+    /// Words the Drafts as the live scheduler would; without one, every
+    /// Draft is the template.
+    pub model: Option<AnthropicClient>,
 }
 
 /// One demo Client and how its Contact behaves.
@@ -284,6 +288,7 @@ pub async fn seed(
         links,
         files,
         base_url,
+        model,
     } = services;
     let shared: Arc<dyn Clock> = clock.clone();
     let firms = Firms::new(pool.clone(), shared.clone());
@@ -296,7 +301,7 @@ pub async fn seed(
     let replies = Replies::new(pool.clone(), shared.clone(), links.clone(), checks.clone(), base_url)
         .with_uploads(uploads.clone());
     let bounces = Bounces::new(pool.clone(), shared.clone());
-    let scheduler = Scheduler::new(pool.clone(), shared.clone(), links.clone())?;
+    let scheduler = Scheduler::with_model(pool.clone(), shared.clone(), links.clone(), model.clone())?;
 
     // The Firm and its Clients are added on the history's first day, since a
     // Client is chased only for Periods that end after it was added.

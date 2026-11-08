@@ -494,6 +494,8 @@ async fn demo_firm(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyh
         links,
         files,
         base_url: config.public_base_url.clone(),
+        // With the owner's key, Claude words the demo's Drafts, as it would live.
+        model: config.language_model()?,
     };
     let summary = demo::seed(&services, name, email, as_of, async || {
         sender.drain_once(DRAIN_BATCH).await
