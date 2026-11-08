@@ -14,7 +14,7 @@ Where Kompleto stands and what comes next, in one page. Dated facts come from `d
 | M8 | Demo Firm, ClamAV scanning, help and legal pages, screenshots, walkthrough video | Done |
 | M9–M13 | Staff logins, approved sign-up, Xero/QuickBooks import, 2307 Payor matching, payroll chasing | Done |
 
-The engine inside Kompleto was split out as [Nudgewright](https://github.com/Enriquez-Johnmark/nudgewright) (2026-10-23); Kompleto pins v0.2.0.
+The engine inside Kompleto was split out as [Nudgewright](https://github.com/Enriquez-Johnmark/nudgewright) (2026-10-23); Kompleto pins v0.4.4.
 
 ## Next
 
@@ -25,9 +25,9 @@ The engine inside Kompleto was split out as [Nudgewright](https://github.com/Enr
 
 ## Housekeeping before both products run live
 
-- Make the daily send budget configurable and set it to **60** (shared Resend account with Balanse; Balanse ADR 0002).
+- ~~Make the daily send budget configurable and set it to **60**~~ Done 2026-11-08: `SEND_BUDGET`, 60 by default (shared Resend account with Balanse; Balanse ADR 0002).
 - Move onto Nudgewright's `accounts` module (v0.3.0) and drop Kompleto's own login, staff, sign-up and closing code.
-- Upgrade to Nudgewright v0.4.0 (deferred messages stay approved; `Cargo.toml` still says "v0.1.0" in a comment).
+- ~~Upgrade to Nudgewright v0.4.0~~ Done 2026-11-08: Kompleto pins v0.4.4; a message whose check couldn't run stays approved, and the engine's accounts tables exist, still empty.
 
 ## Later products on the same engine
 

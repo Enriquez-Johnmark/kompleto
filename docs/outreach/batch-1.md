@@ -10,7 +10,7 @@ Goal: find 3–5 bookkeepers for a free 4-week pilot. The domain is bought only 
 2. **Post once per group, a few days apart.** Never paste the same text into many groups on the same day; Facebook may flag it as spam.
 3. **Direct messages: at most 15–20 a week**, each with one personal line about that bookkeeper (see "Direct messages").
 4. **Log every post and message** in the table at the end, so we can see which channel works.
-5. **Show, don't just tell.** Attach the 2-minute video (`docs/showcase/walkthrough.mp4`) to Post A, or 2–3 screenshots if a group doesn't allow video: `desktop-1-dashboard.png`, `desktop-3-review-before-approving.png` and `phone-3-client-upload-page.png` (all in `docs/showcase/`). Everything in them is a made-up demo firm. Post B gets no attachment. In direct messages, offer the video instead of attaching it unasked.
+5. **Show, don't just tell.** Attach the 2½-minute video (`docs/showcase/walkthrough.mp4`) to Post A, or 2–3 screenshots if a group doesn't allow video: `desktop-1-dashboard.png`, `desktop-3-review-before-approving.png` and `phone-3-client-upload-page.png` (all in `docs/showcase/`). Everything in them is a made-up demo firm. Post B gets no attachment. In direct messages, offer the video instead of attaching it unasked.
 6. **When someone answers, paste their reply to me.** I'll draft your answer; the reply templates below cover the common questions.
 
 ## Where to post
