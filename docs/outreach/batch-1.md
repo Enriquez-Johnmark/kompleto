@@ -46,7 +46,7 @@ Search Facebook for each name; join and wait for approval before posting. Skip g
 >
 > Naghahanap ako ng 3–5 bookkeepers para sa **libreng 4-week pilot**. Walang bayad at walang card na kailangan. Pagkatapos, ₱1,500/month kung gusto niyong ituloy; kung hindi, okay lang din po.
 >
-> Panoorin po ang 2-minute video sa baba para makita kung paano gumagana. 👇
+> Panoorin po ang 2½-minute video sa baba para makita kung paano gumagana. 👇
 >
 > Comment o PM lang po kung interesado kayo. Salamat po! 🙏
 
@@ -68,7 +68,7 @@ Search Facebook for each name; join and wait for approval before posting. Skip g
 >
 > I'm looking for 3–5 bookkeepers for a **free 4-week pilot**. No payment, no card. After that it's ₱1,500/month if you want to keep it; if not, no hard feelings.
 >
-> The 2-minute video below shows how it works. 👇
+> The 2½-minute video below shows how it works. 👇
 >
 > Comment or PM me if you're interested. Thank you!
 
@@ -105,7 +105,7 @@ If someone describes the pain, reply in the comments with thanks and one line, e
 >
 > Tanong lang po: hinahabol niyo pa rin ba ang clients sa Viber para sa resibo at 2307 every month?
 >
-> Gumawa po ako ng Kompleto: may BIR deadline calendar per client, gumagawa ng reminder na kayo ang mag-a-approve, at may upload link para sa phone ng client. Naghahanap po ako ng 3–5 bookkeepers para sa libreng 4-week pilot, walang bayad at walang card. May 2-minute video po ako kung gusto niyong makita.
+> Gumawa po ako ng Kompleto: may BIR deadline calendar per client, gumagawa ng reminder na kayo ang mag-a-approve, at may upload link para sa phone ng client. Naghahanap po ako ng 3–5 bookkeepers para sa libreng 4-week pilot, walang bayad at walang card. May 2½-minute video po ako kung gusto niyong makita.
 >
 > Kung hindi po relevant, okay lang. Salamat sa oras niyo!
 
