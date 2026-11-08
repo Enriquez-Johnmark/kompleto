@@ -2,6 +2,10 @@
 
 Every owner-approved decision, newest first, with the date it was made. Decisions that a later one replaced stay here, marked **superseded**, so the reasoning trail survives. `AGENTS.md` lists only the decisions in force.
 
+## 2026-11-08
+
+- **The owner's API key in cloud sessions is `OWNER_ANTHROPIC_API_KEY`.** In a Claude Code cloud session the key is an environment variable, and Claude Code itself reads `ANTHROPIC_API_KEY`, which could bill the session's own work to the owner's API account. So every product (Kompleto, Balanse, the Review Triage Agent and the Help Assistant) reads `ANTHROPIC_API_KEY` first (from `.env` locally) and otherwise `OWNER_ANTHROPIC_API_KEY`. Nudgewright never reads the key: each product passes it in, so the engine is unchanged (owner: "make sure we use this OWNER_ANTHROPIC_API_KEY of all our products").
+
 ## 2026-10-24
 
 - **One Resend account for all products.** Kompleto and Balanse share one Resend account, each sending from its own domain, because Resend's acceptable-use policy forbids multiple accounts used to get around its quotas. While on Resend Free, Kompleto's daily send budget drops from 90 to **60** and Balanse gets 30, leaving about 10 for login emails and inbound mail; Kompleto's budget becomes configurable before both products run live, and Resend Pro comes out of the first payment. Kompleto keeps its own account code until it moves onto Nudgewright's new `accounts` module in a separate step (owner: "go ahead please" to Balanse's architecture Round 1; Balanse ADRs 0001 and 0002).

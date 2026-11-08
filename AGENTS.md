@@ -38,6 +38,7 @@ Record every approved decision, dated, in `docs/decisions.md`, and update the su
 - **Signed commits (2026-10-24):** cloud-session commits are signed with the owner's SSH key; the engine's earlier history stays as it is, and its release tags are signed from the next release.
 - **Product names (2026-10-24):** the engine is Nudgewright; the products are Kompleto, Balanse, Kotasyon, Biyahe (re-checked before its build), Iskedyul and Rekord (was Resibo). No trademarks filed until each product's paid launch.
 - **Shared email (2026-10-24):** one Resend account for all products; Kompleto's daily budget becomes 60 (configurable) once Balanse runs live.
+- **API key in cloud sessions (2026-11-08):** the owner's key is the environment variable `OWNER_ANTHROPIC_API_KEY`, never `ANTHROPIC_API_KEY`, which Claude Code itself reads; every product falls back to it.
 - **Owner constraints:** no network, no interviews or sales calls, no paid ads. Written, asynchronous contact is fine.
 
 ## Evidence
