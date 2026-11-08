@@ -78,6 +78,8 @@ pub struct Config {
     /// Where Firms write for help (`SUPPORT_EMAIL`), shown when an account
     /// closes. Route it to a person, not to the reply Worker.
     pub support_email: Option<String>,
+    /// The daily send budget with Resend (`SEND_BUDGET`, default 60).
+    pub send_budget: SendBudget,
     /// ClamAV's daemon (`CLAMD_ADDR`, `host:port`), which scans every
     /// Upload. `serve` requires it in production;
     /// without it, nothing is scanned.
@@ -156,6 +158,7 @@ impl Config {
             inbound_secret: optional("INBOUND_SECRET").map(SecretString::from),
             resend_webhook_secret: optional("RESEND_WEBHOOK_SECRET").map(SecretString::from),
             support_email: optional("SUPPORT_EMAIL"),
+            send_budget: daily_budget(optional("SEND_BUDGET").as_deref())?,
             clamd_addr: optional("CLAMD_ADDR"),
             demo_date,
         })
@@ -201,12 +204,12 @@ impl Config {
         })
     }
 
-    /// The daily send budget for the configured provider: Resend Free's
-    /// cap, or none for Mailpit, which delivers nowhere.
+    /// The daily send budget for the configured provider: Kompleto's share
+    /// of the Resend account, or none for Mailpit, which delivers nowhere.
     pub fn send_budget(&self) -> Option<SendBudget> {
         match self.mail {
             MailConfig::Mailpit { .. } => None,
-            MailConfig::Resend { .. } => Some(SendBudget::RESEND_FREE),
+            MailConfig::Resend { .. } => Some(self.send_budget),
         }
     }
 
@@ -264,6 +267,31 @@ fn optional(name: &str) -> Option<String> {
 /// The owner's API key: `ANTHROPIC_API_KEY`, or in a cloud session
 /// `OWNER_ANTHROPIC_API_KEY`, because Claude Code itself reads
 /// `ANTHROPIC_API_KEY` and the owner's key must pay for this app only.
+/// Emails a day kept for login links and notices, which have no deadline.
+const BUDGET_RESERVE: i64 = 10;
+
+/// `SEND_BUDGET`: all the emails Kompleto may start in 24 hours (default
+/// 60, its share of the Resend account it shares with Balanse; Balanse ADR
+/// 0002). Ten are kept for login links and notices, the rest go to Reminders.
+fn daily_budget(text: Option<&str>) -> Result<SendBudget, ConfigError> {
+    let total = match text {
+        None => 60,
+        Some(text) => text
+            .trim()
+            .parse::<i64>()
+            .ok()
+            .filter(|total| (BUDGET_RESERVE + 1..=1_000_000).contains(total))
+            .ok_or_else(|| ConfigError::Invalid {
+                name: "SEND_BUDGET",
+                reason: format!("{text:?} is not a whole number from 11 to 1000000"),
+            })?,
+    };
+    Ok(SendBudget {
+        per_day: total - BUDGET_RESERVE,
+        reserve: BUDGET_RESERVE,
+    })
+}
+
 fn anthropic_key(lookup: impl Fn(&str) -> Option<String>) -> Option<String> {
     lookup("ANTHROPIC_API_KEY").or_else(|| lookup("OWNER_ANTHROPIC_API_KEY"))
 }
@@ -309,6 +337,38 @@ mod tests {
             public_base_url(None, addr("0.0.0.0:3000")),
             Err(ConfigError::Missing("PUBLIC_BASE_URL"))
         ));
+    }
+
+    #[test]
+    fn e2_the_daily_send_budget_is_kompletos_share_of_the_shared_resend_account() {
+        // 60 of Resend Free's 100 a day, shared with Balanse (Balanse ADR 0002):
+        // 10 kept for login links and notices, the rest for Reminders.
+        assert_eq!(
+            daily_budget(None).unwrap(),
+            SendBudget {
+                per_day: 50,
+                reserve: 10
+            }
+        );
+        assert_eq!(
+            daily_budget(Some("100")).unwrap(),
+            SendBudget {
+                per_day: 90,
+                reserve: 10
+            }
+        );
+        for bad in ["10", "0", "-5", "sixty", "1000001"] {
+            assert!(
+                matches!(
+                    daily_budget(Some(bad)),
+                    Err(ConfigError::Invalid {
+                        name: "SEND_BUDGET",
+                        ..
+                    })
+                ),
+                "{bad}"
+            );
+        }
     }
 
     #[test]
