@@ -104,6 +104,7 @@ PUBLIC_BASE_URL=https://app.getkompleto.com
 MAIL_PROVIDER=resend
 RESEND_API_KEY=<from step 3>
 RESEND_WEBHOOK_SECRET=<from step 3>
+SEND_BUDGET=60                                # Kompleto's share of Resend Free; Balanse takes 30
 MAIL_FROM_ADDRESS=reminders@getkompleto.com
 INBOUND_SECRET=<from step 1>
 FILE_MASTER_KEY=<from step 1>
