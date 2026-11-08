@@ -7,6 +7,10 @@ All clients are fictional, so no customer data goes to the consumer app.
 
     python3 -I prototypes/taglish-test/manual.py kit
         writes out/kit.md: the prompts to paste, one per case.
+    python3 -I prototypes/taglish-test/manual.py api
+        asks both models through the API (OWNER_ANTHROPIC_API_KEY or
+        ANTHROPIC_API_KEY) with the app's exact request, read from drafting.rs,
+        and writes out/answers.json and out/usage.json.
     python3 -I prototypes/taglish-test/manual.py blind out/answers.json
         reads the pasted answers and writes out/blind-test.html: each case's two
         emails, assembled the way Kompleto assembles them, in random order.
@@ -17,8 +21,11 @@ Delete this folder once the result is recorded in docs/product/p1-spec.md.
 
 import importlib.util
 import json
+import os
 import random
+import re
 import sys
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -61,6 +68,11 @@ CASES = [
      "Purchase and expense invoices and receipts"], "November 2026", "Fri 4 Dec 2026", "urgent_but_polite"),
     ("Villanueva Tutorial Center", "Joy", ["Sales invoices issued, including cancelled ones"],
      "October 2026", "Thu 5 Nov 2026", "friendly_reminder"),
+    # The prompt also covers payroll and contributions (M13).
+    ("Tan Auto Supply", "Kevin", ["Timesheets and overtime for the period", "New hires and resignations"],
+     "payroll on Sun 15 Nov 2026", "Wed 11 Nov 2026", "firmer"),
+    ("Cruz Freelance Design", "Bea", ["SSS, PhilHealth and Pag-IBIG payment receipts"],
+     "October 2026 SSS and Pag-IBIG contributions", "Tue 10 Nov 2026", "friendly_reminder"),
 ]
 
 
@@ -89,6 +101,50 @@ def kit():
     print(f"Wrote {OUT / 'kit.md'}")
 
 
+ROOT = HERE.parent.parent
+MODELS = {"haiku": "claude-haiku-5-5", "sonnet": "claude-sonnet-5-5"}
+# The engine's thinking setting per model (nudgewright src/llm.rs `body`).
+THINKING = {"haiku": "disabled", "sonnet": "between_tools"}
+SCHEMA = {"type": "object",
+          "properties": {"subject": {"type": "string"}, "opening": {"type": "string"}, "closing": {"type": "string"}},
+          "required": ["subject", "opening", "closing"], "additionalProperties": False}
+
+
+def app_system():
+    """SYSTEM exactly as drafting.rs has it, so the test judges the prompt the app sends."""
+    rust = (ROOT / "src/kompleto/drafting.rs").read_text()
+    literal = re.search(r'const SYSTEM: &str = "(.*?)";\n', rust, re.S).group(1)
+    # A backslash at a line's end joins the next line, dropping its indent.
+    return re.sub(r"\\\n\s*", "", literal).replace('\\"', '"')
+
+
+def api():
+    key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("OWNER_ANTHROPIC_API_KEY")
+    if not key:
+        sys.exit("Set OWNER_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) first.")
+    system, answers, usage = app_system(), {}, {}
+    for number, case in enumerate(CASES, 1):
+        for name, model in MODELS.items():
+            body = {"model": model, "max_tokens": 1000, "system": system,
+                    "messages": [{"role": "user", "content": json.dumps(brief(case), ensure_ascii=False)}],
+                    "output_config": {"format": {"type": "json_schema", "schema": SCHEMA}},
+                    "thinking": {"type": THINKING[name]}}
+            request = urllib.request.Request("https://api.anthropic.com/v1/messages", method="POST",
+                                             data=json.dumps(body).encode(), headers={
+                                                 "x-api-key": key, "anthropic-version": "2023-06-01",
+                                                 "content-type": "application/json"})
+            with urllib.request.urlopen(request, timeout=120) as response:
+                reply = json.load(response)
+            text = next(block["text"] for block in reply["content"] if block["type"] == "text")
+            answers[f"{number}-{name}"] = json.loads(text)
+            usage[f"{number}-{name}"] = {"model": reply["model"], **reply["usage"], "stop": reply["stop_reason"]}
+            print(f"case {number} {name}: {reply['stop_reason']}")
+    OUT.mkdir(exist_ok=True)
+    (OUT / "answers.json").write_text(json.dumps(answers, ensure_ascii=False, indent=1))
+    (OUT / "usage.json").write_text(json.dumps(usage, indent=1))
+    print(f"Wrote {OUT / 'answers.json'}")
+
+
 def email(case, wording):
     """The email as Kompleto assembles it (drafting.rs `assemble`)."""
     business, contact, owed, period, cut_off, tone = case
@@ -114,6 +170,8 @@ def blind(path):
 if __name__ == "__main__":
     if sys.argv[1:2] == ["kit"]:
         kit()
+    elif sys.argv[1:2] == ["api"]:
+        api()
     elif sys.argv[1:2] == ["blind"] and len(sys.argv) == 3:
         blind(sys.argv[2])
     else:
