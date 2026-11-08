@@ -145,7 +145,7 @@ impl Config {
             public_base_url,
             mail,
             mail_from_address: required("MAIL_FROM_ADDRESS")?,
-            model: optional("ANTHROPIC_API_KEY").map(|key| ModelConfig {
+            model: anthropic_key(optional).map(|key| ModelConfig {
                 base_url: optional("ANTHROPIC_BASE_URL").unwrap_or_else(|| "https://api.anthropic.com".to_owned()),
                 api_key: SecretString::from(key),
                 model: optional("LLM_MODEL").unwrap_or_else(|| "claude-haiku-5-5".to_owned()),
@@ -261,6 +261,13 @@ fn optional(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.trim().is_empty())
 }
 
+/// The owner's API key: `ANTHROPIC_API_KEY`, or in a cloud session
+/// `OWNER_ANTHROPIC_API_KEY`, because Claude Code itself reads
+/// `ANTHROPIC_API_KEY` and the owner's key must pay for this app only.
+fn anthropic_key(lookup: impl Fn(&str) -> Option<String>) -> Option<String> {
+    lookup("ANTHROPIC_API_KEY").or_else(|| lookup("OWNER_ANTHROPIC_API_KEY"))
+}
+
 fn required(name: &'static str) -> Result<String, ConfigError> {
     optional(name).ok_or(ConfigError::Missing(name))
 }
@@ -302,5 +309,19 @@ mod tests {
             public_base_url(None, addr("0.0.0.0:3000")),
             Err(ConfigError::Missing("PUBLIC_BASE_URL"))
         ));
+    }
+
+    #[test]
+    fn the_owners_key_is_read_under_its_cloud_name_when_anthropic_api_key_is_unset() {
+        let only = |set: &'static str| move |name: &str| (name == set).then(|| format!("{set}-value"));
+        assert_eq!(
+            anthropic_key(only("OWNER_ANTHROPIC_API_KEY")).as_deref(),
+            Some("OWNER_ANTHROPIC_API_KEY-value")
+        );
+        assert_eq!(
+            anthropic_key(|name: &str| Some(format!("{name}-value"))).as_deref(),
+            Some("ANTHROPIC_API_KEY-value")
+        );
+        assert_eq!(anthropic_key(|_: &str| None), None);
     }
 }
