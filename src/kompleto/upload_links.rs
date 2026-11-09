@@ -6,9 +6,12 @@
 //! a guessed or altered link is simply not found. A link works until 30 days
 //! after its Period's Cut-off.
 //!
-//! Each link also has a reply address, `reply+CODE@domain`, whose code is
-//! the link's ID signed with a separate key. A Contact's Reply to a Reminder
-//! comes back to it, which names the Client and Period (G1).
+//! Each link also has a reply address, `CODE@domain`, whose code is the
+//! link's ID signed with a separate key. A Contact's Reply to a Reminder
+//! comes back to it, which names the Client and Period (G1). The code is 64
+//! characters, the most a mail provider takes before the `@` (RFC 5321), so
+//! it has no prefix; addresses sent before 2026-11-10 had `reply+` and still
+//! work.
 
 use std::sync::Arc;
 
@@ -151,7 +154,7 @@ impl UploadLinks {
             reply_to: self
                 .reply_domain
                 .as_ref()
-                .map(|domain| format!("reply+{}@{domain}", self.reply_signer.token(id))),
+                .map(|domain| format!("{}@{domain}", self.reply_signer.token(id))),
         })
     }
 
@@ -227,7 +230,7 @@ impl UploadLinks {
         };
         let id = recipients.iter().find_map(|address| {
             let (local, at) = address.rsplit_once('@')?;
-            let code = local.strip_prefix("reply+")?;
+            let code = local.strip_prefix("reply+").unwrap_or(local);
             (at == domain).then(|| self.reply_signer.verify(code)).flatten()
         });
         let Some(id) = id else {

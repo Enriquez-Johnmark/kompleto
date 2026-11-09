@@ -41,7 +41,7 @@ async fn e2_a_reminder_comes_from_the_firm_answers_to_kompleto_and_says_sent_via
             .unwrap();
     assert_eq!(from, "Santos Bookkeeping", "the Firm's name as sender");
     assert!(
-        reply_to.starts_with("reply+") && reply_to.ends_with("@getkompleto.test"),
+        reply_to.ends_with("@getkompleto.test") && reply_to.find('@').is_some_and(|at| at <= 64),
         "{reply_to}"
     );
     assert!(body.ends_with("\n--\nSent via Kompleto\n"), "{body}");

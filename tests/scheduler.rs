@@ -434,7 +434,7 @@ async fn f2_every_reminder_for_a_period_carries_the_clients_one_upload_link(pool
     assert!(
         reply_to.iter().all(|r| r
             .as_deref()
-            .is_some_and(|r| r.starts_with("reply+") && Some(r) == reply_to[0].as_deref())),
+            .is_some_and(|r| r.ends_with("@getkompleto.test") && Some(r) == reply_to[0].as_deref())),
         "every reminder for the Period replies to the same signed address: {reply_to:?}"
     );
 }

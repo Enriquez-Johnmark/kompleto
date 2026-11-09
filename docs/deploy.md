@@ -48,7 +48,7 @@ E2 needs SPF, DKIM and DMARC to pass: check it in step 9.
    npx wrangler secret put INBOUND_SECRET     # the inbound secret from step 1
    npx wrangler deploy
    ```
-5. **Routing rules → Catch-all address → Send to a Worker → `kompleto-replies`**. Every reply address (`reply+CODE@getkompleto.com`) now reaches the app. An email the app can't take goes to your inbox instead of being lost.
+5. **Routing rules → Catch-all address → Send to a Worker → `kompleto-replies`**. Every reply address (`CODE@getkompleto.com`, a 64-character signed code) now reaches the app. An email the app can't take goes to your inbox instead of being lost.
 
 Known limit: the free Worker plan allows about 10 ms of CPU per email. Signing a reply with a few photos fits; a reply near the 25 MB limit may not, and then it isn't delivered. If that happens during pilots, raise it: the fix is a different check on the app's side.
 

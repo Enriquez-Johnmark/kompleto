@@ -161,17 +161,14 @@ async fn g1_each_link_has_a_signed_reply_address_naming_its_client_and_period(po
         .unwrap()
         .unwrap();
 
-    assert!(
-        reply.starts_with("reply+") && reply.ends_with("@getkompleto.test"),
-        "{reply}"
-    );
+    assert!(reply.ends_with("@getkompleto.test"), "{reply}");
     assert_eq!(
         (found.firm, found.client, found.period.as_str()),
         (santos, nena_id, "2026-10")
     );
     let mut altered = reply.clone();
     altered.replace_range(10..11, if &reply[10..11] == "0" { "1" } else { "0" });
-    let upload_code = format!("reply+{}@getkompleto.test", token(&issued.url));
+    let upload_code = format!("{}@getkompleto.test", token(&issued.url));
     let elsewhere = reply.replace("getkompleto.test", "evil.test");
     for (case, address) in [
         ("altered", altered),
@@ -180,4 +177,29 @@ async fn g1_each_link_has_a_signed_reply_address_naming_its_client_and_period(po
     ] {
         assert!(links.by_reply_address(&[address]).await.unwrap().is_none(), "{case}");
     }
+}
+
+#[sqlx::test]
+async fn g1_a_reply_address_fits_the_64_character_limit_and_older_ones_still_work(pool: PgPool) {
+    let clock = clock();
+    let santos = firm(&pool, "Santos Bookkeeping").await;
+    let nena_id = Clients::new(pool.clone(), clock.clone())
+        .create(santos, &nena())
+        .await
+        .unwrap();
+    let links = common::upload_links(&pool, clock);
+    let reply = links
+        .issue(santos, nena_id, "2026-10", date!(2026 - 11 - 05))
+        .await
+        .unwrap()
+        .reply_to
+        .unwrap();
+    let (local, _) = reply.rsplit_once('@').unwrap();
+
+    // Mail providers refuse a longer local part (RFC 5321); Resend did.
+    assert!(local.len() <= 64, "{} characters: {reply}", local.len());
+    // Addresses sent before 2026-11-10 carry a `reply+` prefix.
+    let older = format!("reply+{reply}");
+    let found = links.by_reply_address(&[older]).await.unwrap().unwrap();
+    assert_eq!(found.client, nena_id);
 }

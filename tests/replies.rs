@@ -143,7 +143,9 @@ async fn g1_an_automatic_reply_is_noted_but_reminders_continue(pool: PgPool) {
 #[sqlx::test]
 async fn g1_mail_with_a_forged_code_from_an_unknown_sender_keeps_nothing(pool: PgPool) {
     let (_, clock, reply_to) = reminded(&pool).await;
-    let forged = reply_to.replacen("reply+", "reply+0", 1);
+    // One hex digit changed: the signature no longer matches.
+    let flipped = if reply_to.starts_with('0') { "1" } else { "0" };
+    let forged = format!("{flipped}{}", &reply_to[1..]);
     let raw = String::from_utf8(common::inbound("human_reply", &forged))
         .unwrap()
         .replace("Nena@Example.TEST", "stranger@elsewhere.test");
