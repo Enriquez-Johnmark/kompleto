@@ -11,6 +11,9 @@ All clients are fictional, so no customer data goes to the consumer app.
         asks both models through the API (OWNER_ANTHROPIC_API_KEY or
         ANTHROPIC_API_KEY) with the app's exact request, read from drafting.rs,
         and writes out/answers.json and out/usage.json.
+    python3 -I prototypes/taglish-test/manual.py judge
+        a blind judge (Claude Opus) picks the better email in each pair, asked
+        twice with the order swapped; writes out/judged.json.
     python3 -I prototypes/taglish-test/manual.py blind out/answers.json
         reads the pasted answers and writes out/blind-test.html: each case's two
         emails, assembled the way Kompleto assembles them, in random order.
@@ -145,6 +148,57 @@ def api():
     print(f"Wrote {OUT / 'answers.json'}")
 
 
+JUDGE_MODEL = "claude-opus-5-5"
+JUDGE = """You are an experienced Filipino bookkeeper in Manila who writes to small-business clients every day.
+You will see two reminder emails asking the same client for documents. Pick the one you would rather send.
+Judge: natural Taglish as Filipino bookkeepers really write it (not stiff, not textbook Tagalog, not
+English with a few Tagalog words added); respect ("po") without sounding servile; a tone that fits the
+reminder's stage; and clarity. The document list, link and deadline are identical in both; judge only
+the wording around them. Answer "tie" only if you truly cannot choose."""
+VERDICT = {"type": "object", "properties": {"better": {"type": "string", "enum": ["first", "second", "tie"]},
+           "reason": {"type": "string"}}, "required": ["better", "reason"], "additionalProperties": False}
+
+
+def ask_judge(key, case, first, second):
+    stage = CASE_STAGE[case[5]]
+    text = (f"Reminder {stage} of 4 to {case[1]} of {case[0]}.\n\n"
+            f"FIRST EMAIL\nSubject: {first['subject']}\n\n{first['body']}\n\n"
+            f"SECOND EMAIL\nSubject: {second['subject']}\n\n{second['body']}")
+    body = {"model": JUDGE_MODEL, "max_tokens": 1000, "system": JUDGE,
+            "messages": [{"role": "user", "content": text}],
+            "output_config": {"format": {"type": "json_schema", "schema": VERDICT}}}
+    request = urllib.request.Request("https://api.anthropic.com/v1/messages", method="POST",
+                                     data=json.dumps(body).encode(), headers={
+                                         "x-api-key": key, "anthropic-version": "2023-06-01",
+                                         "content-type": "application/json"})
+    with urllib.request.urlopen(request, timeout=180) as response:
+        reply = json.load(response)
+    return json.loads(next(block["text"] for block in reply["content"] if block["type"] == "text"))
+
+
+def judge():
+    key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("OWNER_ANTHROPIC_API_KEY")
+    if not key:
+        sys.exit("Set OWNER_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) first.")
+    answers = json.loads((OUT / "answers.json").read_text())
+    results, totals = [], {"haiku": 0, "sonnet": 0, "tie": 0}
+    for number, case in enumerate(CASES, 1):
+        haiku, sonnet = (email(case, answers[f"{number}-{model}"]) for model in ("haiku", "sonnet"))
+        # Asked twice, the order swapped: a verdict that flips with the order is a tie.
+        one = ask_judge(key, case, haiku, sonnet)
+        two = ask_judge(key, case, sonnet, haiku)
+        picks = {"first": "haiku", "second": "sonnet", "tie": "tie"}[one["better"]], \
+                {"first": "sonnet", "second": "haiku", "tie": "tie"}[two["better"]]
+        winner = picks[0] if picks[0] == picks[1] else "tie"
+        totals[winner] += 1
+        results.append({"case": number, "business": case[0], "winner": winner, "picks": picks,
+                        "reasons": [one["reason"], two["reason"]]})
+        print(f"case {number}: {winner}  ({picks[0]} / {picks[1]})")
+    (OUT / "judged.json").write_text(json.dumps({"judge": JUDGE_MODEL, "totals": totals, "cases": results},
+                                                ensure_ascii=False, indent=1))
+    print("totals:", totals)
+
+
 def email(case, wording):
     """The email as Kompleto assembles it (drafting.rs `assemble`)."""
     business, contact, owed, period, cut_off, tone = case
@@ -172,6 +226,8 @@ if __name__ == "__main__":
         kit()
     elif sys.argv[1:2] == ["api"]:
         api()
+    elif sys.argv[1:2] == ["judge"]:
+        judge()
     elif sys.argv[1:2] == ["blind"] and len(sys.argv) == 3:
         blind(sys.argv[2])
     else:
