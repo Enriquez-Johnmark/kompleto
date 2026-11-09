@@ -20,8 +20,9 @@ The engine inside Kompleto was split out as [Nudgewright](https://github.com/Enr
 
 1. **Owner:** the Taglish test of the AI model (the one open item of the spec, needs an API key).
 2. **Owner:** buy `getkompleto.com` just before pilots (the first spend; ₱0 until then).
-3. **Deploy (M6 close-out):** real email from the domain through the shared Resend account, Cloudflare Tunnel or Oracle Always Free hosting, nightly backups.
-4. **Pilots:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.
+3. **Rehearse the deploy now** (`docs/deploy-rehearsal.md`): the whole set-up on the owner's Mac, without the domain, at ₱0.
+4. **Deploy (M6 close-out):** real email from the domain through the shared Resend account, Cloudflare Tunnel or Oracle Always Free hosting, nightly backups.
+5. **Pilots:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.
 
 ## Housekeeping before both products run live
 

@@ -1,6 +1,6 @@
 # Going live
 
-Status: prepared 2026-10-22, updated for the React app (M7), not yet followed. It starts once the owner has the domain (decision M6 round, `docs/decisions.md`). Every step is at ₱0 except the domain. Vendor screens change; where a label below no longer matches, look for the nearest one, and note the change here.
+Status: prepared 2026-10-22, updated for the React app (M7), not yet followed. Rehearse it first, without a domain: [`deploy-rehearsal.md`](deploy-rehearsal.md). It starts once the owner has the domain (decision M6 round, `docs/decisions.md`). Every step is at ₱0 except the domain. Vendor screens change; where a label below no longer matches, look for the nearest one, and note the change here.
 
 Two paths, depending on the card question:
 
