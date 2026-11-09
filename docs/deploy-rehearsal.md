@@ -1,6 +1,6 @@
 # Rehearsing the go-live
 
-Status: written 2026-11-09, not yet followed. A dry run of [`deploy.md`](deploy.md) on the owner's Mac (path B) **before any domain is bought and before any bookkeeper says yes**, so the first real set-up takes an hour, not days. It costs ₱0 and needs no card.
+Status: written 2026-11-09. **Run in a cloud session on 2026-11-09, everything without the domain passed: [`rehearsal-results.md`](rehearsal-results.md).** The owner can still run it on the Mac later. A dry run of [`deploy.md`](deploy.md) on the owner's Mac (path B) **before any domain is bought and before any bookkeeper says yes**, so the first real set-up takes an hour, not days. It costs ₱0 and needs no card.
 
 What is different from the real thing:
 

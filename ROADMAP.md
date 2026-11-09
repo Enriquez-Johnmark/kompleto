@@ -20,7 +20,7 @@ The engine inside Kompleto was split out as [Nudgewright](https://github.com/Enr
 
 1. **Owner:** rate the Taglish blind kit (the one open item of the spec): both models were run through the API on 2026-11-08 (`prototypes/taglish-test/`), and the shuffled pairs wait for a blind rating.
 2. **Owner:** buy `getkompleto.com` just before pilots (the first spend; ₱0 until then).
-3. **Rehearse the deploy now** (`docs/deploy-rehearsal.md`): the whole set-up on the owner's Mac, without the domain, at ₱0.
+3. ~~**Rehearse the deploy**~~ Done 2026-11-09 in the cloud: everything without the domain passed (`docs/rehearsal-results.md`).
 4. **Deploy (M6 close-out):** real email from the domain through the shared Resend account, Cloudflare Tunnel or Oracle Always Free hosting, nightly backups.
 5. **Pilots:** free written outreach (≤ 15–20 personalised messages a week), then 3–5 free 4-week pilots, then ₱1,500/month via GCash.
 

@@ -12,6 +12,7 @@
 | [legal.md](legal.md) | The help page, privacy notice, terms and data processing agreement: where they live and what the owner fills in before pilots |
 | [deploy.md](deploy.md) | Step-by-step go-live guide, followed once the domain is bought |
 | [deploy-rehearsal.md](deploy-rehearsal.md) | A dry run of the go-live on the owner's Mac, before the domain: ₱0, no card |
+| [rehearsal-results.md](rehearsal-results.md) | The rehearsal, run in the cloud on 2026-11-09: the loop, backups, speed and the Taglish result |
 | [outreach/](outreach/) | Drafted posts and messages to find pilot bookkeepers, with a log of what was sent |
 | [research/README.md](research/README.md) | Research index: market, competitors, scoring, kill-checks, Harvey |
 
