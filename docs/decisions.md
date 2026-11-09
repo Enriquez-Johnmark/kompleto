@@ -2,6 +2,11 @@
 
 Every owner-approved decision, newest first, with the date it was made. Decisions that a later one replaced stay here, marked **superseded**, so the reasoning trail survives. `AGENTS.md` lists only the decisions in force.
 
+## 2026-11-09
+
+- **Claude Sonnet words the Drafts, which closes Phase 6.** The blind Taglish test ran through the API with the app's exact request: Haiku and Sonnet each wrote 10 fictional cases (8 BIR, 1 payroll, 1 contributions), all valid by the app's rules. As the owner couldn't rate them by hand, a blind judge (Claude Opus, told to judge as a Manila bookkeeper) compared each pair twice with the order swapped: Sonnet 8, Haiku 1, tie 1, with 9 of 10 verdicts the same in both orders. Haiku's openings were sometimes awkward ("Hi Nena po!") and its Tagalog stiffer. Sonnet costs about US$0.003 a Draft, under US$1 a month for a 5-Firm pilot (owner: "Sonnet"). The default `LLM_MODEL` is now `claude-sonnet-5-5`, and pilots run with the owner's API key, so Claude words their Drafts. The prototype is deleted; its results are here and in `docs/rehearsal-results.md`.
+- **The go-live rehearsal ran in the cloud**, as the owner can't run it on the Mac: everything that doesn't need the domain or a Resend account passed (`docs/rehearsal-results.md`).
+
 ## 2026-11-08
 
 - **Kompleto moves onto Nudgewright's accounts, and everyone logs in again once.** Login, staff, sign-up and closing are the engine's `accounts` module from now on (the housekeeping before both products run live). The migration copies every Firm, member and sign-up request, but no session or login link, since no bookkeeper uses Kompleto yet (owner: "yes, log everyone out once and go ahead"). Two consequences: the owner of a closed Firm can request a new account only once the old one is erased (until then, `firm reopen`), and a race in the engine's hourly login limits, found by Kompleto's test of parallel requests, is fixed in Nudgewright v0.4.5.

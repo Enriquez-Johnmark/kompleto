@@ -1,6 +1,6 @@
 # Kompleto (P1) spec: first version
 
-Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish test). Built up round by round through grilling; everything under "Decided" and the acceptance criteria are owner-approved, with dates. Background: `docs/product/p1-brief.md`.
+Status: **Phase 6 complete** (the AI model confirmed by the blind Taglish test, 2026-11-09). Built up round by round through grilling; everything under "Decided" and the acceptance criteria are owner-approved, with dates. Background: `docs/product/p1-brief.md`.
 
 ## Decided
 
@@ -160,12 +160,11 @@ Status: **Phase 6 complete except the AI model confirmation** (the blind Taglish
 
 ### AI (2026-10-21)
 
-- **Claude Haiku 5.5** (`claude-haiku-5-5`, thinking disabled, JSON-schema output), at about ₱3.50 per firm per month. **Sonnet 5.5** is the fallback if Haiku's Taglish isn't good enough. Prices: `docs/research/llm-options.md`.
-- The choice is confirmed by a **blind Taglish test** before Phase 6 closes (`prototypes/taglish-test/`).
+- **Claude Sonnet 5.5** (`claude-sonnet-5-5`, thinking off, JSON-schema output), chosen over Haiku 5.5 by the **blind Taglish test** (2026-11-09): Sonnet's wording was preferred in 8 of 10 cases, Haiku's in 1, with 1 tie. About US$0.003 a Draft, roughly US$0.20 a month for a Firm with 15 Clients. `LLM_MODEL` can still name Haiku. Prices: `docs/research/llm-options.md`.
 - Paid API with no training on our data, behind our own small client so the provider can be swapped.
 - If the AI is unavailable, Kompleto **falls back to fixed message templates**, so reminders still go out.
 - **Details (M3 round, 2026-10-21):**
-  - The API key is optional: without `ANTHROPIC_API_KEY` every Draft is a template. The blind Taglish test runs by hand in claude.ai with fictional clients (after-M4 round); the app itself only ever uses an API key.
+  - The API key is optional: without `ANTHROPIC_API_KEY` every Draft is a template. The app itself only ever uses an API key.
   - Thinking off, JSON-schema output, a 15-second timeout and no retry; any failure gives a template Draft at once. The model is a configuration value.
   - **The model writes only the wording:** a subject, an opening and a closing in the Client's language. Kompleto inserts the exact Owed documents, the Cut-off date, the firm's name and (from M4) the upload link, so the model can't garble or invent facts and never sees the firm name or a link.
   - **Tone:** first request friendly; 7 days before the Cut-off a friendly reminder; 3 days firmer; 1 day urgent but polite.
@@ -305,4 +304,4 @@ Kompleto chases the documents payroll needs and the proof that contributions wer
 
 ## Open
 
-1. Blind Taglish test result: confirms Haiku 5.5, or switches to Sonnet 5.5. It doesn't affect the architecture, since the model is a configuration value behind our own client.
+Nothing.

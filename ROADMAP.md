@@ -18,7 +18,7 @@ The engine inside Kompleto was split out as [Nudgewright](https://github.com/Enr
 
 ## Next
 
-1. **Owner:** rate the Taglish blind kit (the one open item of the spec): both models were run through the API on 2026-11-08 (`prototypes/taglish-test/`), and the shuffled pairs wait for a blind rating.
+1. ~~**The Taglish test**~~ Done 2026-11-09: a blind judge preferred Sonnet in 8 of 10 cases; Sonnet now words the Drafts, and Phase 6 is closed.
 2. **Owner:** buy `getkompleto.com` just before pilots (the first spend; ₱0 until then).
 3. ~~**Rehearse the deploy**~~ Done 2026-11-09 in the cloud: everything without the domain passed (`docs/rehearsal-results.md`).
 4. **Deploy (M6 close-out):** real email from the domain through the shared Resend account, Cloudflare Tunnel or Oracle Always Free hosting, nightly backups.

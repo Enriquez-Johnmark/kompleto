@@ -70,7 +70,7 @@ Memory under that load: Kompleto 33 MB, Postgres 118 MB, ClamAV about 1 GB. The 
 
 ## The AI model (the Taglish test)
 
-Haiku and Sonnet each wrote the 10 test cases with Kompleto's exact request. A blind judge (Claude Opus, told to judge as a Manila bookkeeper) compared each pair twice with the order swapped, so a verdict that flipped counts as a tie: **Sonnet 8, Haiku 1, tie 1**, with 9 of 10 verdicts the same in both orders. The judge's reasons: Haiku's openings were sometimes awkward ("Hi Nena po!") and its Tagalog stiffer; Sonnet read like a real bookkeeper and matched each reminder's stage. Cost per draft: Haiku US$0.0002, Sonnet US$0.003, under US$1 a month for a 5-Firm pilot either way. Details: `prototypes/taglish-test/` (`judge`). The model is the owner's call (`LLM_MODEL`).
+Haiku and Sonnet each wrote the 10 test cases with Kompleto's exact request. A blind judge (Claude Opus, told to judge as a Manila bookkeeper) compared each pair twice with the order swapped, so a verdict that flipped counts as a tie: **Sonnet 8, Haiku 1, tie 1**, with 9 of 10 verdicts the same in both orders. The judge's reasons: Haiku's openings were sometimes awkward ("Hi Nena po!") and its Tagalog stiffer; Sonnet read like a real bookkeeper and matched each reminder's stage. Cost per draft: Haiku US$0.0002, Sonnet US$0.003, under US$1 a month for a 5-Firm pilot either way. The owner chose Sonnet (2026-11-09); it is now the default `LLM_MODEL`, and the prototype is deleted (`docs/decisions.md`).
 
 ## What the rehearsal could not cover, and why
 

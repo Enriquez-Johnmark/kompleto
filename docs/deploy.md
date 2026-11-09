@@ -112,7 +112,7 @@ UPLOAD_DIR=/var/lib/kompleto/uploads          # ~/kompleto/uploads on the Mac
 WEB_DIR=/opt/kompleto/web                     # ~/kompleto/web on the Mac
 SUPPORT_EMAIL=help@getkompleto.com
 CLAMD_ADDR=127.0.0.1:3310                     # Kompleto won't start live without it
-# ANTHROPIC_API_KEY=   only once paid for; drafts are templates until then
+ANTHROPIC_API_KEY=<your key>                  # Claude Sonnet words the Drafts; without it, templates
 ```
 
 For backups, `/etc/kompleto/backup.env` (path A) or the same file (path B):
