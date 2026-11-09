@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into firms (id, cut_off_offset_days)\n             select tenant_id, $2 from accounts where tenant_id = $1\n             on conflict (id) do update set cut_off_offset_days = excluded.cut_off_offset_days",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "272aa7aecdd8cd3b714b35ea7c312a7974444bbd259f9d0cd3f6493a03b8d97c"
+}

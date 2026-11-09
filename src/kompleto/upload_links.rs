@@ -160,7 +160,7 @@ impl UploadLinks {
     pub async fn find(&self, firm: FirmId, client: ClientId, period: &str) -> Result<Option<OpenLink>, sqlx::Error> {
         let row = sqlx::query!(
             "select l.id, l.cut_off from upload_links l
-             join firms f on f.id = l.firm_id and f.closed_at is null
+             join accounts a on a.tenant_id = l.firm_id and a.closed_at is null
              where l.firm_id = $1 and l.client_id = $2 and l.period = $3",
             firm.as_uuid(),
             client.as_uuid(),
@@ -197,7 +197,7 @@ impl UploadLinks {
         let id = self.signer.verify(token).ok_or(LinkError::NotFound)?;
         let row = sqlx::query!(
             "select l.firm_id, l.client_id, l.period, l.cut_off, l.expires_at from upload_links l
-             join firms f on f.id = l.firm_id and f.closed_at is null
+             join accounts a on a.tenant_id = l.firm_id and a.closed_at is null
              where l.id = $1",
             id,
         )
@@ -235,7 +235,7 @@ impl UploadLinks {
         };
         let row = sqlx::query!(
             "select l.firm_id, l.client_id, l.period, l.cut_off from upload_links l
-             join firms f on f.id = l.firm_id and f.closed_at is null
+             join accounts a on a.tenant_id = l.firm_id and a.closed_at is null
              where l.id = $1",
             id,
         )

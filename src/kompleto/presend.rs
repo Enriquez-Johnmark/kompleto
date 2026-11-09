@@ -48,7 +48,7 @@ impl KompletoChecks {
         // Run before every send, so it also stops retries and anything
         // approved in the moment the account closed (I2).
         let closed = sqlx::query_scalar!(
-            r#"select closed_at is not null as "closed!" from firms where id = $1"#,
+            r#"select closed_at is not null as "closed!" from accounts where tenant_id = $1"#,
             firm.as_uuid()
         )
         .fetch_optional(&self.pool)
@@ -98,7 +98,7 @@ impl KompletoChecks {
         }
         // A login email goes to one of the Firm's own members (M9).
         let to_member = sqlx::query_scalar!(
-            r#"select exists (select 1 from firm_members where firm_id = $1 and lower(email) = lower($2)) as "to_member!""#,
+            r#"select exists (select 1 from account_members where tenant_id = $1 and lower(email) = lower($2)) as "to_member!""#,
             firm.as_uuid(),
             email.to_address.trim(),
         )

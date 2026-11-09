@@ -71,7 +71,7 @@ async fn j2_a_login_is_logged(pool: PgPool) {
     let page = app.api(Method::GET, "/api/activity", Some(&cookie), None).await;
 
     let actors: Vec<String> =
-        sqlx::query_scalar("select actor from audit_events where tenant_id = $1 and action = 'firm.logged_in'")
+        sqlx::query_scalar("select actor from audit_events where tenant_id = $1 and action = 'account.logged_in'")
             .bind(santos.as_uuid())
             .fetch_all(&app.pool)
             .await

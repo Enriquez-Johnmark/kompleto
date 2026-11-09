@@ -13,39 +13,20 @@
 
 use std::sync::Arc;
 
-use sha2::{Digest, Sha256};
 use sqlx::PgPool;
-use time::Duration;
 
-use serde_json::json;
-
-use super::activity::record_by;
 use super::firms::{FirmError, FirmId};
 use super::members::{MemberId, Role};
 use super::presend::KompletoChecks;
+use crate::engine::accounts::{LoginError, LoginLink, Logins};
 use crate::engine::clock::Clock;
 use crate::engine::mail::Email;
-use crate::engine::outbox::{Outbox, OutboxError};
+use crate::engine::outbox::OutboxError;
 
-/// How long a login link works.
-pub const LINK_LIFETIME: Duration = Duration::minutes(15);
-/// How long a session lasts.
-pub const SESSION_LIFETIME: Duration = Duration::days(30);
-/// Login emails per address per hour.
-pub const MAX_LINKS_PER_HOUR: i64 = 5;
-/// Login and invitation emails per Firm per hour, across its members.
-pub const MAX_FIRM_LINKS_PER_HOUR: i64 = 30;
-/// The approver recorded for login emails.
-pub const LOGIN_APPROVER: &str = "system:login";
-
-/// Whether a login email was sent. Callers show the same screen either way.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LoginOutcome {
-    /// A link is on its way.
-    Sent,
-    /// No account, or too many links this hour.
-    NotSent,
-}
+pub use crate::engine::accounts::{
+    LINK_LIFETIME, LOGIN_APPROVER, LoginOutcome, MAX_ACCOUNT_LINKS_PER_HOUR as MAX_FIRM_LINKS_PER_HOUR,
+    MAX_LINKS_PER_HOUR, SESSION_LIFETIME,
+};
 
 /// Why a login link is emailed.
 #[derive(Debug, Clone, Copy)]
@@ -88,12 +69,21 @@ pub enum AuthError {
     Random(String),
 }
 
-/// Logins and sessions.
+impl From<LoginError> for AuthError {
+    fn from(err: LoginError) -> Self {
+        match err {
+            LoginError::Database(err) => Self::Database(err),
+            LoginError::Outbox(err) => Self::Outbox(err),
+            LoginError::Random(reason) => Self::Random(reason),
+        }
+    }
+}
+
+/// Logins and sessions: the engine's (`engine::accounts`), with Kompleto's
+/// login, invitation and welcome emails.
 #[derive(Clone)]
 pub struct Auth {
-    pool: PgPool,
-    clock: Arc<dyn Clock>,
-    outbox: Outbox,
+    logins: Logins,
     checks: KompletoChecks,
     base_url: String,
 }
@@ -102,10 +92,8 @@ impl Auth {
     /// Logins whose links point at `base_url`, e.g. `https://app.getkompleto.com`.
     pub fn new(pool: PgPool, clock: Arc<dyn Clock>, base_url: &str, checks: KompletoChecks) -> Self {
         Self {
-            outbox: Outbox::new(pool.clone(), clock.clone()),
+            logins: Logins::new(pool, clock),
             checks,
-            pool,
-            clock,
             base_url: base_url.trim_end_matches('/').to_owned(),
         }
     }
@@ -129,160 +117,56 @@ impl Auth {
     }
 
     async fn send_link(&self, email: &str, kind: LinkKind<'_>) -> Result<LoginOutcome, AuthError> {
-        let now = self.clock.now();
-        let mut tx = self.pool.begin().await?;
-        let Some(member) = sqlx::query!(
-            "select m.id, m.firm_id, m.email, f.name as firm_name
-             from firm_members m join firms f on f.id = m.firm_id and f.closed_at is null
-             where lower(m.email) = lower($1)",
-            email.trim(),
-        )
-        .fetch_optional(&mut *tx)
-        .await?
-        else {
-            return Ok(LoginOutcome::NotSent);
-        };
-        let firm = FirmId::from(member.firm_id);
-        // Locking the Firm serialises its requests, so parallel ones can't
-        // all pass the limits before any of them is counted.
-        sqlx::query!("select id from firms where id = $1 for update", firm.as_uuid())
-            .fetch_one(&mut *tx)
-            .await?;
-        // Counted from the outbox, which keeps the emails of removed members
-        // too: removing and inviting an address again can't reset its limit.
-        let recent = sqlx::query!(
-            r#"select count(*) filter (where lower(to_address) = lower($2)) as "to_address!",
-                      count(*) filter (where approved_by = $4) as "firm!"
-               from outbox_messages where tenant_id = $1 and created_at > $3"#,
-            firm.as_uuid(),
-            member.email,
-            now - Duration::hours(1),
-            LOGIN_APPROVER,
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-        if recent.to_address >= MAX_LINKS_PER_HOUR || recent.firm >= MAX_FIRM_LINKS_PER_HOUR {
-            tracing::warn!(%firm, "login emails limited this hour");
-            return Ok(LoginOutcome::NotSent);
-        }
-        let token = random_token()?;
-        sqlx::query!(
-            "insert into login_tokens (token_hash, firm_id, member_id, created_at, expires_at)
-             values ($1, $2, $3, $4, $5)",
-            &hash(&token)[..],
-            firm.as_uuid(),
-            member.id,
-            now,
-            now + LINK_LIFETIME,
-        )
-        .execute(&mut *tx)
-        .await?;
-        let link = format!("{}/login/{token}", self.base_url);
-        let (subject, opening) = match kind {
-            LinkKind::Login => (
-                "Your Kompleto login link".to_owned(),
-                format!("Hi,\n\nOpen this link to log in to {} on Kompleto:", member.firm_name),
-            ),
-            LinkKind::Invitation { invited_by: owner } => (
-                format!("You've been added to {} on Kompleto", member.firm_name),
-                format!(
-                    "Hi,\n\n{owner} added you to {} on Kompleto, which chases clients for their \
-                     BIR documents. Open this link to log in:",
-                    member.firm_name
+        let compose = |link: &LoginLink<'_>| {
+            let firm_name = link.account_name;
+            let (subject, opening) = match kind {
+                LinkKind::Login => (
+                    "Your Kompleto login link".to_owned(),
+                    format!("Hi,\n\nOpen this link to log in to {firm_name} on Kompleto:"),
                 ),
-            ),
-            LinkKind::Welcome => (
-                "Your Kompleto account is ready".to_owned(),
-                format!(
-                    "Hi,\n\nWelcome to Kompleto! The account for {} is ready. Open this link to log in:",
-                    member.firm_name
+                LinkKind::Invitation { invited_by: owner } => (
+                    format!("You've been added to {firm_name} on Kompleto"),
+                    format!(
+                        "Hi,\n\n{owner} added you to {firm_name} on Kompleto, which chases clients for their \
+                         BIR documents. Open this link to log in:"
+                    ),
                 ),
-            ),
+                LinkKind::Welcome => (
+                    "Your Kompleto account is ready".to_owned(),
+                    format!(
+                        "Hi,\n\nWelcome to Kompleto! The account for {firm_name} is ready. Open this link to log in:"
+                    ),
+                ),
+            };
+            let link = format!("{}/login/{}", self.base_url, link.token);
+            Email {
+                // The engine sends it to the member's own address.
+                to_address: String::new(),
+                from_name: "Kompleto".to_owned(),
+                reply_to: None,
+                subject,
+                body_text: format!(
+                    "{opening}\n\n{link}\n\nIt works once, for the next 15 minutes. After that, ask for a new one \
+                     on Kompleto's login page. If you didn't expect this email, ignore it.\n"
+                ),
+            }
         };
-        let email = Email {
-            to_address: member.email,
-            from_name: "Kompleto".to_owned(),
-            reply_to: None,
-            subject,
-            body_text: format!(
-                "{opening}\n\n{link}\n\nIt works once, for the next 15 minutes. After that, ask for a new one \
-                 on Kompleto's login page. If you didn't expect this email, ignore it.\n"
-            ),
-        };
-        let id = self.outbox.create_draft_in(&mut tx, firm, &email, None).await?;
-        tx.commit().await?;
-        let hash = self.outbox.get(firm, id).await?.content_hash();
-        self.outbox
-            .approve(firm, id, LOGIN_APPROVER, &hash, &self.checks)
-            .await?;
-        Ok(LoginOutcome::Sent)
+        Ok(self.logins.send_link(email, compose, &self.checks).await?)
     }
 
     /// Uses up a login link and starts a session, returning the session's
     /// secret for the cookie. `None` if the link is unknown, used or expired.
     pub async fn log_in(&self, token: &str) -> Result<Option<String>, AuthError> {
-        let now = self.clock.now();
-        let mut tx = self.pool.begin().await?;
-        let used = sqlx::query!(
-            "update login_tokens t set used_at = $2
-             from firms f, firm_members m
-             where t.token_hash = $1 and t.used_at is null and t.expires_at > $2
-               and f.id = t.firm_id and f.closed_at is null
-               and m.id = t.member_id and m.firm_id = t.firm_id
-             returning t.firm_id, t.member_id, m.email",
-            &hash(token)[..],
-            now,
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
-        let Some(used) = used else {
-            return Ok(None);
-        };
-        let session = random_token()?;
-        sqlx::query!(
-            "insert into sessions (session_hash, firm_id, member_id, created_at, expires_at)
-             values ($1, $2, $3, $4, $5)",
-            &hash(&session)[..],
-            used.firm_id,
-            used.member_id,
-            now,
-            now + SESSION_LIFETIME,
-        )
-        .execute(&mut *tx)
-        .await?;
-        let firm = FirmId::from(used.firm_id);
-        record_by(
-            &mut tx,
-            firm,
-            &used.email,
-            now,
-            "firm.logged_in",
-            ("firm", firm.as_uuid()),
-            json!({}),
-        )
-        .await?;
-        tx.commit().await?;
-        Ok(Some(session))
+        Ok(self.logins.log_in(token).await?)
     }
 
     /// Who a live session belongs to.
     pub async fn session(&self, session: &str) -> Result<Option<Session>, AuthError> {
-        let row = sqlx::query!(
-            "select s.firm_id, s.member_id, m.email, m.role
-             from sessions s
-             join firms f on f.id = s.firm_id and f.closed_at is null
-             join firm_members m on m.id = s.member_id and m.firm_id = s.firm_id
-             where s.session_hash = $1 and s.expires_at > $2",
-            &hash(session)[..],
-            self.clock.now(),
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(row.map(|row| Session {
-            firm: row.firm_id.into(),
-            member: row.member_id.into(),
-            email: row.email,
-            role: Role::parse(&row.role),
+        Ok(self.logins.session(session).await?.map(|session| Session {
+            firm: session.tenant,
+            member: session.member,
+            email: session.email,
+            role: session.role,
         }))
     }
 
@@ -293,20 +177,6 @@ impl Auth {
 
     /// Ends a session.
     pub async fn log_out(&self, session: &str) -> Result<(), AuthError> {
-        sqlx::query!("delete from sessions where session_hash = $1", &hash(session)[..])
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+        Ok(self.logins.log_out(session).await?)
     }
-}
-
-/// 32 random bytes as 64 lowercase hex digits.
-fn random_token() -> Result<String, AuthError> {
-    let mut bytes = [0_u8; 32];
-    getrandom::fill(&mut bytes).map_err(|err| AuthError::Random(err.to_string()))?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
-}
-
-fn hash(secret: &str) -> [u8; 32] {
-    Sha256::digest(secret.as_bytes()).into()
 }

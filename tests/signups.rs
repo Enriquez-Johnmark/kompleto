@@ -19,7 +19,7 @@ async fn l1_a_request_creates_nothing_until_the_operator_approves_it(pool: PgPoo
         .request(" Cruz Bookkeeping ", " Mia@Cruz.test ", true)
         .await
         .unwrap();
-    let firms_before: i64 = sqlx::query_scalar("select count(*) from firms")
+    let firms_before: i64 = sqlx::query_scalar("select count(*) from accounts")
         .fetch_one(&pool)
         .await
         .unwrap();
@@ -146,16 +146,32 @@ async fn l1_requests_are_limited_per_hour_and_expire_after_30_days(pool: PgPool)
 }
 
 #[sqlx::test]
-async fn l1_the_owner_of_a_closed_firm_can_ask_again(pool: PgPool) {
-    let firms = Firms::new(pool.clone(), clock());
+async fn l1_the_owner_of_a_closed_firm_can_ask_again_once_it_is_erased(pool: PgPool) {
+    use std::sync::Arc;
+
+    use kompleto::engine::clock::Clock;
+    use kompleto::kompleto::closing::{close, erase_due};
+
+    let clock = clock();
+    let dynamic: Arc<dyn Clock> = clock.clone();
+    let firms = Firms::new(pool.clone(), clock.clone());
     let santos = firms.create("Santos Bookkeeping", "bea@santos.test").await.unwrap();
-    sqlx::query("update firms set closed_at = now() where id = $1")
-        .bind(santos.as_uuid())
-        .execute(&pool)
+    close(&pool, &dynamic, santos, "Santos Bookkeeping", "bea@santos.test")
         .await
         .unwrap();
-    let signups = Signups::new(pool.clone(), clock());
+    let signups = Signups::new(pool.clone(), clock.clone());
 
+    // Closed, the account still holds the address: the operator reopens it
+    // instead. The answer is the same as ever.
+    signups
+        .request("Santos Bookkeeping", "bea@santos.test", true)
+        .await
+        .unwrap();
+    assert!(signups.pending().await.unwrap().is_empty());
+
+    clock.advance(time::Duration::days(7));
+    let files = common::files(&pool, clock.clone());
+    assert_eq!(erase_due(&pool, &dynamic, &files).await.unwrap(), 1);
     signups
         .request("Santos Bookkeeping", "bea@santos.test", true)
         .await

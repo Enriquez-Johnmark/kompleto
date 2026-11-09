@@ -121,7 +121,7 @@ async fn g1_unsigned_or_wrongly_signed_mail_is_refused_and_nothing_kept(pool: Pg
 async fn g1_the_firm_reads_a_reply_as_plain_text_data(pool: PgPool) {
     let app = TestApp::new(pool);
     let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
-    let santos: uuid::Uuid = sqlx::query_scalar("select id from firms")
+    let santos: uuid::Uuid = sqlx::query_scalar("select tenant_id from accounts")
         .fetch_one(&app.pool)
         .await
         .unwrap();

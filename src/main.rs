@@ -223,7 +223,7 @@ async fn serve(config: &Config, pool: PgPool, clock: Arc<dyn Clock>) -> anyhow::
                 Ok(forgotten) => tracing::info!(forgotten, "reply text past 90 days deleted"),
                 Err(err) => tracing::error!(%err, "deleting old reply text failed"),
             }
-            match closing::erase_due(&sweep_pool, &files, sweep_clock.now()).await {
+            match closing::erase_due(&sweep_pool, &sweep_clock, &files).await {
                 Ok(0) => {}
                 Ok(erased) => tracing::info!(erased, "closed accounts erased"),
                 Err(err) => tracing::error!(%err, "erasing closed accounts failed"),

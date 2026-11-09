@@ -102,14 +102,18 @@ impl Scheduler {
         }
         let rows = sqlx::query_as!(
             SweepRow,
-            "select c.id, c.firm_id, c.created_at, f.name as firm_name, f.cut_off_offset_days as firm_offset
-             from clients c join firms f on f.id = c.firm_id
-             where not c.paused and f.closed_at is null
+            // 5 is the default cut-off offset (firms::DEFAULT_CUT_OFF_OFFSET_DAYS).
+            r#"select c.id, c.firm_id, c.created_at, a.name as firm_name,
+                    coalesce(f.cut_off_offset_days, 5::smallint) as "firm_offset!"
+             from clients c
+             join accounts a on a.tenant_id = c.firm_id
+             left join firms f on f.id = c.firm_id
+             where not c.paused and a.closed_at is null
                and not exists (
                    select 1 from bounces b
                    where b.firm_id = c.firm_id and b.client_id = c.id
                      and b.kind in ('bounce', 'complaint') and b.address = lower(trim(c.email)))
-             order by c.created_at, c.id"
+             order by c.created_at, c.id"#
         )
         .fetch_all(&self.pool)
         .await?;

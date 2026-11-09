@@ -91,7 +91,7 @@ async fn i2_closing_an_account_stops_everything_at_once(pool: PgPool) {
         StatusCode::UNAUTHORIZED,
         "logged out"
     );
-    let before: i64 = sqlx::query_scalar("select count(*) from login_tokens")
+    let before: i64 = sqlx::query_scalar("select count(*) from account_login_tokens")
         .fetch_one(&app.pool)
         .await
         .unwrap();
@@ -102,7 +102,7 @@ async fn i2_closing_an_account_stops_everything_at_once(pool: PgPool) {
         Some(serde_json::json!({"email": "santos.bookkeeping@firm.test"})),
     )
     .await;
-    let after: i64 = sqlx::query_scalar("select count(*) from login_tokens")
+    let after: i64 = sqlx::query_scalar("select count(*) from account_login_tokens")
         .fetch_one(&app.pool)
         .await
         .unwrap();
@@ -113,7 +113,7 @@ async fn i2_closing_an_account_stops_everything_at_once(pool: PgPool) {
     scheduler.run_once().await.unwrap();
     assert_eq!(waiting(&app, santos).await, ["cancelled"], "no new Drafts");
     let logged: i64 =
-        sqlx::query_scalar("select count(*) from audit_events where tenant_id = $1 and action = 'firm.closed'")
+        sqlx::query_scalar("select count(*) from audit_events where tenant_id = $1 and action = 'account.closed'")
             .bind(santos.as_uuid())
             .fetch_one(&app.pool)
             .await
@@ -134,7 +134,7 @@ async fn i2_no_session_or_login_link_works_for_a_closed_account(pool: PgPool) {
     .await;
     let token = app.login_token_for("santos.bookkeeping@firm.test").await;
     // Closed in the same moment the link was made, so neither was deleted.
-    sqlx::query("update firms set closed_at = now(), erase_after = now() + interval '7 days' where id = $1")
+    sqlx::query("update accounts set closed_at = now(), erase_after = now() + interval '7 days' where tenant_id = $1")
         .bind(santos.as_uuid())
         .execute(&app.pool)
         .await

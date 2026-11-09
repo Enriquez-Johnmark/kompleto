@@ -2,23 +2,23 @@
 //! are cancelled, sessions end, logins and Upload links stop working. After
 //! [`GRACE_DAYS`] all its data is deleted; until then an operator can undo
 //! it ([`reopen`]). Cancelled messages stay cancelled.
+//!
+//! The engine's accounts do the closing, reopening and erasing
+//! (`engine::accounts`); Kompleto's rows point at the account, so erasing it
+//! removes them too.
 
 use std::sync::Arc;
 
-use serde_json::json;
-use sqlx::{PgConnection, PgPool};
-use time::{Duration, OffsetDateTime};
+use sqlx::PgPool;
+use time::OffsetDateTime;
 
-use super::activity::record_by_firm;
 use super::firms::FirmId;
-use crate::engine::audit::{self, AuditEvent};
+use crate::engine::accounts::{Accounts, CloseError};
 use crate::engine::clock::Clock;
 use crate::engine::files::{FileError, Files};
-use crate::engine::outbox::{Outbox, OutboxError};
-use crate::engine::tenants;
+use crate::engine::outbox::OutboxError;
 
-/// Days between closing and deleting everything.
-pub const GRACE_DAYS: i64 = 7;
+pub use crate::engine::accounts::GRACE_DAYS;
 
 /// Why an account wasn't closed.
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +34,18 @@ pub enum ClosingError {
     Database(#[from] sqlx::Error),
 }
 
+impl From<CloseError> for ClosingError {
+    fn from(err: CloseError) -> Self {
+        match err {
+            CloseError::NameMismatch => Self::NameMismatch,
+            // Only a logged-in member closes, so their Firm exists.
+            CloseError::NotFound => Self::Database(sqlx::Error::RowNotFound),
+            CloseError::Outbox(err) => Self::Outbox(err),
+            CloseError::Database(err) => Self::Database(err),
+        }
+    }
+}
+
 /// Closes `firm`'s account if `typed` is its name (ignoring case and
 /// surrounding spaces); returns when everything will be deleted. Closing
 /// again keeps the date and only retries cancelling waiting messages.
@@ -44,130 +56,21 @@ pub async fn close(
     typed: &str,
     actor: &str,
 ) -> Result<OffsetDateTime, ClosingError> {
-    let now = clock.now();
-    let mut tx = pool.begin().await?;
-    let row = sqlx::query!(
-        "select name, erase_after from firms where id = $1 for update",
-        firm.as_uuid()
-    )
-    .fetch_one(&mut *tx)
-    .await?;
-    if row.name.trim().to_lowercase() != typed.trim().to_lowercase() {
-        return Err(ClosingError::NameMismatch);
-    }
-    // Closing again only retries the cancelling below.
-    let erase_after = if let Some(erase_after) = row.erase_after {
-        tx.rollback().await?;
-        erase_after
-    } else {
-        mark_closed(&mut tx, firm, now).await?;
-        tx.commit().await?;
-        now + Duration::days(GRACE_DAYS)
-    };
-
-    // Closed first, so nothing new is drafted while these are cancelled.
-    let waiting = sqlx::query_scalar!(
-        "select id from outbox_messages where tenant_id = $1 and status in ('draft', 'approved')",
-        firm.as_uuid(),
-    )
-    .fetch_all(pool)
-    .await?;
-    let outbox = Outbox::new(pool.clone(), clock.clone());
-    for id in waiting {
-        match outbox.cancel(firm, id.into(), actor).await {
-            // Already being sent: too late to stop.
-            Ok(()) | Err(OutboxError::WrongStatus(_)) => {}
-            Err(err) => return Err(err.into()),
-        }
-    }
-    Ok(erase_after)
+    Ok(Accounts::new(pool.clone(), clock.clone())
+        .close(firm, typed, actor)
+        .await?)
 }
 
 /// Reopens the closed account that logs in as `login_email`, before it's
 /// erased; an operator does this when a Firm asks. False if there's no such
 /// closed account.
 pub async fn reopen(pool: &PgPool, clock: &Arc<dyn Clock>, login_email: &str) -> Result<bool, sqlx::Error> {
-    let now = clock.now();
-    let mut tx = pool.begin().await?;
-    let reopened = sqlx::query_scalar!(
-        "update firms set closed_at = null, erase_after = null
-         where lower(login_email) = lower($1) and closed_at is not null and erase_after > $2
-         returning id",
-        login_email.trim(),
-        now,
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    let Some(id) = reopened else {
-        return Ok(false);
-    };
-    let event = AuditEvent {
-        tenant: id.into(),
-        at: now,
-        actor: "operator",
-        action: "firm.reopened",
-        subject_type: "firm",
-        subject_id: id,
-        details: json!({}),
-    };
-    audit::record(&mut *tx, &event).await?;
-    tx.commit().await?;
-    Ok(true)
+    Accounts::new(pool.clone(), clock.clone()).reopen(login_email).await
 }
 
-/// Deletes all data and files of every Firm closed [`GRACE_DAYS`] ago by
-/// `now`; returns how many Firms. A system-wide worker: it names each Firm
-/// in every delete. The engine's rows go first and the Firm's row last, so
-/// a crash part way leaves the Firm to be found and finished next time. One
-/// Firm that fails is logged and tried again next time; the rest go on.
-pub async fn erase_due(pool: &PgPool, files: &Files, now: OffsetDateTime) -> Result<usize, FileError> {
-    let due = sqlx::query_scalar!("select id from firms where erase_after <= $1", now)
-        .fetch_all(pool)
-        .await?;
-    let mut erased = 0;
-    for id in due {
-        let firm = FirmId::from(id);
-        match erase(pool, files, firm, now).await {
-            Ok(()) => {
-                erased += 1;
-                tracing::info!(%firm, "closed account erased");
-            }
-            Err(err) => tracing::error!(%firm, %err, "erasing a closed account failed"),
-        }
-    }
-    Ok(erased)
-}
-
-async fn erase(pool: &PgPool, files: &Files, firm: FirmId, now: OffsetDateTime) -> Result<(), FileError> {
-    tenants::erase(pool, files, firm).await?;
-    // Its Clients and everything about them go with it (on delete cascade).
-    sqlx::query!(
-        "delete from firms where id = $1 and erase_after <= $2",
-        firm.as_uuid(),
-        now
-    )
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
-/// Marks `firm` closed, ends its sessions and logs it.
-async fn mark_closed(tx: &mut PgConnection, firm: FirmId, now: OffsetDateTime) -> Result<(), sqlx::Error> {
-    let erase_after = now + Duration::days(GRACE_DAYS);
-    sqlx::query!(
-        "update firms set closed_at = $2, erase_after = $3 where id = $1",
-        firm.as_uuid(),
-        now,
-        erase_after,
-    )
-    .execute(&mut *tx)
-    .await?;
-    sqlx::query!("delete from sessions where firm_id = $1", firm.as_uuid())
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query!("delete from login_tokens where firm_id = $1", firm.as_uuid())
-        .execute(&mut *tx)
-        .await?;
-    record_by_firm(tx, firm, now, "firm.closed", ("firm", firm.as_uuid()), json!({})).await?;
-    Ok(())
+/// Deletes all data and files of every Firm closed [`GRACE_DAYS`] ago;
+/// returns how many Firms. A system-wide worker. One Firm that fails is
+/// logged and tried again next time; the rest go on.
+pub async fn erase_due(pool: &PgPool, clock: &Arc<dyn Clock>, files: &Files) -> Result<usize, FileError> {
+    Accounts::new(pool.clone(), clock.clone()).erase_due(files).await
 }

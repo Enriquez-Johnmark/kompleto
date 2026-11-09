@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select count(*) as \"count!\" from outbox_messages\n           where tenant_id = $1 and status = 'approved' and expires_at is not null and approved_at < $2\n             and approved_by <> $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f8101106f65f26065e209ca2853192a1352e565aba68e934a41d8749e4ea05bf"
+}

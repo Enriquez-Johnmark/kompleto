@@ -98,9 +98,13 @@ pub(crate) async fn record_by_firm(
     subject: (&str, Uuid),
     details: serde_json::Value,
 ) -> Result<(), sqlx::Error> {
-    let actor = sqlx::query_scalar!("select login_email from firms where id = $1", firm.as_uuid())
-        .fetch_one(&mut *tx)
-        .await?;
+    // The Firm's login address is its owner's.
+    let actor = sqlx::query_scalar!(
+        "select email from account_members where tenant_id = $1 and role = 'owner'",
+        firm.as_uuid()
+    )
+    .fetch_one(&mut *tx)
+    .await?;
     let event = AuditEvent {
         tenant: firm,
         at,
@@ -139,13 +143,14 @@ pub fn describe(action: &str) -> &str {
         "payor.added" => "Added a Payor",
         "payor.removed" => "Removed a Payor",
         "reply.received" => "A reply arrived",
-        "firm.logged_in" => "Logged in",
+        // The engine's account events, and their names before 2026-11-08.
+        "account.logged_in" | "firm.logged_in" => "Logged in",
         "firm.exported" => "Downloaded all data",
         "firm.cut_off_changed" => "Changed the default cut-off",
-        "firm.closed" => "Closed the account",
-        "member.added" => "Added a staff member",
-        "member.removed" => "Removed a staff member",
-        "firm.reopened" => "Reopened the account",
+        "account.closed" | "firm.closed" => "Closed the account",
+        "account.member_added" | "member.added" => "Added a staff member",
+        "account.member_removed" | "member.removed" => "Removed a staff member",
+        "account.reopened" | "firm.reopened" => "Reopened the account",
         "file.deleted" => "Deleted an uploaded file",
         other => other,
     }

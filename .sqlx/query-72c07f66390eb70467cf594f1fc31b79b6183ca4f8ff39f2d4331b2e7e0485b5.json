@@ -1,44 +1,33 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, name, login_email, cut_off_offset_days from firms where id = $1",
+  "query": "select a.name, m.email, f.cut_off_offset_days as \"cut_off_offset_days?\"\n               from accounts a\n               join account_members m on m.tenant_id = a.tenant_id and m.role = 'owner'\n               left join firms f on f.id = a.tenant_id\n               where a.tenant_id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "firms",
-            "name": "id"
-          }
-        }
-      },
-      {
-        "ordinal": 1,
         "name": "name",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "firms",
+            "table": "accounts",
             "name": "name"
           }
         }
       },
       {
-        "ordinal": 2,
-        "name": "login_email",
+        "ordinal": 1,
+        "name": "email",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "firms",
-            "name": "login_email"
+            "table": "account_members",
+            "name": "email"
           }
         }
       },
       {
-        "ordinal": 3,
-        "name": "cut_off_offset_days",
+        "ordinal": 2,
+        "name": "cut_off_offset_days?",
         "type_info": "Int2",
         "origin": {
           "Table": {
@@ -56,9 +45,8 @@
     "nullable": [
       false,
       false,
-      false,
-      false
+      true
     ]
   },
-  "hash": "a9b8915cd413e0d48b86dbe462f2843fbee2892332d3951f8312a5c988be64f5"
+  "hash": "72c07f66390eb70467cf594f1fc31b79b6183ca4f8ff39f2d4331b2e7e0485b5"
 }

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use common::{clock, firm, nena};
-use kompleto::engine::clock::{Clock, FixedClock};
+use kompleto::engine::clock::FixedClock;
 use kompleto::engine::files::{FileCipher, Files, LocalDisk};
 use kompleto::kompleto::clients::Clients;
 use kompleto::kompleto::closing::{close, erase_due};
@@ -20,7 +20,7 @@ use time::Duration;
 use time::macros::date;
 
 /// Every table that holds a Firm's rows, and its column naming the Firm.
-const TABLES: [(&str, &str); 18] = [
+const TABLES: [(&str, &str); 20] = [
     ("firms", "id"),
     ("clients", "firm_id"),
     ("payors", "firm_id"),
@@ -32,8 +32,10 @@ const TABLES: [(&str, &str); 18] = [
     ("uploads", "firm_id"),
     ("replies", "firm_id"),
     ("bounces", "firm_id"),
-    ("sessions", "firm_id"),
-    ("login_tokens", "firm_id"),
+    ("accounts", "tenant_id"),
+    ("account_members", "tenant_id"),
+    ("account_sessions", "tenant_id"),
+    ("account_login_tokens", "tenant_id"),
     ("outbox_messages", "tenant_id"),
     ("jobs", "tenant_id"),
     ("llm_calls", "tenant_id"),
@@ -122,14 +124,14 @@ async fn i2_a_closed_accounts_data_and_files_are_all_deleted_after_7_days(pool: 
 
     clock.advance(Duration::days(6));
     assert_eq!(
-        erase_due(&pool, &files, clock.now()).await.unwrap(),
+        erase_due(&pool, &dynamic, &files).await.unwrap(),
         0,
         "not before 7 days"
     );
     assert!(rows(&pool, santos).await > santos_rows, "still there, plus the closing");
     clock.advance(Duration::days(1));
-    assert_eq!(erase_due(&pool, &files, clock.now()).await.unwrap(), 1);
-    assert_eq!(erase_due(&pool, &files, clock.now()).await.unwrap(), 0, "once");
+    assert_eq!(erase_due(&pool, &dynamic, &files).await.unwrap(), 1);
+    assert_eq!(erase_due(&pool, &dynamic, &files).await.unwrap(), 0, "once");
 
     assert_eq!(rows(&pool, santos).await, 0, "nothing of the Firm left");
     assert!(
@@ -185,9 +187,9 @@ async fn i2_an_operator_can_reopen_a_closed_account_before_it_is_erased(pool: Pg
         "can log in"
     );
     clock.advance(Duration::days(8));
-    assert_eq!(erase_due(&pool, &files, clock.now()).await.unwrap(), 0, "not erased");
+    assert_eq!(erase_due(&pool, &dynamic, &files).await.unwrap(), 0, "not erased");
     let logged: i64 =
-        sqlx::query_scalar("select count(*) from audit_events where tenant_id = $1 and action = 'firm.reopened'")
+        sqlx::query_scalar("select count(*) from audit_events where tenant_id = $1 and action = 'account.reopened'")
             .bind(santos.as_uuid())
             .fetch_one(&pool)
             .await

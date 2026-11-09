@@ -126,10 +126,13 @@ async fn dashboard(State(state): State<AppState>, ApiFirm(firm): ApiFirm) -> Res
     }
     rows.sort_by_key(|(order, _)| *order);
     let held = sqlx::query_scalar!(
+        // Login emails have a deadline too (their link's), but aren't Reminders.
         r#"select count(*) as "count!" from outbox_messages
-           where tenant_id = $1 and status = 'approved' and expires_at is not null and approved_at < $2"#,
+           where tenant_id = $1 and status = 'approved' and expires_at is not null and approved_at < $2
+             and approved_by <> $3"#,
         firm.as_uuid(),
         state.clock.now() - HELD_AFTER,
+        crate::kompleto::auth::LOGIN_APPROVER,
     )
     .fetch_one(&state.pool)
     .await

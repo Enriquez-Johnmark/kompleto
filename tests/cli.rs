@@ -237,7 +237,7 @@ async fn l1_the_operator_lists_approves_and_declines_requests(pool: PgPool) {
             .unwrap();
     assert_eq!(subject, "Your Kompleto account is ready");
     assert_eq!(status, "approved", "on its way with the server's next send");
-    let firms: i64 = sqlx::query_scalar("select count(*) from firms")
+    let firms: i64 = sqlx::query_scalar("select count(*) from accounts")
         .fetch_one(&pool)
         .await
         .unwrap();

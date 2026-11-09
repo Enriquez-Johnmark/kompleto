@@ -1,16 +1,21 @@
-//! Firms: the bookkeepers who use Kompleto. Each is an engine Tenant. There
-//! is no sign-up; we create Firms with `kompleto firm add`.
+//! Firms: the bookkeepers who use Kompleto. Each is an engine account
+//! (`engine::accounts`), whose tenant is the Firm: the account holds its
+//! name, owner, staff and closing; the `firms` table holds only Kompleto's
+//! own settings, and a Firm with no row there has the defaults.
 
 use std::sync::Arc;
 
-use sqlx::{PgConnection, PgPool};
-use time::OffsetDateTime;
+use sqlx::PgPool;
 
 use super::activity::record_as;
-use super::members::{MemberId, is_email_address};
+use crate::engine::accounts::{AccountError, Accounts};
 use crate::engine::clock::Clock;
 use crate::engine::ids::TenantId;
-use crate::engine::outbox::links;
+
+pub use crate::engine::accounts::check_name;
+
+/// A Firm's default days between a Period's earliest Due date and its Cut-off.
+pub const DEFAULT_CUT_OFF_OFFSET_DAYS: u8 = 5;
 
 /// A Firm's ID; the same value is its engine `TenantId`.
 pub type FirmId = TenantId;
@@ -74,28 +79,35 @@ impl Firms {
         }
     }
 
-    /// Creates a Firm.
+    /// Creates a Firm: an open account owned by `login_email`.
     pub async fn create(&self, name: &str, login_email: &str) -> Result<FirmId, FirmError> {
-        let mut tx = self.pool.begin().await?;
-        let id = create_in(&mut tx, self.clock.now(), name, login_email).await?;
-        tx.commit().await?;
-        Ok(id)
+        Accounts::new(self.pool.clone(), self.clock.clone())
+            .create(name, login_email)
+            .await
+            .map_err(FirmError::from)
     }
 
     /// The Firm `id`.
     pub async fn get(&self, id: FirmId) -> Result<Firm, FirmError> {
         let row = sqlx::query!(
-            "select id, name, login_email, cut_off_offset_days from firms where id = $1",
+            r#"select a.name, m.email, f.cut_off_offset_days as "cut_off_offset_days?"
+               from accounts a
+               join account_members m on m.tenant_id = a.tenant_id and m.role = 'owner'
+               left join firms f on f.id = a.tenant_id
+               where a.tenant_id = $1"#,
             id.as_uuid()
         )
         .fetch_optional(&self.pool)
         .await?
         .ok_or(FirmError::NotFound)?;
         Ok(Firm {
-            id: row.id.into(),
+            id,
             name: row.name,
-            login_email: row.login_email,
-            cut_off_offset_days: u8::try_from(row.cut_off_offset_days).unwrap_or(5),
+            login_email: row.email,
+            cut_off_offset_days: row
+                .cut_off_offset_days
+                .and_then(|days| u8::try_from(days).ok())
+                .unwrap_or(DEFAULT_CUT_OFF_OFFSET_DAYS),
         })
     }
 
@@ -105,8 +117,11 @@ impl Firms {
             return Err(FirmError::Invalid("the cut-off offset is 0 to 30 days".to_owned()));
         }
         let mut tx = self.pool.begin().await?;
+        // Kompleto's row is made the first time a setting changes.
         let updated = sqlx::query!(
-            "update firms set cut_off_offset_days = $2 where id = $1",
+            "insert into firms (id, cut_off_offset_days)
+             select tenant_id, $2 from accounts where tenant_id = $1
+             on conflict (id) do update set cut_off_offset_days = excluded.cut_off_offset_days",
             id.as_uuid(),
             i16::from(days)
         )
@@ -135,7 +150,9 @@ impl Firms {
     /// has no Firm yet, so this is the one lookup not scoped by a `FirmId`.
     pub async fn find_by_login_email(&self, email: &str) -> Result<Option<Firm>, FirmError> {
         let id = sqlx::query_scalar!(
-            "select id from firms where lower(login_email) = lower($1) and closed_at is null",
+            "select a.tenant_id from accounts a
+             join account_members m on m.tenant_id = a.tenant_id and m.role = 'owner'
+             where lower(m.email) = lower($1) and a.closed_at is null",
             email.trim()
         )
         .fetch_optional(&self.pool)
@@ -147,57 +164,13 @@ impl Firms {
     }
 }
 
-/// Why `name` can't be a Firm's name, if it can't.
-pub(crate) fn check_name(name: &str) -> Result<(), String> {
-    if name.is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
-        return Err("a firm name is 1 to 100 characters".to_owned());
+impl From<AccountError> for FirmError {
+    fn from(err: AccountError) -> Self {
+        match err {
+            AccountError::Invalid(reason) => Self::Invalid(reason),
+            AccountError::EmailTaken => Self::LoginEmailTaken,
+            AccountError::NotFound => Self::NotFound,
+            AccountError::Database(err) => Self::Database(err),
+        }
     }
-    // The name signs every email; one that reads as a link would make the
-    // pre-send checks (D7) refuse them all.
-    if !links(name).is_empty() {
-        return Err(format!("{name:?} looks like a web address; use the business name"));
-    }
-    Ok(())
-}
-
-/// Creates a Firm, and its owner as its first member, in the caller's
-/// transaction.
-pub(crate) async fn create_in(
-    tx: &mut PgConnection,
-    now: OffsetDateTime,
-    name: &str,
-    login_email: &str,
-) -> Result<FirmId, FirmError> {
-    let (name, login_email) = (name.trim(), login_email.trim());
-    check_name(name).map_err(FirmError::Invalid)?;
-    if !is_email_address(login_email) {
-        return Err(FirmError::Invalid(format!("{login_email:?} is not an email address")));
-    }
-    let id = FirmId::new();
-    let taken = |err: sqlx::Error| match err.as_database_error().and_then(|db| db.constraint()) {
-        Some("firms_login_email" | "firm_members_email") => FirmError::LoginEmailTaken,
-        _ => FirmError::Database(err),
-    };
-    sqlx::query!(
-        "insert into firms (id, name, login_email, created_at) values ($1, $2, $3, $4)",
-        id.as_uuid(),
-        name,
-        login_email,
-        now,
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(taken)?;
-    // Its login address is its owner's.
-    sqlx::query!(
-        "insert into firm_members (id, firm_id, email, role, created_at) values ($1, $2, $3, 'owner', $4)",
-        MemberId::new().as_uuid(),
-        id.as_uuid(),
-        login_email,
-        now,
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(taken)?;
-    Ok(id)
 }

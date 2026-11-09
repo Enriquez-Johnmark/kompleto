@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select l.id, l.cut_off from upload_links l\n             join firms f on f.id = l.firm_id and f.closed_at is null\n             where l.firm_id = $1 and l.client_id = $2 and l.period = $3",
+  "query": "select l.id, l.cut_off from upload_links l\n             join accounts a on a.tenant_id = l.firm_id and a.closed_at is null\n             where l.firm_id = $1 and l.client_id = $2 and l.period = $3",
   "describe": {
     "columns": [
       {
@@ -38,5 +38,5 @@
       false
     ]
   },
-  "hash": "130e31181c18512f9d55efb50f282c0fcda654af9ee8442c8ffc1bbd0b2d26a0"
+  "hash": "781373a17a3f10d4439692177fd2830495846046604186f98fd4174749f58b1f"
 }

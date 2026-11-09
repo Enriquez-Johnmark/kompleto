@@ -88,7 +88,7 @@ async fn the_demo_firm_has_staff_and_chases_payroll(pool: PgPool) {
     let (summary, _) = seed(&pool, datetime!(2026-10-21 09:00 UTC)).await;
     let firm = summary.firm.unwrap();
 
-    let staff: i64 = sqlx::query_scalar("select count(*) from firm_members where firm_id = $1 and role = 'staff'")
+    let staff: i64 = sqlx::query_scalar("select count(*) from account_members where tenant_id = $1 and role = 'staff'")
         .bind(firm.as_uuid())
         .fetch_one(&pool)
         .await

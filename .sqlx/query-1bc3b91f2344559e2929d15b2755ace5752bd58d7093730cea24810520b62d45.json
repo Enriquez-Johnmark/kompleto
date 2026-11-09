@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select a.tenant_id from accounts a\n             join account_members m on m.tenant_id = a.tenant_id and m.role = 'owner'\n             where lower(m.email) = lower($1) and a.closed_at is null",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "accounts",
+            "name": "tenant_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1bc3b91f2344559e2929d15b2755ace5752bd58d7093730cea24810520b62d45"
+}

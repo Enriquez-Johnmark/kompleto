@@ -39,7 +39,7 @@ async fn k2_staff_do_the_daily_work_but_cant_export_or_close_the_account(pool: P
     assert_eq!(export.status, StatusCode::FORBIDDEN);
     assert_eq!(close.status, StatusCode::FORBIDDEN);
     assert_eq!(close.json()["message"], "Only the firm's owner can do this.");
-    let closed: bool = sqlx::query_scalar("select closed_at is not null from firms where id = $1")
+    let closed: bool = sqlx::query_scalar("select closed_at is not null from accounts where tenant_id = $1")
         .bind(firm.as_uuid())
         .fetch_one(&app.pool)
         .await
