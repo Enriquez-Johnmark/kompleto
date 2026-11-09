@@ -96,7 +96,7 @@ pub struct ModelConfig {
     pub base_url: String,
     /// API key.
     pub api_key: SecretString,
-    /// Model ID, e.g. `claude-haiku-5-5`.
+    /// Model ID, e.g. `claude-sonnet-5-5`.
     pub model: String,
 }
 
@@ -150,7 +150,7 @@ impl Config {
             model: anthropic_key(optional).map(|key| ModelConfig {
                 base_url: optional("ANTHROPIC_BASE_URL").unwrap_or_else(|| "https://api.anthropic.com".to_owned()),
                 api_key: SecretString::from(key),
-                model: optional("LLM_MODEL").unwrap_or_else(|| "claude-haiku-5-5".to_owned()),
+                model: drafting_model(optional("LLM_MODEL")),
             }),
             file_master_key: optional("FILE_MASTER_KEY").map(SecretString::from),
             upload_dir: optional("UPLOAD_DIR").map_or_else(|| PathBuf::from("uploads"), PathBuf::from),
@@ -267,6 +267,12 @@ fn optional(name: &str) -> Option<String> {
 /// The owner's API key: `ANTHROPIC_API_KEY`, or in a cloud session
 /// `OWNER_ANTHROPIC_API_KEY`, because Claude Code itself reads
 /// `ANTHROPIC_API_KEY` and the owner's key must pay for this app only.
+/// The model that words Drafts: `LLM_MODEL`, or Claude Sonnet, which the
+/// blind Taglish test of 2026-11-09 chose over Haiku (docs/decisions.md).
+fn drafting_model(setting: Option<String>) -> String {
+    setting.unwrap_or_else(|| "claude-sonnet-5-5".to_owned())
+}
+
 /// Emails a day kept for login links and notices, which have no deadline.
 const BUDGET_RESERVE: i64 = 10;
 
@@ -369,6 +375,13 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn d5_drafts_are_worded_by_sonnet_unless_llm_model_says_otherwise() {
+        // The blind Taglish test of 2026-11-09 chose Sonnet (docs/decisions.md).
+        assert_eq!(drafting_model(None), "claude-sonnet-5-5");
+        assert_eq!(drafting_model(Some("claude-haiku-5-5".to_owned())), "claude-haiku-5-5");
     }
 
     #[test]
