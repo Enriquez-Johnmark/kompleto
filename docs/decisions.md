@@ -4,6 +4,9 @@ Every owner-approved decision, newest first, with the date it was made. Decision
 
 ## 2026-11-08
 
+- **Kompleto moves onto Nudgewright's accounts, and everyone logs in again once.** Login, staff, sign-up and closing are the engine's `accounts` module from now on (the housekeeping before both products run live). The migration copies every Firm, member and sign-up request, but no session or login link, since no bookkeeper uses Kompleto yet (owner: "yes, log everyone out once and go ahead"). Two consequences: the owner of a closed Firm can request a new account only once the old one is erased (until then, `firm reopen`), and a race in the engine's hourly login limits, found by Kompleto's test of parallel requests, is fixed in Nudgewright v0.4.5.
+- **Kompleto's daily send budget is `SEND_BUDGET`, 60 by default**, its share of the Resend account shared with Balanse (decided 2026-10-24; built 2026-11-08).
+
 - **The owner's API key in cloud sessions is `OWNER_ANTHROPIC_API_KEY`.** In a Claude Code cloud session the key is an environment variable, and Claude Code itself reads `ANTHROPIC_API_KEY`, which could bill the session's own work to the owner's API account. So every product (Kompleto, Balanse, the Review Triage Agent and the Help Assistant) reads `ANTHROPIC_API_KEY` first (from `.env` locally) and otherwise `OWNER_ANTHROPIC_API_KEY`. Nudgewright never reads the key: each product passes it in, so the engine is unchanged (owner: "make sure we use this OWNER_ANTHROPIC_API_KEY of all our products").
 
 ## 2026-10-24
