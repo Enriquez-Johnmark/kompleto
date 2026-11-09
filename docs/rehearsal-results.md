@@ -42,6 +42,21 @@ The reminder Claude wrote, as the Client received it:
 
 > **Mga dokumento para sa November 2026 BIR filings - Aling Nena's Sari-Sari Store**
 
+## Real email through Resend (2026-11-10)
+
+With the owner's Resend key (a network secret on the cloud environment, sending access only) and no domain yet, Kompleto ran with `MAIL_PROVIDER=resend`, sending from Resend's test sender `onboarding@resend.dev` to Resend's test inboxes.
+
+| Step | Result |
+|---|---|
+| Two Clients (`delivered@resend.dev`, `bounced@resend.dev`); a due date moved so a Reminder is due; the scheduler drafts both with Claude Sonnet | pass |
+| Approved through the review API; **Resend refused both**: "Invalid `reply_to` field" | **bug found** |
+| Cause, confirmed with Resend: the signed reply address's local part was 70 characters (`reply+` and a 64-character code); Resend, like the email standard (RFC 5321), takes at most 64. Mailpit, used in every earlier test, doesn't check | |
+| Fixed in Kompleto and Balanse: the address is the 64-character code alone; older `reply+` addresses still work | fixed, with tests |
+| Again on a fresh database: both Reminders **sent through Resend**, each with Resend's message ID | pass |
+| What became of each email (delivered, bounced) | not visible: a sending-only key can't read it, and Resend's bounce webhook needs a public address (go-live day) |
+
+The run also found a test that failed now and then: tests of a scanner that is down borrowed a free port and released it, and their own fake scanner could take the same port. They now use a port nothing can take (Kompleto and Balanse).
+
 ## Backups
 
 | Measure | Result |
@@ -76,7 +91,7 @@ Haiku and Sonnet each wrote the 10 test cases with Kompleto's exact request. A b
 
 | Not covered | Why | When it's checked |
 |---|---|---|
-| Real email through Resend, and SPF, DKIM and DMARC passing | Needs a Resend account (free, no card) and, for the Firm's own address, the domain | `deploy.md` step 9 |
+| SPF, DKIM and DMARC passing, and bounce events reaching Kompleto | Sending through Resend now works (above); checking the headers needs an inbox the owner can open, and bounce events need a public address | `deploy.md` step 9 |
 | Replies reaching Kompleto by email | Needs the domain's Email Routing and the Worker | `deploy.md` step 9 |
 | The public address through the Cloudflare tunnel | Needs the domain (a named tunnel) | Go-live day |
 | The launchd or systemd units starting it at boot | No Mac or systemd in a cloud container | Go-live day |
