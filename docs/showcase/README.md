@@ -23,7 +23,7 @@ Screenshots and a two-and-a-half-minute captioned walkthrough of a demo Firm, Sa
 | `phone-3-client-upload-page.png` | What the client sees when they open their link, in Taglish |
 | `phone-4-client-upload-page-english.png` | The same page for a client who reads English (used on the landing page) |
 
-The drafts' wording is Claude's (Haiku, with the owner's API key, made on 2026-11-08): the demo's 45 days of history were drafted the way the live scheduler drafts, and each Draft says "AI". Kompleto itself inserts the documents, the cut-off and the upload link. Without a key, the same demo uses the fixed templates.
+The drafts' wording is Claude's (Sonnet, the model the blind Taglish test chose, with the owner's API key, made on 2026-11-09): the demo's 45 days of history were drafted the way the live scheduler drafts, and each Draft says "AI". Kompleto itself inserts the documents, the cut-off and the upload link. Without a key, the same demo uses the fixed templates.
 
 Everything here is made-up data: the businesses, people and `.example.test` addresses don't exist.
 
