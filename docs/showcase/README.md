@@ -1,10 +1,10 @@
 # Showcase
 
-Screenshots and a two-and-a-half-minute captioned walkthrough of a demo Firm, Santos Bookkeeping, as of Thursday 7 January 2027: three days before the December cut-off, with 15 clients, reminders sent, uploads in, two replies, a bounced address and 10 drafts waiting. The owner, Bea, shares the work with a staff member, Carlo, and three clients have payroll chasing on.
+Screenshots and a three-minute captioned walkthrough of a demo Firm, Santos Bookkeeping, as of Thursday 7 January 2027: three days before the December cut-off, with 15 clients, reminders sent, uploads in, two replies, a bounced address and 10 drafts waiting. The owner, Bea, shares the work with a staff member, Carlo, and three clients have payroll chasing on.
 
 | File | Shows |
 |---|---|
-| `walkthrough.mp4` | The whole loop in about 2½ minutes: dashboard, drafts (BIR and payroll), review and approve, the client uploading on the upload page, marking received, replies, the 2307 tracker and Payors from a sales export, BIR calendar, activity, staff, settings and help |
+| `walkthrough.mp4` | The whole loop in about 3 minutes: dashboard, importing clients from a Xero contacts export, drafts (BIR and payroll), review and approve, the client uploading on the upload page, marking received, replies, the 2307 tracker and Payors from a sales export, BIR calendar, activity, staff, settings and help |
 | `desktop-1-dashboard.png` | What each client still owes, nearest cut-off first |
 | `desktop-2-drafts.png` | Drafts waiting for approval, in Taglish or English |
 | `desktop-3-review-before-approving.png` | Reviewing several drafts in full before approving them |

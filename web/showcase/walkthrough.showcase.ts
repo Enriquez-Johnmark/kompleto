@@ -10,6 +10,7 @@ import {
   SALES_EXPORT,
   say,
   SESSION,
+  XERO_CONTACTS,
 } from "./support.ts"
 
 const size = { width: 1280, height: 720 }
@@ -38,6 +39,38 @@ test("walkthrough", async ({ browser }, testInfo) => {
   await say(page, "The dashboard shows what each client still owes, nearest cut-off first.")
   await pointAt(page, page.getByText("Email bounced").filter({ visible: true }).first())
   await say(page, "Bounced emails, replies and drafts waiting stand out at a glance.")
+
+  // Where the clients come from.
+  await page.goto("/import")
+  await page.getByText("For files without").first().waitFor()
+  await say(
+    page,
+    "Your clients come from your own list: type them in, or import a Xero or QuickBooks contacts export."
+  )
+  const defaults = page.locator("[data-slot=card]", { hasText: "For files without" })
+  await press(
+    page,
+    defaults.getByRole("checkbox", { name: "My file has no Language or Forms columns" })
+  )
+  await press(page, defaults.getByRole("checkbox", { name: /2551Q/ }))
+  await page.locator("input[type=file]").setInputFiles(XERO_CONTACTS)
+  await page.getByRole("cell", { name: "Pascual Laundry Hub" }).waitFor()
+  await page.getByText(/clients? ready to add/).scrollIntoViewIfNeeded()
+  // Room below the table, so the caption doesn't cover it.
+  await page.evaluate(() => (document.body.style.paddingBottom = "180px"))
+  await page.mouse.wheel(0, 400)
+  await say(
+    page,
+    "Kompleto checks every row first and shows what it will add, and any row it can't, with the reason."
+  )
+  const add = page.getByRole("button", { name: /^Add \d+ clients?$/ })
+  await press(page, add)
+  await page.waitForURL("**/clients")
+  await pointAt(page, visibleLink(page, "Pascual Laundry Hub"))
+  await say(
+    page,
+    "Each client's documents then come from the client, through their own upload link."
+  )
 
   // Drafts and approval.
   await press(page, visibleLink(page, "Drafts"))
