@@ -15,4 +15,8 @@ who: string,
 /**
  * e.g. "Marked an upload received".
  */
-what: string, };
+what: string, 
+/**
+ * The client it concerns, if any.
+ */
+client: string | null, };

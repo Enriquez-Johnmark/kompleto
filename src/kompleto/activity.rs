@@ -24,13 +24,25 @@ pub struct Entry {
     pub subject_type: String,
     /// The record's ID.
     pub subject_id: Uuid,
+    /// The client's business name, when the entry concerns one.
+    pub client: Option<String>,
 }
 
 /// A Firm's entries since `since`, newest first.
 pub async fn since(pool: &PgPool, firm: FirmId, since: OffsetDateTime) -> Result<Vec<Entry>, sqlx::Error> {
     let rows = sqlx::query!(
-        "select at, actor, action, subject_type, subject_id from audit_events
-         where tenant_id = $1 and at >= $2 order by at desc, id desc",
+        // The client each entry concerns, found from its record, always
+        // within the same Firm.
+        r#"select a.at, a.actor, a.action, a.subject_type, a.subject_id, c.business_name as "client?"
+         from audit_events a
+         left join clients c on c.firm_id = a.tenant_id and c.id = case a.subject_type
+             when 'client' then a.subject_id
+             when 'upload' then (select u.client_id from uploads u where u.firm_id = a.tenant_id and u.id = a.subject_id)
+             when 'reply' then (select r.client_id from replies r where r.firm_id = a.tenant_id and r.id = a.subject_id)
+             when 'outbox_message' then (select s.client_id from scheduled_drafts s
+                                         where s.firm_id = a.tenant_id and s.message_id = a.subject_id limit 1)
+           end
+         where a.tenant_id = $1 and a.at >= $2 order by a.at desc, a.id desc"#,
         firm.as_uuid(),
         since,
     )
@@ -44,6 +56,7 @@ pub async fn since(pool: &PgPool, firm: FirmId, since: OffsetDateTime) -> Result
             action: row.action,
             subject_type: row.subject_type,
             subject_id: row.subject_id,
+            client: row.client,
         })
         .collect())
 }

@@ -33,12 +33,13 @@ export function ActivityPage() {
       {log.data ? (
         <Card>
           <CardContent>
-            <Table>
+            <Table className="hidden md:table">
               <TableHeader>
                 <TableRow>
                   <TableHead>When</TableHead>
                   <TableHead>Who</TableHead>
                   <TableHead>What</TableHead>
+                  <TableHead>Client</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -50,10 +51,27 @@ export function ActivityPage() {
                     </TableCell>
                     <TableCell>{entry.who}</TableCell>
                     <TableCell className="whitespace-normal">{entry.what}</TableCell>
+                    <TableCell className="whitespace-normal">{entry.client ?? "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            {/* On a phone, one entry per block, so nothing is cut off. */}
+            <ul className="flex flex-col divide-y md:hidden">
+              {log.data.entries.map((entry, index) => (
+                <li key={`${entry.at}-${index}`} className="flex flex-col gap-0.5 py-3 text-sm">
+                  <span className="font-medium">
+                    {entry.what}
+                    {entry.client ? (
+                      <span className="font-normal text-muted-foreground"> · {entry.client}</span>
+                    ) : null}
+                  </span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {formatDateTime(entry.at)} · {entry.who}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       ) : null}

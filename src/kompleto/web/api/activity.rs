@@ -35,6 +35,8 @@ pub struct ActivityEntry {
     pub who: String,
     /// e.g. "Marked an upload received".
     pub what: String,
+    /// The client it concerns, if any.
+    pub client: Option<String>,
 }
 
 async fn page(State(state): State<AppState>, ApiFirm(firm): ApiFirm) -> Result<Json<ActivityLog>, ApiError> {
@@ -50,6 +52,7 @@ async fn page(State(state): State<AppState>, ApiFirm(firm): ApiFirm) -> Result<J
                 at: rfc3339(entry.at),
                 who: who(&entry.actor).to_owned(),
                 what: describe(&entry.action).to_owned(),
+                client: entry.client,
             })
             .collect(),
     }))

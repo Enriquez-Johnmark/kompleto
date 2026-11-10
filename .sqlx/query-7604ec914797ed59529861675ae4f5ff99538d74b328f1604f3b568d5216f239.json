@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select at, actor, action, subject_type, subject_id from audit_events\n         where tenant_id = $1 and at >= $2 order by at desc, id desc",
+  "query": "select a.at, a.actor, a.action, a.subject_type, a.subject_id, c.business_name as \"client?\"\n         from audit_events a\n         left join clients c on c.firm_id = a.tenant_id and c.id = case a.subject_type\n             when 'client' then a.subject_id\n             when 'upload' then (select u.client_id from uploads u where u.firm_id = a.tenant_id and u.id = a.subject_id)\n             when 'reply' then (select r.client_id from replies r where r.firm_id = a.tenant_id and r.id = a.subject_id)\n             when 'outbox_message' then (select s.client_id from scheduled_drafts s\n                                         where s.firm_id = a.tenant_id and s.message_id = a.subject_id limit 1)\n           end\n         where a.tenant_id = $1 and a.at >= $2 order by a.at desc, a.id desc",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,17 @@
             "name": "subject_id"
           }
         }
+      },
+      {
+        "ordinal": 5,
+        "name": "client?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "clients",
+            "name": "business_name"
+          }
+        }
       }
     ],
     "parameters": {
@@ -70,8 +81,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "d79331a6d6b19f6428eed3307635641e48465e45dfd72d089cffc92085200449"
+  "hash": "7604ec914797ed59529861675ae4f5ff99538d74b328f1604f3b568d5216f239"
 }

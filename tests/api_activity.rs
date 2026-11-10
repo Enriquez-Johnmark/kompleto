@@ -83,3 +83,23 @@ async fn j2_a_login_is_logged(pool: PgPool) {
         page.body
     );
 }
+
+#[sqlx::test]
+async fn j2_each_entry_names_the_client_it_concerns(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (_, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    let input = serde_json::json!({
+        "business_name": "Nena's Store", "contact_first_name": "Nena",
+        "email": "nena@example.test", "language": "taglish", "forms": ["2551Q"],
+    });
+    let created = app.api(Method::POST, "/api/clients", Some(&cookie), Some(input)).await;
+    assert_eq!(created.status, StatusCode::CREATED, "{}", created.body);
+
+    let page = app.api(Method::GET, "/api/activity", Some(&cookie), None).await.json();
+
+    let entries = page["entries"].as_array().unwrap();
+    let added = entries.iter().find(|e| e["what"] != "Logged in").unwrap();
+    assert_eq!(added["client"], "Nena's Store", "{page}");
+    let login = entries.iter().find(|e| e["what"] == "Logged in").unwrap();
+    assert!(login["client"].is_null(), "a login concerns no client: {page}");
+}
