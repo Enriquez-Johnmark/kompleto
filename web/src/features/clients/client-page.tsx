@@ -71,7 +71,8 @@ function ClientContent({ client }: { client: ClientDetail }) {
         value={tab}
         onValueChange={(value) => setParams({ tab: String(value) }, { replace: true })}
       >
-        <TabsList className="max-w-full overflow-x-auto">
+        {/* Starts at the left: centred, an overflowing strip would cut off its first tab. */}
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="deadlines">Deadlines</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="uploads">Uploads ({client.uploads.length})</TabsTrigger>
