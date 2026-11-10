@@ -22,6 +22,12 @@ Every month, bookkeepers chase each client for receipts, bank statements, GCash 
 
 Kompleto never keeps books, computes tax, files returns or produces BIR-format files (`docs/adr/0004-stay-outside-bir-accounting-system-rules.md`). It only chases documents.
 
+## Where the data comes from
+
+- **In the demo:** a made-up firm with 15 made-up clients and 45 days of history, created by `cargo run -- demo-firm` (`src/kompleto/demo.rs`) and replayed through Kompleto's own scheduler, so every reminder, reply and upload in the screenshots went through the real code. The sales export and Xero contacts file the showcase imports are made up too (`web/showcase/support.ts`).
+- **In a real firm:** the bookkeeper types each client in, or imports them from a Xero or QuickBooks contacts export; each client's Payors come from a Xero, QuickBooks or spreadsheet sales export. The documents themselves come from the clients, uploaded through their private link, scanned for viruses and stored encrypted.
+- Nothing in this repository is real client data.
+
 ## Status
 
 | Stage | Status |
