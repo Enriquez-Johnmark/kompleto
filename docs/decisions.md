@@ -2,6 +2,10 @@
 
 Every owner-approved decision, newest first, with the date it was made. Decisions that a later one replaced stay here, marked **superseded**, so the reasoning trail survives. `AGENTS.md` lists only the decisions in force.
 
+## 2026-11-10
+
+- **UI polish with `ui-taste`:** Uizze's `ui-taste` skill (v0.3.0, Apache-2.0) is added, pinned and recorded, without the paid Uizze MCP. Every product gets an audit (look only, with real desktop and phone screenshots), then a polish pass that keeps its current look, one product at a time: Lab Report Assistant, Kompleto, Balanse, Review Triage Agent, Help Assistant, then the portfolio; each product's screenshots, video and portfolio page are remade before the next starts. Every rule that protects an acceptance criterion stays in code, and every test must still pass (owner: "yes to all").
+
 ## 2026-11-09
 
 - **Claude Sonnet words the Drafts, which closes Phase 6.** The blind Taglish test ran through the API with the app's exact request: Haiku and Sonnet each wrote 10 fictional cases (8 BIR, 1 payroll, 1 contributions), all valid by the app's rules. As the owner couldn't rate them by hand, a blind judge (Claude Opus, told to judge as a Manila bookkeeper) compared each pair twice with the order swapped: Sonnet 8, Haiku 1, tie 1, with 9 of 10 verdicts the same in both orders. Haiku's openings were sometimes awkward ("Hi Nena po!") and its Tagalog stiffer. Sonnet costs about US$0.003 a Draft, under US$1 a month for a 5-Firm pilot (owner: "Sonnet"). The default `LLM_MODEL` is now `claude-sonnet-5-5`, and pilots run with the owner's API key, so Claude words their Drafts. The prototype is deleted; its results are here and in `docs/rehearsal-results.md`.

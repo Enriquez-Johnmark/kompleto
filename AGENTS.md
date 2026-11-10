@@ -55,7 +55,7 @@ Research claims carry a source (URL, publisher, date, accessed date), an evidenc
 
 ## React (from M7)
 
-- Read the `vercel-react-best-practices`, `vercel-composition-patterns`, `shadcn`, `frontend-design` and `web-design-guidelines` skills (`.claude/skills/`) before writing or reviewing React, and follow `docs/frontend.md` (principles, conventions, folder layout). Where they disagree, `docs/frontend.md` wins.
+- Read the `vercel-react-best-practices`, `vercel-composition-patterns`, `shadcn`, `frontend-design`, `web-design-guidelines` and `ui-taste` skills (`.claude/skills/`) before writing or reviewing React, and follow `docs/frontend.md` (principles, conventions, folder layout). Where they disagree, `docs/frontend.md` wins.
 - The React app only shows data and asks the Rust API to act. Every rule that protects an acceptance criterion stays in Rust (`docs/adr/0005-react-app-served-by-the-rust-binary.md`).
 - Third-party skills are read in full before they're added, recorded in `skills-lock.json` and `docs/frontend.md` with source, commit and licence, and may not run unpinned commands.
 
