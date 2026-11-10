@@ -148,3 +148,24 @@ async fn the_dashboard_says_when_approved_messages_are_waiting_to_go_out(pool: P
 
     assert_eq!(held(dashboard().await), 1);
 }
+
+#[sqlx::test]
+async fn h1_at_the_same_cut_off_clients_still_owing_come_before_those_with_everything(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let (santos, cookie) = app.logged_in_firm("Santos Bookkeeping").await;
+    // Same Cut-off; "Aardvark" would come first by name alone.
+    let done = add(&app, santos, "Aardvark Supply", None, false).await;
+    add(&app, santos, "Zulu Trading", None, false).await;
+    let clients = Clients::new(app.pool.clone(), app.clock.clone());
+    for item in kompleto::kompleto::checklist::DEFAULT_ITEMS {
+        clients.remove_default_item(santos, done, item.key).await.unwrap();
+    }
+
+    let page = app.api(Method::GET, "/api/dashboard", Some(&cookie), None).await;
+
+    let rows = page.json()["clients"].as_array().unwrap().clone();
+    assert_eq!(rows[0]["cut_off"], rows[1]["cut_off"], "{rows:?}");
+    let names: Vec<&str> = rows.iter().map(|row| row["business_name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Zulu Trading", "Aardvark Supply"], "{rows:?}");
+    assert_eq!(rows[1]["missing"].as_array().unwrap().len(), 0);
+}

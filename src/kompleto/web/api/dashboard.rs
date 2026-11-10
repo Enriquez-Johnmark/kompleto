@@ -104,7 +104,8 @@ async fn dashboard(State(state): State<AppState>, ApiFirm(firm): ApiFirm) -> Res
         let key = next.as_ref().map(|period| period.key()).unwrap_or_default();
         let sort_date = next.as_ref().map(|period| period.cut_off);
         rows.push((
-            (client.paused, sort_date.is_none(), sort_date),
+            // At the same Cut-off, clients still owing documents come first.
+            (client.paused, sort_date.is_none(), sort_date, missing.is_empty()),
             DashboardClient {
                 id: client.id.as_uuid(),
                 business_name: client.details.business_name,
